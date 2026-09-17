@@ -1456,7 +1456,7 @@ class Indicatore extends PanelMenu.Button {
     /* ------------------------------------------------ azioni progetto --- */
 
     /* Gio costruisce l'URI con le fughe giuste: un "file://" concatenato a
-       mano si rompe sul primo spazio, e fra i progetti c'è "Technical Sales". */
+       mano si rompe sul primo spazio, e fra i progetti c'è "Documenti Vari". */
     _apriPercorso(percorso) {
         if (!percorso)
             return;

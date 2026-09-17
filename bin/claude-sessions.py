@@ -6,8 +6,8 @@ ogni sessione: titolo, progetto, date, numero di messaggi, dimensione e il
 comando per riprenderla.
 
 Il progetto NON viene dedotto dal nome della cartella: quella codifica è
-cambiata tra le versioni di Claude Code (mattioli_19 è diventato
-mattioli-19) e non è invertibile. Si usa il campo `cwd` scritto dentro la
+cambiata tra le versioni di Claude Code (cliente_alfa è diventato
+cliente-alfa) e non è invertibile. Si usa il campo `cwd` scritto dentro la
 trascrizione, che è il percorso reale.
 
 SOLA LETTURA. Non tocca niente.

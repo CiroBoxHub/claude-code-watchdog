@@ -9,7 +9,7 @@ pulizia, inventario delle sessioni.
 
 `session-purge.py` e `project-purge.py` **spostano nel cestino** con `gio trash`,
 non cancellano: `--definitivo` serve a cancellare davvero. Il 2026-09-17 sono
-andate due conversazioni di `/home/cirobox/Claude` — una da **4380 messaggi** —
+andate due conversazioni di `~/Claude` — una da **4380 messaggi** —
 perché lì c'era un `unlink()` e basta. L'elenco di conferma era corretto e
 l'utente ha confermato; il difetto era non lasciare un'ora di ripensamento su
 dati che non si ricostruiscono. Nessuno script di questa cartella
@@ -79,13 +79,13 @@ vederle divergere senza accorgersene.
   i file di lavoro; le conversazioni si sono salvate solo perché stavano lì.
   Compaiono come "duplicati" negli inventari: non sono spazzatura.
 - **La codifica cartella↔percorso in `~/.claude/projects/` non è invertibile.**
-  È cambiata tra le versioni (`mattioli_19` è diventato `mattioli-19`), quindi
+  È cambiata tra le versioni (`cliente_alfa` è diventato `cliente-alfa`), quindi
   il percorso reale di un progetto si legge dal campo `cwd` dentro le
   trascrizioni, mai dal nome della cartella.
 - **Una cartella di `projects/` può contenere sessioni di `cwd` diversi.**
   Succede quando un progetto viene spostato e Claude Code continua a scrivere
   nella cartella vecchia. Verificato il 2026-09-16:
-  `-home-cirobox-Documenti-Claude-posta-aziendale` ne contiene **tre**
+  `-home-utente-Documenti-Claude-posta-aziendale` ne contiene **tre**
   (`/tmp`, `/tmp/migrazione_posta`, e la sua), `progetto-beta` due.
   **Chi cancella deve abbinare per singolo file, mai per cartella**: una prima
   versione di `project-purge.py` abbinava per cartella e avrebbe cancellato
@@ -97,7 +97,7 @@ vederle divergere senza accorgersene.
   conteggi (33 invece di 23). Si usa `glob("*/*.jsonl")`.
 - **`~/.claude.json` non va editato mentre Claude Code gira**: tiene anche i
   permessi accordati e la cronologia, e viene riscritto alla chiusura.
-- **Le sessioni-fantasma in `~/.claude/projects/-home-cirobox/` le genera
+- **Le sessioni-fantasma in `~/.claude/projects/-home-utente/` le genera
   l'estensione GNOME `claude-status@oakz.org`**, che mostra la quota Claude nel
   pannello lanciando `claude -p "/usage"` a intervalli. Non consuma token
   (`/usage` è un comando locale), ma ogni giro accende una CLI completa: 1,7 s
@@ -115,7 +115,7 @@ vederle divergere senza accorgersene.
   2026-09-16: file a 900, comportamento ancora a 300. Serve un riavvio della
   shell, che su Wayland vuol dire **logout e login**.
   Per controllare se il nuovo valore è attivo: svuota
-  `~/.claude/projects/-home-cirobox/` e guarda a che distanza compare lo stub
+  `~/.claude/projects/-home-utente/` e guarda a che distanza compare lo stub
   successivo.
 - `dnf5 repoquery --unneeded` elenca come "non necessari" anche pacchetti
   installati a mano (`7zip`, `arj`, `cabextract`). Non è una lista da eseguire

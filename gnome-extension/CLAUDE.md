@@ -234,7 +234,7 @@ quanti esistono nella cartella candidata. Tre verdetti — `sicuro` (file
 ritrovati), `incerto` (nessun file citato, o solo il nome che coincide), `no`
 (niente prove e nome diverso: rifiuta, salvo `--forza`). Collaudato sul caso
 reale `/tmp/migrazione_posta` → `~/Documenti/Claude/migrazione_posta`: trova
-`migrazione_qboxmail.csv` e dà `sicuro`; puntato su `modulo_gls` dà `no`.
+`migrazione_qboxmail.csv` e dà `sicuro`; puntato su `modulo_gamma` dà `no`.
 
 L'operazione riscrive il campo `cwd` dentro le trascrizioni e le scrive nella
 cartella nuova; **gli originali vanno nel cestino**, e si allinea anche la `cwd`

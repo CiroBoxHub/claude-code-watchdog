@@ -35,8 +35,7 @@
       "Bash(flatpak uninstall:*)"
     ],
     "deny": [
-      "Read(./**/.credentials.json)",
-      "Read(//home/cirobox/.claude/.credentials.json)"
+      "Read(**/.credentials.json)"
     ]
   }
 }

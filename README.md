@@ -1,6 +1,44 @@
 # fedora_watchdog
 
-Monitoraggio e pulizia del PC (Fedora 44) e dei dati di Claude Code.
+Sorveglianza e pulizia dello spazio su Fedora, con un occhio particolare ai dati
+che [Claude Code](https://claude.com/claude-code) lascia sul disco: trascrizioni
+delle conversazioni, memorie dei progetti, job, e la quota di utilizzo.
+
+Due parti che funzionano anche separate:
+
+- **Script da terminale** (`bin/`) — scansione, inventario delle conversazioni,
+  pulizia guidata, riparazione dei progetti spostati.
+- **Estensione GNOME** (`gnome-extension/`) — gli stessi dati nel pannello, con
+  un popup da cui si interviene senza aprire un terminale.
+
+## La regola che tiene insieme tutto
+
+**Prima si guarda, poi si cancella. E si cancella nel cestino.**
+
+Nessuno script cancella qualcosa senza averlo prima elencato voce per voce e
+aver ricevuto un sì esplicito. `clean.sh` è in dry-run se non riceve `--apply`.
+Le rimozioni passano da `gio trash`, quindi si recuperano dal gestore file.
+
+Questa regola è nata da un errore: il 2026-09-17 sono andate perse due
+conversazioni — una da 4380 messaggi — perché al posto del cestino c'era un
+`unlink()`.
+
+## Installare
+
+    git clone <questo-repo> && cd fedora_watchdog
+    ./bin/prova.sh                 # 19 prove funzionali in sandbox
+    ./bin/install-extension.sh     # estensione GNOME, poi logout/login
+    gnome-extensions enable claude-code-watchdog@cirobox.local
+
+Gli script da terminale non richiedono installazione. L'estensione vuole GNOME
+Shell 48 o successivo; la sola lettura della quota richiede la CLI `claude` nel
+PATH.
+
+## Licenza
+
+GPL-2.0-or-later, la stessa di GNOME Shell. Vedi `LICENSE`.
+
+---
 
 ## Da dentro Claude Code
 

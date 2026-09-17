@@ -142,7 +142,7 @@ python3 - "$CLAUDE_DIR" <<'PY'
 import json, sys
 from pathlib import Path
 # La codifica cartella<->percorso è cambiata tra le versioni di Claude Code
-# (mattioli_19 è diventato mattioli-19) e non è invertibile: il percorso vero
+# (cliente_alfa è diventato cliente-alfa) e non è invertibile: il percorso vero
 # si legge dal campo cwd dentro le trascrizioni.
 proj = Path(sys.argv[1]) / "projects"
 orphans = []
