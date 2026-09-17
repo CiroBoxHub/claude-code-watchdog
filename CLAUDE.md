@@ -32,6 +32,7 @@ il dry-run, mostra l'elenco, chiedi. Anche quando la risposta sembra ovvia.
     bin/project-relocate.py riaggancia un progetto a una cartella spostata
     bin/fix-cwd.py          allinea la cwd dichiarata alla cartella reale
     bin/trash-scaduti.py    elementi del cestino oltre la retention
+    bin/prova.sh            collaudo funzionale su dati finti in sandbox
     bin/verifica-estensione.sh controlli statici, obbligatori prima di installare
     bin/install-extension.sh installa l'estensione GNOME
     bin/pack-extension.sh   crea lo zip distribuibile in dist/
@@ -41,7 +42,31 @@ il dry-run, mostra l'elenco, chiedi. Anche quando la risposta sembra ovvia.
     reports/                report datati, per confrontare due momenti
 
 Dati del cruscotto in `~/.local/share/fedora-watchdog/`: `metrics.json`
-(fotografia corrente) e `history.jsonl` (serie storica, potata a 2000 righe).
+(fotografia corrente), `usage.json` (quota) e `history.jsonl` (serie storica,
+potata a 2000 righe). Cartella `700`, file `600`: contengono i nomi dei
+progetti, quindi dei clienti.
+
+**`~/.claude` non è tutto lavoro dell'utente.** Il 2026-09-17 il plugin
+`claude-security` si è installato un ambiente Python da **276 MB**, e una
+metrica che somma tutto faceva sembrare che fossero cresciute le conversazioni.
+`collect-metrics.py` pubblica `conversazioniMb` accanto a `totaleMb` e una
+`scomposizione` per cartella; il popup mostra le conversazioni, con il resto
+come contesto.
+
+## Prima di dire «fatto»
+
+    ./bin/prova.sh              19 prove funzionali, sandbox con HOME dirottata
+    ./bin/verifica-estensione.sh  controlli statici (gira dentro install e pack)
+
+`prova.sh` esiste perché i controlli statici non bastano: dei difetti trovati
+dalla revisione del 2026-09-17, tre sarebbero caduti lì — la radice sbagliata
+nella copia dentro l'estensione, il cestino potato per mtime invece che per
+data di cancellazione, la codifica delle cartelle divergente fra due script.
+
+Il progetto è un **repository git** dal 2026-09-18. `dist/` e `reports/` sono
+ignorati, e con loro le copie degli script dentro `gnome-extension/`: le mette
+`install-extension.sh` copiandole da `bin/`, e versionarle due volte significa
+vederle divergere senza accorgersene.
 
 ## Comandi
 
