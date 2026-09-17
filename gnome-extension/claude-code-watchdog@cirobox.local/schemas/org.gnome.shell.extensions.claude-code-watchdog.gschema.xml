@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.claude-code-watchdog"
+          path="/org/gnome/shell/extensions/claude-code-watchdog/">
+
+    <key name="panel-indicators" type="as">
+      <default>['disco']</default>
+      <summary>Indicatori mostrati nella barra</summary>
+      <description>
+        Quali valori compaiono accanto all'icona nel pannello, nell'ordine.
+        Valori ammessi: disco, claude, sessioni, recuperabile, messaggi,
+        quota-sessione, quota-settimana.
+      </description>
+    </key>
+
+    <key name="panel-show-icon" type="b">
+      <default>true</default>
+      <summary>Mostra l'icona nel pannello</summary>
+    </key>
+
+    <key name="panel-icons" type="b">
+      <default>false</default>
+      <summary>Un'icona davanti a ogni indicatore</summary>
+      <description>
+        Utile con più indicatori accesi: si distinguono a colpo d'occhio senza
+        leggere. Occupa più spazio nella barra.
+      </description>
+    </key>
+
+    <key name="panel-compact" type="b">
+      <default>false</default>
+      <summary>Etichette compatte</summary>
+      <description>Omette le unità di misura per occupare meno spazio.</description>
+    </key>
+
+    <key name="refresh-seconds" type="i">
+      <range min="30" max="7200"/>
+      <default>600</default>
+      <summary>Intervallo di aggiornamento automatico (secondi)</summary>
+    </key>
+
+
+    <key name="show-projects" type="b">
+      <default>true</default>
+      <summary>Mostra i progetti</summary>
+    </key>
+
+
+    <key name="show-alerts" type="b">
+      <default>true</default>
+      <summary>Mostra gli allarmi</summary>
+    </key>
+
+
+    <key name="terminal-command" type="s">
+      <default>''</default>
+      <summary>Comando del terminale per riprendere una sessione</summary>
+      <description>
+        Vuoto significa rilevamento automatico. %d viene sostituito con la
+        cartella di lavoro. Non esiste un segnaposto per la sessione: l'azione
+        è per progetto e apre il selettore di claude --resume.
+      </description>
+    </key>
+
+    <key name="show-other-folders" type="b">
+      <default>true</default>
+      <summary>Mostra le cartelle fuori dai progetti</summary>
+      <description>
+        Cartelle da cui Claude Code è stato eseguito ma che non stanno nella
+        radice dei progetti: la home, /tmp, percorsi sparsi. Non sono progetti,
+        quindi l'unica azione è rimuoverne le sessioni.
+      </description>
+    </key>
+
+    <key name="max-projects" type="i">
+      <range min="3" max="25"/>
+      <default>8</default>
+      <summary>Quanti progetti elencare</summary>
+    </key>
+
+    <key name="confirm-delete" type="b">
+      <default>true</default>
+      <summary>Chiedi conferma prima di eliminare i dati di un progetto</summary>
+      <description>
+        Disattivarlo elimina al primo clic senza mostrare l'elenco. Sconsigliato.
+      </description>
+    </key>
+
+    <key name="shell" type="s">
+      <default>''</default>
+      <summary>Shell da usare dopo che Claude esce</summary>
+      <description>
+        Vuoto significa rilevamento automatico: prima il comando personalizzato
+        del profilo Ptyxis, poi la variabile SHELL. Viene avviata con -i perché
+        legga i file di configurazione dell'utente.
+      </description>
+    </key>
+
+    <key name="projects-root" type="s">
+      <default>''</default>
+      <summary>Cartella dove nascono i nuovi progetti</summary>
+      <description>
+        Vuoto significa rilevamento automatico: la cartella che contiene il
+        progetto fedora_watchdog. Il pulsante «Nuovo progetto» crea qui la
+        cartella e ci apre una sessione di Claude Code.
+      </description>
+    </key>
+
+    <key name="new-project-readme" type="b">
+      <default>true</default>
+      <summary>Crea un README.md nei progetti nuovi</summary>
+      <description>
+        Un file con nome, data, percorso e il comando per riprendere, più
+        l'invito a scrivere due righe su cos'è il progetto.
+      </description>
+    </key>
+
+    <key name="usage-enabled" type="b">
+      <default>true</default>
+      <summary>Monitora la quota Claude</summary>
+      <description>
+        Interroga periodicamente `claude -p "/usage"` e rimuove subito la
+        trascrizione vuota che l'invocazione lascia.
+      </description>
+    </key>
+
+    <key name="usage-interval-seconds" type="i">
+      <range min="300" max="86400"/>
+      <default>1800</default>
+      <summary>Ogni quanto rileggere la quota (secondi)</summary>
+      <description>
+        Più costoso dell'aggiornamento normale: circa 2 secondi e un giro di
+        rete. Non consuma token.
+      </description>
+    </key>
+
+    <key name="show-usage" type="b">
+      <default>true</default>
+      <summary>Mostra la quota nel popup</summary>
+    </key>
+
+  </schema>
+</schemalist>

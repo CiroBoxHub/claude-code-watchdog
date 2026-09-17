@@ -1,0 +1,22 @@
+# Prodotti, non sorgenti: si rigenerano con ./bin/pack-extension.sh
+dist/
+
+# Report datati: utili sulla macchina, rumore nella cronologia
+reports/
+
+# Compilato dallo schema, ricreato a ogni installazione
+*.gschemas.compiled
+gschemas.compiled
+
+# Copie degli script dentro la cartella dell'estensione: le mette
+# install-extension.sh copiandole da bin/, e averle versionate due volte
+# significa vederle divergere senza accorgersene
+gnome-extension/*/collect-metrics.py
+gnome-extension/*/collect-usage.py
+gnome-extension/*/claude-sessions.py
+gnome-extension/*/session-purge.py
+gnome-extension/*/project-purge.py
+gnome-extension/*/project-relocate.py
+
+__pycache__/
+*.pyc

@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./bin/scan-system.sh:*)",
+      "Bash(./bin/scan-claude.sh:*)",
+      "Bash(./bin/claude-sessions.py:*)",
+      "Bash(./bin/clean.sh)",
+      "Bash(df:*)",
+      "Bash(du:*)",
+      "Bash(free:*)",
+      "Bash(uptime:*)",
+      "Bash(uname:*)",
+      "Bash(rpm -q:*)",
+      "Bash(rpm -qa:*)",
+      "Bash(dnf5 repoquery:*)",
+      "Bash(dnf5 check-update:*)",
+      "Bash(flatpak list:*)",
+      "Bash(systemctl --failed:*)",
+      "Bash(systemctl status:*)",
+      "Bash(journalctl --disk-usage)",
+      "Bash(journalctl -p err:*)",
+      "Bash(coredumpctl list:*)",
+      "Bash(lsblk:*)",
+      "Bash(ps:*)",
+      "Bash(sensors:*)",
+      "Bash(smartctl -H:*)"
+    ],
+    "ask": [
+      "Bash(./bin/clean.sh:* --apply:*)",
+      "Bash(sudo:*)",
+      "Bash(rm:*)",
+      "Bash(find:* -delete:*)",
+      "Bash(dnf5 remove:*)",
+      "Bash(dnf5 autoremove:*)",
+      "Bash(flatpak uninstall:*)"
+    ],
+    "deny": [
+      "Read(./**/.credentials.json)",
+      "Read(//home/cirobox/.claude/.credentials.json)"
+    ]
+  }
+}

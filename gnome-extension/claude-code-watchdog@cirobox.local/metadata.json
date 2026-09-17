@@ -1,0 +1,13 @@
+{
+  "uuid": "claude-code-watchdog@cirobox.local",
+  "name": "Claude Code Watchdog",
+  "description": "Stato dei dati di Claude Code e del disco nel pannello: quota, spazio, conversazioni per progetto, spazio recuperabile e andamento nel tempo. Legge le metriche prodotte da fedora_watchdog.",
+  "shell-version": [
+    "48",
+    "49",
+    "50"
+  ],
+  "url": "",
+  "settings-schema": "org.gnome.shell.extensions.claude-code-watchdog",
+  "version": 3
+}

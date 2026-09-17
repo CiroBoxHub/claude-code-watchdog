@@ -1,0 +1,528 @@
+/* Fedora Watchdog — sistema visivo.
+ *
+ * Quadro strumenti, non cruscotto a schede. Niente riquadri: le misure sono
+ * righe, separate da spazio e da filetti sottili. Un solo elemento forte per
+ * riga — la cifra — e tutto il resto tenuto basso.
+ *
+ * Palette (St non supporta var(), quindi i valori sono ripetuti per esteso;
+ * questa è la fonte di verità se vanno cambiati):
+ *   #2F9284  misura sana        teal
+ *   #8676B8  quota Claude       viola: distingue l'allowance dalla macchina
+ *   #B77B1A  attenzione         ambra, da 75%
+ *   #CE5A50  critico            da 90%
+ *   rgba(127,127,127,.20)  traccia dei misuratori
+ * Le quattro tinte sono state scelte misurando il contrasto: stanno sopra 3:1
+ * su popup chiaro, popup scuro, barra chiara e barra scura. Gli stessi valori
+ * sono nella mappa TINTE di extension.js per le parti disegnate in Cairo.
+ * REGOLA PER I DUE TEMI: il colore si usa per i GRAFICI (barre, linee, punti),
+ * mai per il testo. Nessuna tinta supera 4,5:1 di contrasto sia su fondo chiaro
+ * sia su scuro — abbassarla per il chiaro la affossa sullo scuro — quindi il
+ * testo prende sempre il colore del tema, che è leggibile per definizione, e il
+ * significato passa da uno sfondo tenue o da un simbolo. Le uniche eccezioni
+ * sono le etichette del pannello, che sono in grassetto e usano tinte
+ * verificate sopra 3:1 su entrambe le barre.
+ */
+
+/* ------------------------------------------------------------ pannello --- */
+
+.fw-panel-box {
+    spacing: 6px;
+}
+
+.fw-panel-label {
+    font-feature-settings: "tnum";   /* cifre a larghezza fissa: la barra non
+                                        balla a ogni aggiornamento */
+    font-weight: 500;
+}
+
+.fw-panel-warn {
+    color: #B77B1A;          /* 3,0:1 su barra chiara · 4,7:1 su scura */
+    font-weight: 700;
+}
+
+.fw-panel-crit {
+    color: #CE5A50;          /* 3,4:1 su barra chiara · 4,1:1 su scura */
+    font-weight: 700;
+}
+
+/* --------------------------------------------------------------- popup --- */
+
+.fw-content {
+    spacing: 0;
+    padding: 2px 4px 4px 4px;
+    min-width: 300px;
+}
+
+.fw-header {
+    spacing: 8px;
+    padding: 2px 6px 10px 6px;
+}
+
+.fw-header-title {
+    font-weight: 700;
+    font-size: 1.05em;
+}
+
+.fw-header-age {
+    opacity: 0.68;
+    font-size: 0.85em;
+    font-feature-settings: "tnum";
+}
+
+.fw-icon-btn {
+    padding: 3px 5px;
+    border-radius: 99px;
+}
+
+.fw-icon-btn:hover {
+    background-color: rgba(127, 127, 127, 0.22);
+}
+
+/* Filetto di raggruppamento: separa famiglie di misure senza scatolarle. */
+.fw-rule {
+    height: 1px;
+    margin: 9px 6px;
+    background-color: rgba(127, 127, 127, 0.18);
+}
+
+.fw-section {
+    font-weight: 700;
+    font-size: 0.85em;
+    opacity: 0.7;
+    padding: 4px 6px 5px 6px;
+}
+
+/* -------------------------------------------------------- riga misura --- */
+
+.fw-metric {
+    spacing: 1px;
+    padding: 5px 6px 7px 6px;
+    border-radius: 7px;
+}
+
+.fw-metric-label {
+    font-size: 0.98em;
+    font-weight: 600;
+}
+
+/* La cifra è l'unico elemento forte: grande e leggera, voce da strumento. */
+.fw-metric-value {
+    font-size: 1.5em;
+    font-weight: 200;
+    font-feature-settings: "tnum";
+}
+
+.fw-metric-note {
+    font-size: 0.85em;
+    opacity: 0.72;
+    padding-top: 1px;
+}
+
+/* I misuratori sono disegnati in Cairo (classe Misuratore in extension.js):
+   con widget CSS dentro un BinLayout il riempimento finiva centrato e la tinta
+   non veniva applicata. Qui resta solo lo spazio che occupano. */
+.fw-meter {
+    margin: 2px 0 1px 0;
+}
+
+/* Tendenza, per le grandezze senza massimo: una barra sarebbe una bugia. */
+.fw-trend {
+    margin: 3px 0 2px 0;
+    border-radius: 3px;
+}
+
+/* ------------------------------------------------------------ progetti --- */
+
+.fw-projects {
+    spacing: 1px;
+}
+
+.fw-proj {
+    spacing: 0;
+}
+
+.fw-proj-head {
+    padding: 5px 6px;
+    border-radius: 7px;
+}
+
+.fw-proj-head:hover {
+    background-color: rgba(127, 127, 127, 0.16);
+}
+
+.fw-proj-head:focus {
+    background-color: rgba(127, 127, 127, 0.22);
+}
+
+.fw-proj-arrow {
+    padding-right: 7px;
+    opacity: 0.4;
+}
+
+.fw-proj-name {
+    font-size: 0.97em;
+}
+
+/* La cartella sparita la segnala il triangolo nel nome, non una tinta: un
+   testo ambra è illeggibile su fondo chiaro. */
+.fw-proj-missing {
+    opacity: 0.75;
+    font-style: italic;
+}
+
+.fw-proj-meta {
+    font-size: 0.83em;
+    opacity: 0.68;
+}
+
+.fw-proj-size {
+    font-size: 0.88em;
+    opacity: 0.8;
+    padding-left: 10px;
+    font-feature-settings: "tnum";
+}
+
+/* Anche questa è disegnata: qui solo la spaziatura. */
+.fw-proj-bar {
+    margin: 0 6px 4px 27px;
+}
+
+.fw-proj-actions {
+    spacing: 5px;
+    padding: 2px 6px 7px 27px;
+}
+
+/* ------------------------------------------------------------- azioni --- */
+
+.fw-btn {
+    padding: 7px 10px;
+    border-radius: 7px;
+    background-color: rgba(127, 127, 127, 0.16);
+    text-align: center;
+    font-weight: 500;
+}
+
+.fw-btn:hover {
+    background-color: rgba(127, 127, 127, 0.28);
+}
+
+.fw-btn:focus {
+    background-color: rgba(127, 127, 127, 0.28);
+}
+
+.fw-btn-mini {
+    padding: 5px 9px;
+    border-radius: 6px;
+    font-size: 0.85em;
+    background-color: rgba(127, 127, 127, 0.18);
+    text-align: center;
+}
+
+.fw-btn-mini:hover {
+    background-color: rgba(127, 127, 127, 0.3);
+}
+
+/* L'unico elemento colorato pieno di tutto il popup è il bottone che
+   cancella: non deve poter essere confuso con "Annulla". */
+.fw-btn-danger {
+    background-color: rgba(178, 58, 49, 0.9);
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.fw-btn-danger:hover {
+    background-color: #A83028;
+}
+
+.fw-actions {
+    spacing: 6px;
+    padding-top: 6px;
+}
+
+/* ------------------------------------------------------------ conferma --- */
+
+.fw-confirm {
+    spacing: 3px;
+    padding: 9px 10px;
+    margin: 2px 6px 4px 6px;
+    border-radius: 8px;
+    border: 1px solid rgba(206, 90, 80, 0.5);
+    background-color: rgba(206, 90, 80, 0.09);
+}
+
+.fw-confirm-nested {
+    margin-left: 27px;
+}
+
+.fw-confirm-title {
+    font-weight: 600;
+    font-size: 0.88em;
+}
+
+.fw-confirm-note {
+    font-size: 0.83em;
+    opacity: 0.78;
+    padding-top: 3px;
+}
+
+/* Quello che NON verrà toccato va detto in modo che si legga per primo. */
+.fw-confirm-safe {
+    font-size: 0.78em;
+    padding: 4px 7px;
+    margin-top: 3px;
+    border-radius: 5px;
+    background-color: rgba(47, 146, 132, 0.20);
+}
+
+.fw-pick {
+    padding: 4px 5px;
+    border-radius: 6px;
+}
+
+.fw-pick:hover {
+    background-color: rgba(127, 127, 127, 0.16);
+}
+
+.fw-pick-check {
+    padding-right: 7px;
+}
+
+.fw-pick-name {
+    font-size: 0.87em;
+}
+
+.fw-pick-detail {
+    font-size: 0.85em;
+    opacity: 0.75;
+    font-feature-settings: "tnum";
+}
+
+.fw-purge-row {
+    padding: 1px 0;
+}
+
+/* --------------------------------------------------------------- vari --- */
+
+.fw-esito {
+    padding: 7px 9px;
+    margin: 0 6px 6px 6px;
+    border-radius: 7px;
+    font-size: 0.87em;
+    background-color: rgba(47, 146, 132, 0.20);
+}
+
+.fw-alerts {
+    spacing: 3px;
+    padding: 2px 6px;
+}
+
+.fw-alert {
+    font-size: 0.87em;
+    padding: 5px 8px;
+    border-radius: 6px;
+    background-color: rgba(183, 123, 26, 0.20);
+}
+
+.fw-empty {
+    font-size: 0.86em;
+    opacity: 0.68;
+    padding: 3px 6px 6px 6px;
+}
+
+/* Icona e valore di uno stesso indicatore restano vicini fra loro e staccati
+   dal gruppo successivo: senza questo la barra diventa una fila indistinta. */
+.fw-panel-group {
+    spacing: 3px;
+}
+
+.fw-panel-icon {
+    icon-size: 14px;
+    opacity: 0.85;
+}
+
+/* --- progetti con problemi --- */
+
+/* Il giallo sta sull'icona e su un fondo tenue, non sul nome: un testo ambra
+   su fondo chiaro sta a 2,9:1 di contrasto e non si legge. Così la riga è
+   visibilmente gialla e il nome resta leggibile su qualunque tema. */
+.fw-proj-problema {
+    background-color: rgba(183, 123, 26, 0.13);
+    border-radius: 7px;
+}
+
+.fw-proj-warn {
+    icon-size: 14px;
+    color: #B77B1A;
+    padding-right: 7px;
+}
+
+/* Suggerimento: fondo scuro pieno e testo chiaro in ogni caso, come i tooltip
+   di sistema. Non dipendendo dal tema, è l'unico elemento che non deve essere
+   verificato su chiaro e scuro: si porta dietro i propri due colori. */
+.fw-tooltip {
+    background-color: rgba(38, 38, 38, 0.97);
+    color: #f2f2f2;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 0.87em;
+}
+
+/* --- nuovo progetto --- */
+
+.fw-section-row {
+    spacing: 6px;
+}
+
+.fw-nuovo {
+    spacing: 5px;
+    padding: 9px 10px;
+    margin: 2px 6px 6px 6px;
+    border-radius: 8px;
+    border: 1px solid rgba(47, 146, 132, 0.4);
+    background-color: rgba(47, 146, 132, 0.08);
+}
+
+.fw-nuovo-titolo {
+    font-weight: 600;
+    font-size: 0.88em;
+}
+
+.fw-nuovo-percorso {
+    font-size: 0.83em;
+    opacity: 0.78;
+    padding-bottom: 3px;
+}
+
+/* Il campo si porta dietro i propri colori: dentro un menu non può contare su
+   quelli del tema per il contrasto fra testo e fondo. */
+.fw-entry {
+    padding: 6px 9px;
+    border-radius: 6px;
+    background-color: rgba(127, 127, 127, 0.22);
+    border: 1px solid rgba(127, 127, 127, 0.35);
+}
+
+.fw-entry:focus {
+    border: 1px solid rgba(47, 146, 132, 0.85);
+}
+
+.fw-nuovo-errore {
+    font-size: 0.8em;
+    padding: 4px 7px;
+    border-radius: 5px;
+    background-color: rgba(206, 90, 80, 0.2);
+}
+
+.fw-btn-primario {
+    background-color: rgba(47, 146, 132, 0.85);
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.fw-btn-primario:hover {
+    background-color: #2F9284;
+}
+
+/* --- pulsanti d'azione colorati ---
+   Fondo pieno e testo bianco, come il pulsante rosso: si portano dietro i
+   propri due colori e quindi non dipendono dal tema. Verificato: bianco su
+   #1F6E62 sta a 6,1:1, su #3A6FB0 a 5,2:1, sopra la soglia di 4,5 per il
+   testo piccolo. */
+
+.fw-btn-riprendi {
+    background-color: #1F6E62;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.fw-btn-riprendi:hover {
+    background-color: #268275;
+}
+
+.fw-btn-cartella {
+    background-color: #3A6FB0;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.fw-btn-cartella:hover {
+    background-color: #4580C6;
+}
+
+/* Non cliccabile: niente colore, niente grassetto. Il grigio dice da solo
+   che lì non si può fare nulla. */
+.fw-btn-spento {
+    background-color: rgba(127, 127, 127, 0.12);
+    opacity: 0.55;
+}
+
+/* --- correzione di una cartella spostata --- */
+
+/* Bordo verde e non rosso: qui non si cancella niente, si rimette a posto. */
+.fw-fix {
+    spacing: 4px;
+    padding: 9px 10px;
+    margin: 2px 6px 4px 27px;
+    border-radius: 8px;
+    border: 1px solid rgba(47, 146, 132, 0.45);
+    background-color: rgba(47, 146, 132, 0.08);
+}
+
+.fw-fix-esito {
+    font-size: 0.82em;
+    padding: 5px 7px;
+    margin-top: 2px;
+    border-radius: 5px;
+    background-color: rgba(127, 127, 127, 0.16);
+}
+
+.fw-btn-correggi {
+    background-color: #96640F;   /* bianco sopra: 5,1:1 — l'ambra chiara #B77B1A
+                                    stava a 3,6 e non basta per il testo piccolo */
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.fw-btn-correggi:hover {
+    background-color: #AC7413;
+}
+
+/* Il contenuto del popup cresce aprendo le righe: oltre l'altezza dello
+   schermo veniva tagliato senza modo di raggiungerlo. Il tetto vero lo
+   calcola l'estensione sul monitor; qui solo il resto. */
+.fw-scroll {
+    padding-right: 4px;
+}
+
+/* La barra occupa il suo spazio invece di sovrapporsi: qui le si dà una
+   larghezza contenuta perché non rubi troppo al contenuto. */
+.fw-scroll StScrollBar {
+    padding: 0;
+    width: 8px;
+}
+
+.fw-scroll StScrollBar StBin#trough {
+    background-color: rgba(127, 127, 127, 0.12);
+    border-radius: 4px;
+}
+
+.fw-scroll StScrollBar StButton#vhandle {
+    background-color: rgba(127, 127, 127, 0.45);
+    border-radius: 4px;
+    margin: 0 1px;
+}
+
+.fw-scroll StScrollBar StButton#vhandle:hover {
+    background-color: rgba(127, 127, 127, 0.65);
+}
+
+/* Guasto di un raccoglitore: deve vedersi senza essere un allarme rosso —
+   il cruscotto continua a funzionare, sono i dati a essere fermi. */
+.fw-guasto {
+    padding: 7px 9px;
+    margin: 0 6px 6px 6px;
+    border-radius: 7px;
+    font-size: 0.85em;
+    background-color: rgba(183, 123, 26, 0.2);
+}
