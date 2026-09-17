@@ -55,7 +55,7 @@ export default class WatchdogPreferences extends ExtensionPreferences {
             description: 'Tiene d’occhio lo spazio del PC e i dati che Claude ' +
                          'Code lascia sul disco, e permette di intervenire senza ' +
                          'aprire un terminale. Non misura niente da sé: legge i ' +
-                         'dati raccolti dagli script del progetto fedora_watchdog.',
+                         'dati raccolti dagli script del progetto claude-code-watchdog.',
         });
         pagina.add(cosa);
         spiega(cosa, 'In una riga',
@@ -217,12 +217,12 @@ export default class WatchdogPreferences extends ExtensionPreferences {
         });
         pagina.add(dove);
         spiega(dove, 'I dati che il popup mostra',
-               '~/.local/share/fedora-watchdog/metrics.json è la fotografia ' +
+               '~/.local/share/claude-code-watchdog/metrics.json è la fotografia ' +
                'corrente; history.jsonl è la serie storica che disegna la linea ' +
                'di tendenza, tenuta alle ultime 2000 rilevazioni.');
         spiega(dove, 'Le soglie di allarme',
                'ALERT_WARN_PCT e ALERT_CRIT_PCT in config/watchdog.conf, nella ' +
-               'cartella del progetto fedora_watchdog. Valgono per tutto: ' +
+               'cartella del progetto claude-code-watchdog. Valgono per tutto: ' +
                'colore delle barre, colore delle etichette nella barra in alto, ' +
                'allarmi. Le tacche sui misuratori si spostano di conseguenza.');
 
@@ -459,7 +459,7 @@ export default class WatchdogPreferences extends ExtensionPreferences {
         radice.add(inUso);
 
         spiega(radice, 'Vuoto = automatico',
-               'Si usa la cartella che contiene il progetto fedora_watchdog. ' +
+               'Si usa la cartella che contiene il progetto claude-code-watchdog. ' +
                'Per sceglierne un\u2019altra scrivi un percorso assoluto, o uno ' +
                'che inizia con la tilde.');
 
@@ -570,7 +570,7 @@ export default class WatchdogPreferences extends ExtensionPreferences {
     _radiceRilevata() {
         try {
             const f = Gio.File.new_for_path(GLib.build_filenamev(
-                [GLib.get_user_data_dir(), 'fedora-watchdog', 'metrics.json']));
+                [GLib.get_user_data_dir(), 'claude-code-watchdog', 'metrics.json']));
             const [ok, bytes] = f.load_contents(null);
             if (ok) {
                 const d = JSON.parse(new TextDecoder().decode(bytes));

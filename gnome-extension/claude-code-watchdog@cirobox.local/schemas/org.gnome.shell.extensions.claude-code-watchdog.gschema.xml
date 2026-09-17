@@ -101,7 +101,7 @@
       <summary>Cartella dove nascono i nuovi progetti</summary>
       <description>
         Vuoto significa rilevamento automatico: la cartella che contiene il
-        progetto fedora_watchdog. Il pulsante «Nuovo progetto» crea qui la
+        progetto claude-code-watchdog. Il pulsante «Nuovo progetto» crea qui la
         cartella e ci apre una sessione di Claude Code.
       </description>
     </key>

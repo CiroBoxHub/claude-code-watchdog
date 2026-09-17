@@ -19,7 +19,7 @@ from pathlib import Path
 
 HOME = Path.home()
 PROJECTS = HOME / ".claude" / "projects"
-OUT_DIR = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share")) / "fedora-watchdog"
+OUT_DIR = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share")) / "claude-code-watchdog"
 USAGE = OUT_DIR / "usage.json"
 
 # La trascrizione finisce nella cartella che corrisponde alla cwd: lanciando da

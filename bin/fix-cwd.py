@@ -35,7 +35,7 @@ def mappa_cartelle(profondita: int = 2) -> dict[str, str]:
     # la radice dei progetti, se il watchdog sa dov'è
     try:
         dati = json.loads((Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share"))
-                           / "fedora-watchdog" / "metrics.json").read_text())
+                           / "claude-code-watchdog" / "metrics.json").read_text())
         if dati.get("progetto"):
             radici.append(Path(dati["progetto"]).parent)
     except Exception:
@@ -178,7 +178,7 @@ def correggi(v: dict) -> str | None:
         # La copia va creata sul filesystem della home, NON in /tmp: lì è un
         # filesystem in memoria e `gio trash` rifiuta con «spostamento nel
         # cestino sui montaggi interni di sistema non supportato».
-        appoggio = Path.home() / ".cache" / "fedora-watchdog"
+        appoggio = Path.home() / ".cache" / "claude-code-watchdog"
         appoggio.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=appoggio) as tmp:
             copia = Path(tmp) / f.name

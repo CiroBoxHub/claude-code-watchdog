@@ -1,4 +1,4 @@
-# fedora_watchdog
+# claude-code-watchdog
 
 Sorveglianza e pulizia dello spazio su Fedora, con un occhio particolare ai dati
 che [Claude Code](https://claude.com/claude-code) lascia sul disco: trascrizioni
@@ -25,7 +25,7 @@ conversazioni — una da 4380 messaggi — perché al posto del cestino c'era un
 
 ## Installare
 
-    git clone <questo-repo> && cd fedora_watchdog
+    git clone <questo-repo> && cd claude-code-watchdog
     ./bin/prova.sh                 # 19 prove funzionali in sandbox
     ./bin/install-extension.sh     # estensione GNOME, poi logout/login
     gnome-extensions enable claude-code-watchdog@cirobox.local
@@ -105,7 +105,7 @@ dell'utente — cache pacchetti, journal e kernel richiedono root e restano
 appannaggio di `/watchdog-clean`.
 
 L'estensione **non calcola niente**: legge
-`~/.local/share/fedora-watchdog/metrics.json`, prodotto dal raccoglitore, e
+`~/.local/share/claude-code-watchdog/metrics.json`, prodotto dal raccoglitore, e
 `history.jsonl` per il grafico. Correggere una misura vuol dire toccare gli
 script, non il codice della shell.
 
@@ -126,7 +126,7 @@ poi logout e login. Non esiste scorciatoia su Wayland.
     gnome-extensions enable claude-code-watchdog@cirobox.local
 
 Lo zip porta con sé i quattro script Python e le icone, quindi funziona anche
-dove la cartella `fedora_watchdog` non c'è. Serve GNOME Shell 48 o successivo e, per la
+dove la cartella `claude-code-watchdog` non c'è. Serve GNOME Shell 48 o successivo e, per la
 sola quota, la CLI `claude` nel PATH.
 
 ## Soglie e retention

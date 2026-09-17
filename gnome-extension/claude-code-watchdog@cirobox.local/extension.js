@@ -1,7 +1,7 @@
 /* Fedora Watchdog — indicatore di pannello per GNOME Shell.
  *
  * Non calcola niente: legge il JSON prodotto da
- * fedora_watchdog/bin/collect-metrics.py e lo disegna. Tutta la logica di
+ * claude-code-watchdog/bin/collect-metrics.py e lo disegna. Tutta la logica di
  * misura sta negli script del progetto, così si corregge senza toccare la shell.
  *
  * NIENTE COSTANTI CONFIGURABILI IN QUESTO FILE. GNOME Shell tiene in cache il
@@ -23,7 +23,7 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-const DATA_DIR = GLib.build_filenamev([GLib.get_user_data_dir(), 'fedora-watchdog']);
+const DATA_DIR = GLib.build_filenamev([GLib.get_user_data_dir(), 'claude-code-watchdog']);
 const METRICS = GLib.build_filenamev([DATA_DIR, 'metrics.json']);
 const HISTORY = GLib.build_filenamev([DATA_DIR, 'history.jsonl']);
 const USAGE = GLib.build_filenamev([DATA_DIR, 'usage.json']);
@@ -647,7 +647,7 @@ class Indicatore extends PanelMenu.Button {
             this.suggerimento = new Suggerimento();
         } catch (e) {
             this.suggerimento = null;
-            logError(e, 'fedora-watchdog: suggerimento non disponibile');
+            logError(e, 'claude-code-watchdog: suggerimento non disponibile');
         }
 
         this._box = new St.BoxLayout({style_class: 'fw-panel-box'});
@@ -950,7 +950,7 @@ class Indicatore extends PanelMenu.Button {
         try {
             d = JSON.parse(testo);
         } catch (e) {
-            logError(e, 'fedora-watchdog: metrics.json illeggibile');
+            logError(e, 'claude-code-watchdog: metrics.json illeggibile');
             return;
         }
         // La quota si legge dal suo file invece di aspettare che
@@ -965,7 +965,7 @@ class Indicatore extends PanelMenu.Button {
                     d.quota = {limiti: q.limiti, extra: q.extra,
                                letteIl: q.letteIl, etaSecondi: Math.round(eta)};
             } catch (e) {
-                logError(e, 'fedora-watchdog: usage.json illeggibile');
+                logError(e, 'claude-code-watchdog: usage.json illeggibile');
             }
         }
 
@@ -1436,7 +1436,7 @@ class Indicatore extends PanelMenu.Button {
                     if (m)
                         liberati = m[1];
                 } catch (e) {
-                    logError(e, 'fedora-watchdog: pulizia, lettura output fallita');
+                    logError(e, 'claude-code-watchdog: pulizia, lettura output fallita');
                 }
                 // Il dialogo si chiude da solo: restare aperto su un elenco
                 // ormai vuoto è solo confusione.
@@ -1449,7 +1449,7 @@ class Indicatore extends PanelMenu.Button {
             this._pulendo = false;
             this._chiudiPulizia();
             this._mostraEsito('Avvio della pulizia fallito.');
-            logError(e, 'fedora-watchdog: clean.sh non avviato');
+            logError(e, 'claude-code-watchdog: clean.sh non avviato');
         }
     }
 
@@ -1464,7 +1464,7 @@ class Indicatore extends PanelMenu.Button {
             Gio.AppInfo.launch_default_for_uri(
                 Gio.File.new_for_path(percorso).get_uri(), null);
         } catch (e) {
-            logError(e, 'fedora-watchdog: apertura non riuscita');
+            logError(e, 'claude-code-watchdog: apertura non riuscita');
         }
     }
 
@@ -1511,7 +1511,7 @@ class Indicatore extends PanelMenu.Button {
             const app = Shell.AppSystem.get_default().lookup_app(desktop);
             return !!app && app.get_n_windows() > 0;
         } catch (e) {
-            logError(e, 'fedora-watchdog: conteggio finestre fallito');
+            logError(e, 'claude-code-watchdog: conteggio finestre fallito');
             return false;
         }
     }
@@ -1570,7 +1570,7 @@ class Indicatore extends PanelMenu.Button {
             return true;
         } catch (e) {
             this._mostraEsito('Apertura del terminale fallita.');
-            logError(e, 'fedora-watchdog: terminale non avviato');
+            logError(e, 'claude-code-watchdog: terminale non avviato');
             return false;
         }
     }
@@ -1660,7 +1660,7 @@ class Indicatore extends PanelMenu.Button {
         } catch (e) {
             this._erroreNuovo?.set_text('Non si riesce a creare la cartella.');
             this._erroreNuovo?.show();
-            logError(e, 'fedora-watchdog: creazione cartella fallita');
+            logError(e, 'claude-code-watchdog: creazione cartella fallita');
             return;
         }
         let conReadme = false;
@@ -1674,7 +1674,7 @@ class Indicatore extends PanelMenu.Button {
                 conReadme = true;
             } catch (e) {
                 // La cartella c'è già: un README mancato non è un fallimento.
-                logError(e, 'fedora-watchdog: README non scritto');
+                logError(e, 'claude-code-watchdog: README non scritto');
             }
         }
 
@@ -1777,7 +1777,7 @@ class Indicatore extends PanelMenu.Button {
                     const [, stdout] = src.communicate_utf8_finish(res);
                     d = JSON.parse(stdout);
                 } catch (e) {
-                    logError(e, 'fedora-watchdog: verifica spostamento illeggibile');
+                    logError(e, 'claude-code-watchdog: verifica spostamento illeggibile');
                 }
                 if (!d) {
                     esito.set_text('Verifica fallita.');
@@ -1797,7 +1797,7 @@ class Indicatore extends PanelMenu.Button {
             });
         } catch (e) {
             esito.set_text('Verifica non avviata.');
-            logError(e, 'fedora-watchdog: project-relocate non avviato');
+            logError(e, 'claude-code-watchdog: project-relocate non avviato');
         }
     }
 
@@ -1828,7 +1828,7 @@ class Indicatore extends PanelMenu.Button {
                     const [, stdout] = src.communicate_utf8_finish(res);
                     d = JSON.parse(stdout);
                 } catch (e) {
-                    logError(e, 'fedora-watchdog: esito spostamento illeggibile');
+                    logError(e, 'claude-code-watchdog: esito spostamento illeggibile');
                 }
                 const errori = d?.errori ?? [];
                 // Il numero di sessioni TROVATE non è quello delle spostate.
@@ -1843,7 +1843,7 @@ class Indicatore extends PanelMenu.Button {
             });
         } catch (e) {
             this._mostraEsito('Spostamento non avviato.');
-            logError(e, 'fedora-watchdog: project-relocate non avviato');
+            logError(e, 'claude-code-watchdog: project-relocate non avviato');
         }
     }
 
@@ -1879,7 +1879,7 @@ class Indicatore extends PanelMenu.Button {
                     const [, stdout] = src.communicate_utf8_finish(res);
                     dati = JSON.parse(stdout);
                 } catch (e) {
-                    logError(e, 'fedora-watchdog: elenco rimozione illeggibile');
+                    logError(e, 'claude-code-watchdog: elenco rimozione illeggibile');
                 }
                 this._mostraConfermaProgetto(p, riga, dati);
             });
@@ -1887,7 +1887,7 @@ class Indicatore extends PanelMenu.Button {
             area.destroy_all_children();
             area.add_child(new St.Label({text: 'Lettura fallita.',
                                          style_class: 'fw-confirm-note'}));
-            logError(e, 'fedora-watchdog: project-purge non avviato');
+            logError(e, 'claude-code-watchdog: project-purge non avviato');
         }
     }
 
@@ -1967,7 +1967,7 @@ class Indicatore extends PanelMenu.Button {
             });
         } catch (e) {
             this._mostraEsito('Rimozione fallita.');
-            logError(e, 'fedora-watchdog: project-purge non avviato');
+            logError(e, 'claude-code-watchdog: project-purge non avviato');
         }
     }
 
@@ -2002,11 +2002,11 @@ export default class FedoraWatchdogExtension extends Extension {
             // Senza questa rete un errore qui lascia l'estensione in ERROR e
             // l'indicatore a metà costruzione, che poi fa fallire anche
             // disable(). Meglio ripulire e dire cosa è andato storto.
-            logError(e, 'fedora-watchdog: avvio fallito');
+            logError(e, 'claude-code-watchdog: avvio fallito');
             try {
                 this._indicatore?.destroy();
             } catch (e2) {
-                logError(e2, 'fedora-watchdog: pulizia dopo avvio fallito');
+                logError(e2, 'claude-code-watchdog: pulizia dopo avvio fallito');
             }
             this._indicatore = null;
             throw e;

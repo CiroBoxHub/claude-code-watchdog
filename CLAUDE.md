@@ -1,4 +1,4 @@
-# fedora_watchdog
+# claude-code-watchdog
 
 Manutenzione del PC (Fedora 44) e dei dati di Claude Code: monitoraggio,
 pulizia, inventario delle sessioni.
@@ -41,7 +41,7 @@ il dry-run, mostra l'elenco, chiedi. Anche quando la risposta sembra ovvia.
     gnome-extension/        sorgente dell'estensione di pannello
     reports/                report datati, per confrontare due momenti
 
-Dati del cruscotto in `~/.local/share/fedora-watchdog/`: `metrics.json`
+Dati del cruscotto in `~/.local/share/claude-code-watchdog/`: `metrics.json`
 (fotografia corrente), `usage.json` (quota) e `history.jsonl` (serie storica,
 potata a 2000 righe). Cartella `700`, file `600`: contengono i nomi dei
 progetti, quindi dei clienti.

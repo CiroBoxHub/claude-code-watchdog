@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Raccoglie le metriche per il cruscotto e le scrive in JSON.
 
-Scrive due file sotto ~/.local/share/fedora-watchdog/:
+Scrive due file sotto ~/.local/share/claude-code-watchdog/:
   metrics.json   la fotografia corrente, che l'estensione GNOME legge
   history.jsonl  una riga per esecuzione, per i grafici nel tempo
 
@@ -31,7 +31,7 @@ def _radici() -> tuple[Path | None, Path]:
 ROOT, SCRIPT_DIR = _radici()
 HOME = Path.home()
 CLAUDE = HOME / ".claude"
-OUT_DIR = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share")) / "fedora-watchdog"
+OUT_DIR = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share")) / "claude-code-watchdog"
 METRICS = OUT_DIR / "metrics.json"
 USAGE = OUT_DIR / "usage.json"
 HISTORY = OUT_DIR / "history.jsonl"

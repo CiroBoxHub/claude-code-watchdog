@@ -3,7 +3,7 @@
 Si carica quando si lavora in questa cartella.
 
 **Il nome è cambiato il 2026-09-18**: da «Fedora Watchdog»
-(`claude-watchdog@fedora-watchdog.local`) a «Claude Code Watchdog»
+(`claude-watchdog@claude-code-watchdog.local`) a «Claude Code Watchdog»
 (`claude-code-watchdog@cirobox.local`). Il vecchio prometteva una cosa —
 sorvegliare Fedora — e ne faceva un'altra: l'80% di quello che mostra sono dati
 di Claude Code, e niente lì dentro è specifico di Fedora.
@@ -117,7 +117,7 @@ copre un'ora, dieci minuti coprono dieci ore.
 ### Progetti e «fuori dai progetti»
 
 **È un progetto solo la cartella figlia diretta della radice** (`projects-root`,
-vuoto = la cartella che contiene `fedora_watchdog`). Tutto il resto — la home,
+vuoto = la cartella che contiene `claude-code-watchdog`). Tutto il resto — la home,
 `/tmp`, percorsi sparsi — sono posti da cui Claude è stato lanciato, e finiscono
 in una sezione separata dove l'unica azione è togliere le sessioni.
 
@@ -292,7 +292,7 @@ progetto nominava la sessione. Risultato: da 4 progetti a **10**.
 
 **La copia di sicurezza non può stare in `/tmp`**: è un filesystem in memoria e
 `gio trash` rifiuta con «spostamento nel cestino sui montaggi interni di sistema
-non supportato». Va sul filesystem della home (`~/.cache/fedora-watchdog/`).
+non supportato». Va sul filesystem della home (`~/.cache/claude-code-watchdog/`).
 
 ### Controlli prima di installare
 
@@ -360,7 +360,7 @@ grigio e smorzato): «colorato» deve voler dire «si può premere».
 ### Nuovo progetto
 
 Il «+» accanto al titolo «Progetti» chiede un nome di cartella, la crea sotto
-`projects-root` (vuoto = la cartella che contiene `fedora_watchdog`, cioè
+`projects-root` (vuoto = la cartella che contiene `claude-code-watchdog`, cioè
 `~/Documenti/Claude`) e ci apre una sessione **nuova** — `claude`, non
 `claude --resume`: la cartella è appena nata.
 

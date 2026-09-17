@@ -63,7 +63,7 @@ uguale "claude-sessions: ignora i subagenti" \
 # ------------------------------------------------- collect-metrics.py ---
 prepara
 "$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1
-M="$HOME/.local/share/fedora-watchdog/metrics.json"
+M="$HOME/.local/share/claude-code-watchdog/metrics.json"
 [[ -f "$M" ]] && ok "collect-metrics: scrive metrics.json" || ko "collect-metrics: scrive metrics.json"
 uguale "collect-metrics: conta le conversazioni" \
   "$(python3 -c "import json;print(json.load(open('$M'))['claude']['conversazioni'])")" "1"
