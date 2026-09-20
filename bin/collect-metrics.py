@@ -84,6 +84,37 @@ def stale_mb(path: Path, days: int) -> int:
     return total // 1048576
 
 
+def radice_progetti() -> Path | None:
+    """La radice dei progetti configurata nell'estensione.
+
+    Sta in gsettings, non in un file nostro: qui si legge soltanto, e se il
+    comando non c'e' o lo schema non e' installato si restituisce None invece
+    di indovinare una cartella.
+    """
+    # Lo schema dell'estensione non e' installato in /usr/share/glib-2.0/schemas:
+    # sta nella cartella dell'estensione, quindi gsettings da solo non lo trova
+    # e va indicato con --schemadir. Si prova prima senza, per il caso in cui
+    # l'estensione fosse installata a livello di sistema.
+    tentativi = [
+        ["gsettings", "get"],
+        ["gsettings", "--schemadir", str(SCRIPT_DIR / "schemas"), "get"],
+    ]
+    for base in tentativi:
+        try:
+            r = subprocess.run(
+                base + ["org.gnome.shell.extensions.claude-code-watchdog",
+                        "projects-root"],
+                capture_output=True, text=True, timeout=5)
+            if r.returncode != 0:
+                continue
+            valore = r.stdout.strip().strip("'\"")
+            if valore:
+                return Path(valore).expanduser()
+        except Exception:
+            continue
+    return None
+
+
 def problemi_progetto(cwd: str, cartelle_condivise: set[str]) -> list[dict]:
     """Cosa c'è che non va in un progetto, in forma leggibile.
 
@@ -146,6 +177,27 @@ def sessions() -> dict:
     top = sorted(by_proj.values(), key=lambda e: -e["mb"])[:40]
     for e in top:
         e["mb"] = round(e["mb"], 1)
+
+    # Cartelle di progetto che non hanno ancora conversazioni.
+    #
+    # L'elenco qui sopra nasce dalle sessioni, raggruppate per cwd: una cartella
+    # appena creata, o su cui si e' lavorato senza Claude, non comparirebbe mai.
+    # Il caso non e' teorico: succede ogni volta che si apre un progetto nuovo e
+    # ci si chiede perche' il pannello non lo veda.
+    #
+    # La radice e' quella configurata nell'estensione; se gsettings non risponde
+    # non si inventa un percorso e semplicemente non si aggiunge nulla.
+    radice = radice_progetti()
+    if radice and radice.is_dir():
+        gia_elencati = {e["percorso"] for e in top}
+        for c in sorted(radice.iterdir()):
+            if not c.is_dir() or c.name.startswith("."):
+                continue
+            if str(c) in gia_elencati:
+                continue
+            top.append({"nome": c.name, "percorso": str(c), "mb": 0,
+                        "sessioni": 0, "messaggi": 0, "esiste": True,
+                        "problemi": []})
 
     # Elenco delle sessioni per il menu cliccabile dell'estensione: id intero
     # (serve a --resume e alla rimozione), percorso di lavoro e peso.
