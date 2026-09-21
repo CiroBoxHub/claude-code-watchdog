@@ -69,6 +69,10 @@ uguale "collect-metrics: conta le conversazioni" \
   "$(python3 -c "import json;print(json.load(open('$M'))['claude']['conversazioni'])")" "1"
 uguale "collect-metrics: scompone lo spazio" \
   "$(python3 -c "import json;print('scomposizione' in json.load(open('$M'))['claude'])")" "True"
+uguale "collect-metrics: pubblica il fondoscala della cache" \
+  "$(python3 -c "import json;print(json.load(open('$M'))['soglie']['cacheMb'])")" "2048"
+uguale "collect-metrics: pubblica chi occupa piu' cache" \
+  "$(python3 -c "import json;print('cacheTop' in json.load(open('$M'))['claude'])")" "True"
 uguale "collect-metrics: pubblica le soglie" \
   "$(python3 -c "import json;print(json.load(open('$M'))['soglie']['attenzione'])")" "75"
 

@@ -48,7 +48,7 @@ dentro invocano soltanto `du`, `gio`, `gsettings` e `claude`.
     git clone https://github.com/CiroBoxHub/claude-code-watchdog
     cd claude-code-watchdog
 
-    ./bin/prova.sh                 # 38 prove funzionali in sandbox
+    ./bin/prova.sh                 # 40 prove funzionali in sandbox
     ./bin/install-extension.sh     # installa l'estensione
     gnome-extensions enable claude-code-watchdog@cirobox.local
 
@@ -74,9 +74,17 @@ dove il repository non è stato clonato.
 
 ## Il pannello
 
-Nel popup: disco, peso di `~/.claude` con la tendenza, quota (sessione
-corrente e settimana), spazio recuperabile, e l'elenco dei **progetti
-cliccabili**.
+Nel popup: disco, peso di `~/.claude` con la tendenza, `~/.cache`, quota
+(sessione corrente e settimana), spazio recuperabile, e l'elenco dei
+**progetti cliccabili**.
+
+La barra della cache ha come fondoscala `ALERT_HOME_CACHE_MB`, non il disco:
+2,4 GB su un disco da 1 TB sarebbero una barra vuota, mentre quello che conta
+è se ha superato il limite che ci si è dati. Sotto compare chi occupa di più,
+perché un indicatore che dice «2,4 GB» senza dire di chi sono lascia dove ha
+trovato. Attenzione: il target `usercache` toglie solo i file non toccati da
+`USER_CACHE_RETENTION_DAYS` giorni, quindi su una macchina nuova la barra può
+restare alta mentre non c'è niente da liberare.
 
 Ogni riga di progetto si apre su tre azioni:
 
@@ -259,7 +267,7 @@ potarlo per quello lo distruggerebbe il giorno dopo averlo cestinato.
 
 ## Sviluppo
 
-    ./bin/prova.sh                 # 38 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh                 # 40 prove funzionali, sandbox con HOME dirottata
     ./bin/verifica-estensione.sh   # controlli statici
 
 I controlli statici girano dentro `install-extension.sh` e `pack-extension.sh`,
