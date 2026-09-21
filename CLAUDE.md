@@ -53,9 +53,22 @@ metrica che somma tutto faceva sembrare che fossero cresciute le conversazioni.
 `scomposizione` per cartella; il popup mostra le conversazioni, con il resto
 come contesto.
 
+**La radice dei progetti si deduce, non si indovina.** L'impostazione
+`projects-root` ha come default la stringa vuota, che per lo schema significa
+«rilevamento automatico». Il rilevamento stava in `extension.js`, che lo
+ricavava da `progetto` — e `progetto` è `null` per costruzione quando lo script
+gira copiato dentro l'estensione, cioè in uso normale: l'automatismo promesso
+dalle preferenze non ha mai funzionato da installato. Dal 2026-09-21 la deduce
+`collect-metrics.py` dai progetti già noti (la cartella che ne contiene di più,
+almeno due, mai la home né `/tmp`) e la pubblica come `radiceProgetti`.
+L'estensione la passa con `--radice-progetti` solo quando l'utente ne ha
+scritta una a mano. **Lo script non legge gsettings**: lo schema non è
+installato a livello di sistema, e una seconda copia della regola di scelta è
+una copia che diverge.
+
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              19 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh              23 prove funzionali, sandbox con HOME dirottata
     ./bin/verifica-estensione.sh  controlli statici (gira dentro install e pack)
 
 `prova.sh` esiste perché i controlli statici non bastano: dei difetti trovati
