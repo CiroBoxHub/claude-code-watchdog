@@ -15,7 +15,7 @@ dicendo «Niente di selezionato».
 
 Senza `--apply` non cancella niente: elenca e basta.
 """
-import json, os, shutil, subprocess, sys, time
+import hashlib, json, os, shutil, subprocess, sys, time
 from pathlib import Path
 
 
@@ -48,6 +48,11 @@ RETENTION = {
     "claude-paste":       ("CLAUDE_PASTE_CACHE_RETENTION_DAYS", 14),
 }
 
+# Quante versioni di Claude Code tenere, quella in uso compresa. Due e non una:
+# se un aggiornamento rompe qualcosa serve poterci tornare, e una versione pesa
+# ~220 MB — il prezzo del ripensamento e' noto e accettabile.
+KEEP_VERSIONI_DEFAULT = 2
+
 # Sottocartella di ~/.claude per i target a scadenza, e nome leggibile.
 CARTELLE = {
     "claude-jobs":        ("jobs", "Job Claude"),
@@ -56,7 +61,15 @@ CARTELLE = {
     "claude-paste":       ("paste-cache", "Paste cache"),
 }
 
-TARGET = ["trash", "usercache", "claude-stubs", *CARTELLE]
+VERSIONI = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share")) / "claude/versions"
+
+# Coda delle segnalazioni: percorsi trovati a mano che il pannello mostra come
+# tutte le altre voci. Non e' un campo dove si digita un percorso — ci si
+# scrive con `segnala.py`, e reclaim.py agisce solo su cio' che trova qui.
+SEGNALATI = (Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share"))
+             / "claude-code-watchdog" / "segnalati.jsonl")
+
+TARGET = ["trash", "usercache", "claude-stubs", "claude-versions", *CARTELLE]
 
 
 def conf() -> dict:
@@ -131,6 +144,138 @@ def _script(nome: str) -> Path:
     return SCRIPT_DIR / nome
 
 
+def versione_in_uso() -> Path | None:
+    """Il binario di Claude Code che il PATH risolve adesso.
+
+    Si risolve il link invece di prendere il numero di versione piu' alto:
+    `claude install` puo' aver riportato indietro il link dopo un guasto, e
+    cancellare «la piu' vecchia» in quel caso toglierebbe quella in uso.
+    """
+    candidati = []
+    dove = shutil.which("claude")
+    if dove:
+        candidati.append(Path(dove))
+    # Anche fuori dal PATH e anche se il permesso di esecuzione manca: il link
+    # c'e' lo stesso, e sbagliare qui vuol dire cestinare il binario in uso.
+    candidati.append(HOME / ".local/bin/claude")
+    for c in candidati:
+        try:
+            vero = c.resolve()
+        except OSError:
+            continue
+        if vero.is_file() and vero.parent == VERSIONI.resolve():
+            return vero
+    return None
+
+
+def versioni_vecchie() -> list[Path]:
+    """Le versioni di Claude Code da togliere.
+
+    Si tengono KEEP_VERSIONI le piu' recenti per data, e in ogni caso quella
+    in uso, che potrebbe non essere la piu' recente.
+    """
+    if not VERSIONI.is_dir():
+        return []
+    try:
+        quante = int(conf().get("CLAUDE_KEEP_VERSIONS", KEEP_VERSIONI_DEFAULT))
+    except ValueError:
+        quante = KEEP_VERSIONI_DEFAULT
+    quante = max(1, quante)
+
+    binari = [f for f in VERSIONI.iterdir() if f.is_file() and not f.is_symlink()]
+    binari.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+    in_uso = versione_in_uso()
+    if in_uso is None:
+        # Non si riesce a stabilire quale versione stia girando. Non si tira a
+        # indovinare «la piu' recente»: se il link fosse stato riportato
+        # indietro dopo un aggiornamento andato male, la piu' recente sarebbe
+        # proprio quella da non toccare. Meglio che la voce non compaia.
+        if binari:
+            print("versione di Claude in uso non identificabile: non tolgo niente",
+                  file=sys.stderr)
+        return []
+
+    tenere = set(binari[:quante])
+    tenere.add(in_uso)
+    return [f for f in binari if f not in tenere]
+
+
+def ammissibile(percorso: Path) -> str | None:
+    """None se il percorso si puo' cestinare, altrimenti il motivo del rifiuto.
+
+    Vale sia quando si segnala sia quando si cancella. La seconda volta non e'
+    ridondante: fra le due puo' passare del tempo, e un progetto puo' essere
+    nato nel frattempo proprio li' dentro.
+    """
+    try:
+        p = percorso.resolve()
+    except OSError:
+        return "percorso irrisolvibile"
+    if not p.is_absolute():
+        return "percorso non assoluto"
+    if p == HOME or HOME not in p.parents:
+        return "fuori dalla home"
+    if p == CLAUDE or CLAUDE in p.parents:
+        # Trascrizioni e memorie hanno strumenti loro, che verificano prima di
+        # toccare: session-purge.py e project-purge.py. Passare di qui
+        # salterebbe quelle verifiche.
+        return "sotto ~/.claude: usa session-purge.py o project-purge.py"
+    if p == SEGNALATI.parent:
+        return "e' la cartella dati del cruscotto"
+    for lavoro in cartelle_di_lavoro():
+        if p == lavoro or p in lavoro.parents:
+            return f"contiene la cartella di lavoro di un progetto ({lavoro})"
+    return None
+
+
+def cartelle_di_lavoro() -> list[Path]:
+    """Le cartelle di lavoro dei progetti note al cruscotto.
+
+    Si leggono da metrics.json invece di ricalcolarle: se il file non c'e'
+    ancora si torna una lista vuota e restano gli altri controlli.
+    """
+    f = SEGNALATI.parent / "metrics.json"
+    try:
+        d = json.loads(f.read_text())
+    except Exception:
+        return []
+    out = []
+    for e in d.get("claude", {}).get("progetti", []):
+        perc = e.get("percorso") or ""
+        if perc.startswith("/"):
+            out.append(Path(perc))
+    return out
+
+
+def ident(percorso: Path) -> str:
+    """Sigla stabile di un percorso segnalato, usata come nome di target."""
+    return hashlib.sha256(str(percorso).encode()).hexdigest()[:12]
+
+
+def segnalati() -> list[dict]:
+    """La coda, già filtrata: solo voci esistenti e ammissibili."""
+    out = []
+    if not SEGNALATI.is_file():
+        return out
+    for riga in SEGNALATI.read_text().splitlines():
+        riga = riga.strip()
+        if not riga:
+            continue
+        try:
+            v = json.loads(riga)
+        except ValueError:
+            continue
+        perc = v.get("percorso") or ""
+        if not perc.startswith("/"):
+            continue
+        p = Path(perc)
+        if not p.exists() or ammissibile(p):
+            continue
+        out.append({"percorso": p, "nome": v.get("nome") or p.name,
+                    "motivo": v.get("motivo") or "", "id": ident(p)})
+    return out
+
+
 def elenca(target: str) -> list[Path]:
     """Cosa toglierebbe questo target, come elenco di percorsi."""
     if target == "trash":
@@ -159,6 +304,13 @@ def elenca(target: str) -> list[Path]:
         except Exception as e:
             print(f"claude-sessions.py non eseguibile: {e}", file=sys.stderr)
             return []
+
+    if target == "claude-versions":
+        return versioni_vecchie()
+
+    if target.startswith("segnalato:"):
+        sigla = target.split(":", 1)[1]
+        return [v["percorso"] for v in segnalati() if v["id"] == sigla]
 
     if target == "usercache":
         return scaduti(HOME / ".cache", giorni("usercache"))
@@ -224,6 +376,12 @@ def applica(target: str, percorsi: list[Path]) -> int:
                 continue
         return b
 
+    if target == "claude-versions" or target.startswith("segnalato:"):
+        # Nel cestino, sempre. Una versione si recupera reinstallandola, ma
+        # una segnalazione puo' essere qualunque cosa: l'unico modo per non
+        # dover indovinare quanto era importante e' non cancellarla.
+        return b if cestina(percorsi) else 0
+
     if target == "claude-stubs":
         # Nel cestino e non cancellati: il criterio «nessuna risposta
         # dell'assistente» può pescare una conversazione vera interrotta
@@ -250,7 +408,8 @@ def main() -> int:
     come_json = "--json" in argv
     scelti = [a for a in argv if not a.startswith("-")]
 
-    ignoti = [t for t in scelti if t not in TARGET]
+    ignoti = [t for t in scelti
+              if t not in TARGET and not t.startswith("segnalato:")]
     if ignoti:
         print(f"target sconosciuto: {', '.join(ignoti)}", file=sys.stderr)
         print(f"disponibili: {', '.join(TARGET)}", file=sys.stderr)
