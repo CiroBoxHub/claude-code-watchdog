@@ -82,6 +82,30 @@ uguale "collect-metrics: funziona anche copiato fuori da bin/" \
 uguale "collect-metrics: senza progetto non inventa una radice" \
   "$(python3 -c "import json;print(json.load(open('$M'))['progetto'])" 2>/dev/null)" "None"
 
+# Cartelle di progetto senza conversazioni. La sandbox lavora sotto /tmp, che
+# la deduzione scarta apposta: lì dentro ci sono decine di cartelle che non
+# sono progetti di nessuno.
+prepara
+"$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1
+uguale "collect-metrics: non deduce una radice dai progetti in /tmp" \
+  "$(python3 -c "import json;print(json.load(open('$M'))['radiceProgetti'])")" "None"
+
+# Con la radice passata dall'estensione, le cartelle senza conversazioni
+# compaiono con zero sessioni accanto a quelle vere.
+mkdir -p "$SANDBOX/lavoro/appena-creato" "$SANDBOX/lavoro/.nascosta"
+"$WD_ROOT/bin/collect-metrics.py" --quiet --radice-progetti "$SANDBOX/lavoro" >/dev/null 2>&1
+uguale "collect-metrics: elenca le cartelle senza conversazioni" \
+  "$(python3 -c "import json;d=json.load(open('$M'));print(sorted(p['nome'] for p in d['claude']['progetti'] if p['sessioni']==0))")" \
+  "['appena-creato', 'progetto']"
+uguale "collect-metrics: salta le cartelle nascoste" \
+  "$(python3 -c "import json;d=json.load(open('$M'));print(any(p['nome'].startswith('.') for p in d['claude']['progetti']))")" "False"
+
+# Una radice che non esiste non deve far saltare la raccolta né inventare voci.
+"$WD_ROOT/bin/collect-metrics.py" --quiet --radice-progetti "$SANDBOX/non-esiste" >/dev/null 2>&1
+uguale "collect-metrics: una radice inesistente non aggiunge niente" \
+  "$(python3 -c "import json;d=json.load(open('$M'));print(d['radiceProgetti'], sum(1 for p in d['claude']['progetti'] if p['sessioni']==0))")" \
+  "None 0"
+
 # --------------------------------------------------- session-purge.py ---
 prepara
 uguale "session-purge: rifiuta un id non valido" \

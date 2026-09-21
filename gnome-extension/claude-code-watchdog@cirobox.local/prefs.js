@@ -574,6 +574,12 @@ export default class WatchdogPreferences extends ExtensionPreferences {
             const [ok, bytes] = f.load_contents(null);
             if (ok) {
                 const d = JSON.parse(new TextDecoder().decode(bytes));
+                // Dedotta dai progetti gia' noti. Prima si ricavava da
+                // «progetto», nullo quando lo script gira dentro
+                // l'estensione: qui si leggeva «rilevata in automatico» e
+                // sotto compariva la home.
+                if (d.radiceProgetti)
+                    return d.radiceProgetti;
                 if (d.progetto)
                     return GLib.path_get_dirname(d.progetto);
             }
