@@ -1,4 +1,4 @@
-/* Fedora Watchdog — indicatore di pannello per GNOME Shell.
+/* claude-code-watchdog — indicatore di pannello per GNOME Shell.
  *
  * Non calcola niente: legge il JSON prodotto da
  * claude-code-watchdog/bin/collect-metrics.py e lo disegna. Tutta la logica di
@@ -1158,7 +1158,17 @@ class Indicatore extends PanelMenu.Button {
             // STDERR_PIPE e non SILENCE: un raccoglitore che fallisce deve
             // poterlo dire all'utente. Prima finiva solo nel journal, e a
             // video restava un dato che invecchiava senza spiegazione.
-            const proc = Gio.Subprocess.new([script, '--quiet'],
+            // La radice scelta a mano vince sulla deduzione che lo script fa
+            // da solo, quindi gliela si passa. Non la rilegge lui da
+            // gsettings: lo schema non e' installato a livello di sistema e
+            // un secondo posto dove decidere la stessa cosa e' un posto dove
+            // le due decisioni divergono.
+            const argv = [script, '--quiet'];
+            const sceltaRadice = this._settings.get_string('projects-root').trim();
+            if (sceltaRadice)
+                argv.push('--radice-progetti',
+                          sceltaRadice.replace(/^~/, GLib.get_home_dir()));
+            const proc = Gio.Subprocess.new(argv,
                                             Gio.SubprocessFlags.STDOUT_SILENCE |
                                             Gio.SubprocessFlags.STDERR_PIPE);
             proc.communicate_utf8_async(null, null, (src, res) => {
@@ -1593,6 +1603,12 @@ class Indicatore extends PanelMenu.Button {
         const scelta = this._settings.get_string('projects-root').trim();
         if (scelta)
             return pulisci(scelta.replace(/^~/, GLib.get_home_dir()));
+        // Dedotta dai progetti gia' noti e pubblicata in metrics.json.
+        // Prima si ricavava da «progetto», che e' null quando lo script
+        // gira copiato dentro l'estensione: il rilevamento automatico
+        // che lo schema promette non ha mai funzionato da installato.
+        if (this._dati?.radiceProgetti)
+            return pulisci(this._dati.radiceProgetti);
         if (this._dati?.progetto)
             return pulisci(GLib.path_get_dirname(this._dati.progetto));
         return GLib.get_home_dir();

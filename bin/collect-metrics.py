@@ -84,35 +84,58 @@ def stale_mb(path: Path, days: int) -> int:
     return total // 1048576
 
 
-def radice_progetti() -> Path | None:
-    """La radice dei progetti configurata nell'estensione.
-
-    Sta in gsettings, non in un file nostro: qui si legge soltanto, e se il
-    comando non c'e' o lo schema non e' installato si restituisce None invece
-    di indovinare una cartella.
-    """
-    # Lo schema dell'estensione non e' installato in /usr/share/glib-2.0/schemas:
-    # sta nella cartella dell'estensione, quindi gsettings da solo non lo trova
-    # e va indicato con --schemadir. Si prova prima senza, per il caso in cui
-    # l'estensione fosse installata a livello di sistema.
-    tentativi = [
-        ["gsettings", "get"],
-        ["gsettings", "--schemadir", str(SCRIPT_DIR / "schemas"), "get"],
-    ]
-    for base in tentativi:
-        try:
-            r = subprocess.run(
-                base + ["org.gnome.shell.extensions.claude-code-watchdog",
-                        "projects-root"],
-                capture_output=True, text=True, timeout=5)
-            if r.returncode != 0:
-                continue
-            valore = r.stdout.strip().strip("'\"")
-            if valore:
-                return Path(valore).expanduser()
-        except Exception:
-            continue
+def arg(nome: str) -> str | None:
+    """Valore di un'opzione «--nome valore» sulla riga di comando, o None."""
+    if nome in sys.argv:
+        i = sys.argv.index(nome)
+        if i + 1 < len(sys.argv):
+            return sys.argv[i + 1]
     return None
+
+
+def radice_progetti(esplicita: str | None, progetti: list[dict]) -> Path | None:
+    """La cartella dove nascono i progetti nuovi, o None se non si sa.
+
+    Due sorgenti, in quest'ordine. L'estensione passa `--radice-progetti`
+    quando l'utente l'ha scritta nelle preferenze: quella vince sempre.
+    Altrimenti si deduce dai progetti già noti, prendendo la cartella che ne
+    contiene di più.
+
+    La deduzione non è un lusso: nello schema dell'estensione il valore vuoto
+    significa «rilevamento automatico», ed è il caso normale. Senza, la
+    funzione risponderebbe None proprio a chi non ha configurato niente.
+
+    Non si legge gsettings da qui. La regola di scelta sta in extension.js
+    (`_radiceProgetti`), e riscriverla in Python vorrebbe dire vederla
+    divergere senza accorgersene — è già successo con la codifica delle
+    cartelle di ~/.claude/projects/.
+    """
+    if esplicita:
+        p = Path(esplicita).expanduser()
+        return p if p.is_dir() else None
+
+    conta: dict[Path, int] = {}
+    for e in progetti:
+        perc = e.get("percorso") or ""
+        if not perc.startswith("/"):
+            continue
+        genitore = Path(perc).parent
+        # La home non è una radice di progetti: prenderla vorrebbe dire
+        # elencare Scaricati, Immagini e il resto come se fossero lavoro.
+        # /tmp lo stesso, ed è pieno di cartelle che non sono progetti.
+        if genitore == HOME or str(genitore) == "/" or str(genitore).startswith("/tmp"):
+            continue
+        conta[genitore] = conta.get(genitore, 0) + 1
+    if not conta:
+        return None
+    # A parità di conteggio si ordina per percorso, così due esecuzioni di
+    # fila danno la stessa risposta invece di alternarsi.
+    migliore, quanti = max(conta.items(), key=lambda kv: (kv[1], str(kv[0])))
+    # Un progetto solo non è un indizio: con due progetti in due posti diversi
+    # si sceglierebbe a sorte, e l'elenco cambierebbe da un giro all'altro.
+    if quanti < 2 or not migliore.is_dir():
+        return None
+    return migliore
 
 
 def problemi_progetto(cwd: str, cartelle_condivise: set[str]) -> list[dict]:
@@ -181,14 +204,15 @@ def sessions() -> dict:
     # Cartelle di progetto che non hanno ancora conversazioni.
     #
     # L'elenco qui sopra nasce dalle sessioni, raggruppate per cwd: una cartella
-    # appena creata, o su cui si e' lavorato senza Claude, non comparirebbe mai.
-    # Il caso non e' teorico: succede ogni volta che si apre un progetto nuovo e
-    # ci si chiede perche' il pannello non lo veda.
+    # appena creata, o su cui si è lavorato senza Claude, non comparirebbe mai.
+    # Il caso non è teorico: succede ogni volta che si apre un progetto nuovo e
+    # ci si chiede perché il pannello non lo veda.
     #
-    # La radice e' quella configurata nell'estensione; se gsettings non risponde
-    # non si inventa un percorso e semplicemente non si aggiunge nulla.
-    radice = radice_progetti()
-    if radice and radice.is_dir():
+    # Si aggiungono in fondo e non si riordina: «top» è ordinato per peso, e
+    # queste pesano zero. Il campo «problemi» lo riempie il giro più sotto,
+    # insieme a tutte le altre.
+    radice = radice_progetti(arg("--radice-progetti"), top)
+    if radice:
         gia_elencati = {e["percorso"] for e in top}
         for c in sorted(radice.iterdir()):
             if not c.is_dir() or c.name.startswith("."):
@@ -196,8 +220,7 @@ def sessions() -> dict:
             if str(c) in gia_elencati:
                 continue
             top.append({"nome": c.name, "percorso": str(c), "mb": 0,
-                        "sessioni": 0, "messaggi": 0, "esiste": True,
-                        "problemi": []})
+                        "sessioni": 0, "messaggi": 0, "esiste": True})
 
     # Elenco delle sessioni per il menu cliccabile dell'estensione: id intero
     # (serve a --resume e alla rimozione), percorso di lavoro e peso.
@@ -236,6 +259,7 @@ def sessions() -> dict:
         "mbTotali": round(sum(s["bytes"] for s in reali) / 1048576, 1),
         "progetti": top,
         "elenco": elenco,
+        "radiceProgetti": str(radice) if radice else None,
     }
 
 
@@ -340,12 +364,18 @@ def main() -> int:
             nome = nomi.get(l.get("tipo"), l.get("tipo") or "quota")
             allarmi.append(f"Quota {nome} al {l['percento']}%")
 
+    # Sale al primo livello accanto a «progetto»: la leggono il pannello e le
+    # preferenze, che finora la deducevano da «progetto» — null quando lo
+    # script gira copiato dentro l'estensione, cioè in uso normale.
+    radice_prog = sess.pop("radiceProgetti", None)
+
     now = datetime.now(timezone.utc)
     data = {
         "generatoIl": now.isoformat(timespec="seconds"),
         # Solo se il progetto c'è davvero: dichiarare la cartella delle
         # estensioni come «progetto» farebbe creare lì i progetti nuovi.
         "progetto": str(ROOT) if ROOT else None,
+        "radiceProgetti": radice_prog,
         "disco": disco,
         "claude": {
             "totaleMb": claude_mb,
