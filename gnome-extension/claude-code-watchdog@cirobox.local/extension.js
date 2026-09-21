@@ -825,8 +825,13 @@ class Indicatore extends PanelMenu.Button {
         // --- macchina ---
         this._mDisco = new Misura('Disco', {forma: 'barra'});
         this._mClaude = new Misura('Conversazioni', {forma: 'tendenza'});
+        // Fondoscala la soglia d'allarme, non il disco: 2,4 GB di cache su un
+        // disco da 1 TB sarebbero una barra vuota, e l'unica cosa che conta
+        // qui e' se ha superato il limite che ci si e' dati.
+        this._mCache = new Misura('Cache', {forma: 'barra'});
         c.add_child(this._mDisco);
         c.add_child(this._mClaude);
+        c.add_child(this._mCache);
 
         // --- quota ---
         this._ruleQuota = new St.Widget({style_class: 'fw-rule', x_expand: true});
@@ -983,7 +988,7 @@ class Indicatore extends PanelMenu.Button {
         // delle etichette nel pannello.
         this._attenzione = (d.soglie?.attenzione ?? 75) / 100;
         this._critico = (d.soglie?.critico ?? 90) / 100;
-        for (const m of [this._mDisco, this._mSessione, this._mSettimana])
+        for (const m of [this._mDisco, this._mCache, this._mSessione, this._mSettimana])
             m.setSoglie(this._attenzione, this._critico);
 
         this._rigaGuasto.visible = !!this._guasto;
@@ -995,6 +1000,13 @@ class Indicatore extends PanelMenu.Button {
 
         this._mDisco.aggiorna(`${disco.pct ?? '?'}%`, (disco.pct ?? 0) / 100,
             `${disco.usatiGb ?? '?'} di ${disco.totaliGb ?? '?'} GB · ${disco.liberiGb ?? '?'} GB liberi`);
+
+        const cacheMb = claude.cacheHomeMb ?? 0;
+        const cacheSoglia = d.soglie?.cacheMb ?? 2048;
+        this._mCache.aggiorna(fmtMb(cacheMb), cacheMb / cacheSoglia,
+            claude.cacheTop
+                ? `soglia ${fmtMb(cacheSoglia)} · più grossa: ${claude.cacheTop} (${fmtMb(claude.cacheTopMb ?? 0)})`
+                : `soglia ${fmtMb(cacheSoglia)}`);
 
         // Si mostra lo spazio delle CONVERSAZIONI, non il totale di ~/.claude:
         // lì dentro finiscono anche gli ambienti che i plugin si installano, e

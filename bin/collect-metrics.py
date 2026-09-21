@@ -153,6 +153,37 @@ def radice_progetti(esplicita: str | None, progetti: list[dict]) -> Path | None:
     return migliore
 
 
+def cache_utente() -> tuple[int, str, int]:
+    """(MB totali di ~/.cache, nome del piu' grosso, MB del piu' grosso).
+
+    Un solo `du` sui figli invece di uno sul totale: costa uguale (57 ms qui)
+    e in piu' dice chi occupa. Un indicatore che segnala 2,4 GB senza dire di
+    chi sono lascia l'utente esattamente dove l'ha trovato.
+    """
+    d = HOME / ".cache"
+    if not d.is_dir():
+        return 0, "", 0
+    try:
+        r = subprocess.run(["du", "-sm", "--one-file-system"] +
+                           [str(x) for x in d.iterdir()],
+                           capture_output=True, text=True, timeout=30)
+    except Exception:
+        return du_mb(d), "", 0
+    voci = []
+    for riga in r.stdout.splitlines():
+        parti = riga.split("\t", 1)
+        if len(parti) != 2:
+            continue
+        try:
+            voci.append((int(parti[0]), Path(parti[1]).name))
+        except ValueError:
+            continue
+    if not voci:
+        return 0, "", 0
+    voci.sort(reverse=True)
+    return sum(m for m, _ in voci), voci[0][1], voci[0][0]
+
+
 def problemi_progetto(cwd: str, cartelle_condivise: set[str]) -> list[dict]:
     """Cosa c'è che non va in un progetto, in forma leggibile.
 
@@ -385,7 +416,7 @@ def main() -> int:
         allarmi.append(f"Disco al {disco['pct']}%")
     if claude_mb > num("ALERT_CLAUDE_MB", 500):
         allarmi.append(f"~/.claude a {claude_mb} MB")
-    cache_mb = du_mb(HOME / ".cache")
+    cache_mb, cache_top, cache_top_mb = cache_utente()
     if cache_mb > num("ALERT_HOME_CACHE_MB", 2048):
         allarmi.append(f"~/.cache a {cache_mb} MB")
     if sess["fantasma"] > 50:
@@ -419,12 +450,18 @@ def main() -> int:
             "conversazioniMb": parti.get("conversazioni", 0),
             "scomposizione": parti,
             "cacheHomeMb": cache_mb,
+            "cacheTop": cache_top,
+            "cacheTopMb": cache_top_mb,
             **sess,
         },
         # Le soglie viaggiano con i dati: così il pannello colora le barre agli
         # stessi valori a cui gli scan suonano l'allarme, senza una seconda
         # copia da tenere allineata a mano.
-        "soglie": {"attenzione": warn, "critico": crit},
+        # `cacheMb` e' il fondoscala della barra della cache: senza, il pannello
+        # dovrebbe inventarsi un massimo e colorerebbe a soglie diverse da
+        # quelle a cui suona l'allarme.
+        "soglie": {"attenzione": warn, "critico": crit,
+                   "cacheMb": num("ALERT_HOME_CACHE_MB", 2048)},
         "recuperabile": {"totaleMb": sum(r["mb"] for r in rec), "voci": rec},
         "quota": quota,
         "allarmi": allarmi,
