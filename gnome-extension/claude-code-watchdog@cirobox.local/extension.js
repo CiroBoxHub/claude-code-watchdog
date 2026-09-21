@@ -1042,9 +1042,12 @@ class Indicatore extends PanelMenu.Button {
         const voci = (rec.voci ?? []).map(v => v.dettaglio ? `${v.nome} (${v.dettaglio})` : v.nome);
         this._mRec.aggiorna(fmtMb(recTot), null,
                             voci.length ? voci.join(' · ') : 'niente da liberare');
-        const puoPulire = (rec.voci ?? []).length > 0 && !!d.progetto;
+        // Non si chiede piu' `d.progetto`: era il residuo di quando il
+        // pulsante cercava clean.sh dentro il checkout. Da installata quel
+        // campo e' null, quindi il pulsante restava spento sempre.
+        const puoPulire = (rec.voci ?? []).length > 0;
         this._btnLibera.reactive = puoPulire;
-        this._btnLibera.opacity = puoPulire ? 255 : 110;
+        this._btnLibera.style_class = puoPulire ? 'fw-btn fw-btn-libera' : 'fw-btn fw-btn-spento';
 
         // Un progetto è una cartella figlia diretta della radice: è il modo in
         // cui l'utente lavora davvero, e si verifica senza ambiguità. Tutto il
