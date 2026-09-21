@@ -825,10 +825,12 @@ class Indicatore extends PanelMenu.Button {
         // --- macchina ---
         this._mDisco = new Misura('Disco', {forma: 'barra'});
         this._mClaude = new Misura('Conversazioni', {forma: 'tendenza'});
-        // Fondoscala la soglia d'allarme, non il disco: 2,4 GB di cache su un
-        // disco da 1 TB sarebbero una barra vuota, e l'unica cosa che conta
-        // qui e' se ha superato il limite che ci si e' dati.
-        this._mCache = new Misura('Cache', {forma: 'barra'});
+        // Solo ~/.cache/claude* e non tutta ~/.cache: li' dentro il grosso e'
+        // sempre il browser, e questo pannello non deve misurarlo. Fondoscala
+        // la soglia d'allarme e non il disco: pochi MB su un disco da 1 TB
+        // sarebbero una barra sempre vuota, mentre la domanda e' se si e'
+        // superato il limite che ci si e' dati.
+        this._mCache = new Misura('Cache di Claude', {forma: 'barra'});
         c.add_child(this._mDisco);
         c.add_child(this._mClaude);
         c.add_child(this._mCache);
@@ -1001,8 +1003,8 @@ class Indicatore extends PanelMenu.Button {
         this._mDisco.aggiorna(`${disco.pct ?? '?'}%`, (disco.pct ?? 0) / 100,
             `${disco.usatiGb ?? '?'} di ${disco.totaliGb ?? '?'} GB · ${disco.liberiGb ?? '?'} GB liberi`);
 
-        const cacheMb = claude.cacheHomeMb ?? 0;
-        const cacheSoglia = d.soglie?.cacheMb ?? 2048;
+        const cacheMb = claude.cacheMb ?? 0;
+        const cacheSoglia = d.soglie?.cacheMb ?? 200;
         this._mCache.aggiorna(fmtMb(cacheMb), cacheMb / cacheSoglia,
             claude.cacheTop
                 ? `soglia ${fmtMb(cacheSoglia)} · più grossa: ${claude.cacheTop} (${fmtMb(claude.cacheTopMb ?? 0)})`

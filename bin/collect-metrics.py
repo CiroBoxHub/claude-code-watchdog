@@ -153,31 +153,22 @@ def radice_progetti(esplicita: str | None, progetti: list[dict]) -> Path | None:
     return migliore
 
 
-def cache_utente() -> tuple[int, str, int]:
-    """(MB totali di ~/.cache, nome del piu' grosso, MB del piu' grosso).
+def cache_claude() -> tuple[int, str, int]:
+    """(MB della cache di Claude Code, nome del pezzo piu' grosso, suoi MB).
 
-    Un solo `du` sui figli invece di uno sul totale: costa uguale (57 ms qui)
-    e in piu' dice chi occupa. Un indicatore che segnala 2,4 GB senza dire di
-    chi sono lascia l'utente esattamente dove l'ha trovato.
+    Solo le cartelle di Claude, non tutta ~/.cache: li' dentro il grosso e'
+    sempre il browser, e un pannello che si chiama claude-code-watchdog non
+    deve misurare la cache di Chrome. Se un giorno servisse la cache intera,
+    e' un'altra estensione.
+
+    Sono due: `claude/` (staging degli aggiornamenti) e `claude-cli-nodejs/`,
+    che tiene i log degli MCP divisi per progetto.
     """
-    d = HOME / ".cache"
-    if not d.is_dir():
-        return 0, "", 0
-    try:
-        r = subprocess.run(["du", "-sm", "--one-file-system"] +
-                           [str(x) for x in d.iterdir()],
-                           capture_output=True, text=True, timeout=30)
-    except Exception:
-        return du_mb(d), "", 0
+    cartelle = [HOME / ".cache/claude", HOME / ".cache/claude-cli-nodejs"]
     voci = []
-    for riga in r.stdout.splitlines():
-        parti = riga.split("\t", 1)
-        if len(parti) != 2:
-            continue
-        try:
-            voci.append((int(parti[0]), Path(parti[1]).name))
-        except ValueError:
-            continue
+    for d in cartelle:
+        if d.is_dir():
+            voci.append((du_mb(d), d.name))
     if not voci:
         return 0, "", 0
     voci.sort(reverse=True)
@@ -370,6 +361,17 @@ def main() -> int:
         "claude-filehistory")
     add("Paste cache", stale_mb(CLAUDE / "paste-cache", num("CLAUDE_PASTE_CACHE_RETENTION_DAYS", 14)),
         "claude-paste")
+
+    # La cache di Claude sta in ~/.cache, non in ~/.claude: due cartelle, e i
+    # MB li conta chi poi cancella.
+    try:
+        if reclaim:
+            log = reclaim.elenca("claude-cache")
+            if log:
+                add("Cache di Claude", int(reclaim.peso(log) / 1048576),
+                    "claude-cache", f"{len(log)} file di log oltre la scadenza")
+    except Exception as e:
+        print(f"cache di Claude non leggibile: {e}", file=sys.stderr)
     try:
         vecchie = reclaim.versioni_vecchie() if reclaim else []
         if vecchie:
@@ -416,9 +418,9 @@ def main() -> int:
         allarmi.append(f"Disco al {disco['pct']}%")
     if claude_mb > num("ALERT_CLAUDE_MB", 500):
         allarmi.append(f"~/.claude a {claude_mb} MB")
-    cache_mb, cache_top, cache_top_mb = cache_utente()
-    if cache_mb > num("ALERT_HOME_CACHE_MB", 2048):
-        allarmi.append(f"~/.cache a {cache_mb} MB")
+    cache_mb, cache_top, cache_top_mb = cache_claude()
+    if cache_mb > num("ALERT_CLAUDE_CACHE_MB", 200):
+        allarmi.append(f"cache di Claude a {cache_mb} MB")
     if sess["fantasma"] > 50:
         allarmi.append(f"{sess['fantasma']} sessioni-fantasma")
     # Si distingue per `tipo`: un account può avere weekly_all e weekly_opus,
@@ -449,7 +451,7 @@ def main() -> int:
             # popup mostra in evidenza, con il totale come contesto.
             "conversazioniMb": parti.get("conversazioni", 0),
             "scomposizione": parti,
-            "cacheHomeMb": cache_mb,
+            "cacheMb": cache_mb,
             "cacheTop": cache_top,
             "cacheTopMb": cache_top_mb,
             **sess,
@@ -461,7 +463,7 @@ def main() -> int:
         # dovrebbe inventarsi un massimo e colorerebbe a soglie diverse da
         # quelle a cui suona l'allarme.
         "soglie": {"attenzione": warn, "critico": crit,
-                   "cacheMb": num("ALERT_HOME_CACHE_MB", 2048)},
+                   "cacheMb": num("ALERT_CLAUDE_CACHE_MB", 200)},
         "recuperabile": {"totaleMb": sum(r["mb"] for r in rec), "voci": rec},
         "quota": quota,
         "allarmi": allarmi,

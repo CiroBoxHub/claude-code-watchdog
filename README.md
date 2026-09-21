@@ -48,7 +48,7 @@ dentro invocano soltanto `du`, `gio`, `gsettings` e `claude`.
     git clone https://github.com/CiroBoxHub/claude-code-watchdog
     cd claude-code-watchdog
 
-    ./bin/prova.sh                 # 40 prove funzionali in sandbox
+    ./bin/prova.sh                 # 42 prove funzionali in sandbox
     ./bin/install-extension.sh     # installa l'estensione
     gnome-extensions enable claude-code-watchdog@cirobox.local
 
@@ -74,17 +74,16 @@ dove il repository non è stato clonato.
 
 ## Il pannello
 
-Nel popup: disco, peso di `~/.claude` con la tendenza, `~/.cache`, quota
+Nel popup: disco, peso di `~/.claude` con la tendenza, cache di Claude, quota
 (sessione corrente e settimana), spazio recuperabile, e l'elenco dei
 **progetti cliccabili**.
 
-La barra della cache ha come fondoscala `ALERT_HOME_CACHE_MB`, non il disco:
-2,4 GB su un disco da 1 TB sarebbero una barra vuota, mentre quello che conta
-è se ha superato il limite che ci si è dati. Sotto compare chi occupa di più,
-perché un indicatore che dice «2,4 GB» senza dire di chi sono lascia dove ha
-trovato. Attenzione: il target `usercache` toglie solo i file non toccati da
-`USER_CACHE_RETENTION_DAYS` giorni, quindi su una macchina nuova la barra può
-restare alta mentre non c'è niente da liberare.
+La barra della cache misura **solo** `~/.cache/claude` e
+`~/.cache/claude-cli-nodejs` — lo staging degli aggiornamenti e i log degli
+MCP. Non tutta `~/.cache`, dove il grosso è sempre il browser: quella la
+sorveglia `scan-system.sh`, che è lo strumento di sistema. Il fondoscala è
+`ALERT_CLAUDE_CACHE_MB` e non il disco, perché la domanda è se si è superato
+il limite che ci si è dati, non quanto pesa su un terabyte.
 
 Ogni riga di progetto si apre su tre azioni:
 
@@ -113,7 +112,7 @@ secondo clic su **Elimina**.
 
 Tocca esclusivamente dati dell'utente, senza chiedere privilegi:
 
-`trash` · `usercache` · `claude-versions` · `claude-stubs` ·
+`trash` · `usercache` · `claude-cache` · `claude-versions` · `claude-stubs` ·
 `claude-jobs` · `claude-snapshots` · `claude-paste` · `claude-filehistory`
 
 Cache dei pacchetti, journal e kernel richiedono root e restano appannaggio di
@@ -210,8 +209,13 @@ GNOME sul desktop.
 `claude-stubs` `claude-jobs` `claude-snapshots` `claude-paste`
 `claude-filehistory`
 
-`reclaim.py` aggiunge `claude-versions` e le segnalazioni, che `clean.sh` non
-ha: sono nati per il pannello.
+`reclaim.py` aggiunge `claude-cache`, `claude-versions` e le segnalazioni, che
+`clean.sh` non ha: sono nati per il pannello.
+
+Nota sulle finestre di scadenza: un target toglie solo i file più vecchi della
+sua retention. Su una macchina appena installata può quindi non esserci niente
+da togliere anche quando la barra è alta — non è un errore, è che nessun file
+ha ancora l'età richiesta.
 
 **Delicati** — solo se richiesti per nome, mai in automatico:
 
@@ -255,6 +259,8 @@ cablati dentro.
 | `JOURNAL_MAX_SIZE`, `COREDUMP_RETENTION_DAYS` | Limiti del journal e dei coredump |
 | `KEEP_KERNELS` | Quanti kernel lasciare installati |
 | `CLAUDE_KEEP_VERSIONS` | Quante versioni di Claude Code tenere, quella in uso compresa |
+| `CLAUDE_CACHE_RETENTION_DAYS` | Quanto tenere i log degli MCP in `~/.cache/claude-cli-nodejs/` |
+| `ALERT_CLAUDE_CACHE_MB` | Fondoscala della barra della cache, e soglia dell'avviso |
 | `ALERT_*` | Soglie oltre le quali `/watchdog-check` segnala |
 
 Le impostazioni del pannello, invece, stanno in GSettings e si cambiano dalle
@@ -267,7 +273,7 @@ potarlo per quello lo distruggerebbe il giorno dopo averlo cestinato.
 
 ## Sviluppo
 
-    ./bin/prova.sh                 # 40 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh                 # 42 prove funzionali, sandbox con HOME dirottata
     ./bin/verifica-estensione.sh   # controlli statici
 
 I controlli statici girano dentro `install-extension.sh` e `pack-extension.sh`,
