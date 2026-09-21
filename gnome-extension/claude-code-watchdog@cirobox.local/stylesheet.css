@@ -450,6 +450,24 @@
     background-color: #4580C6;
 }
 
+/* Verde quando c'e' davvero qualcosa da liberare. Non e' il verde di
+   «Riprendi» (#1F6E62, piu' freddo): sono due azioni diverse e devono
+   restare distinguibili a colpo d'occhio. 4,75:1 col bianco; il lime pieno
+   #4A8B2C sta a 4,18 e non basta. */
+.fw-btn-libera {
+    background-color: #43812E;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.fw-btn-libera:hover {
+    background-color: #4E9636;
+}
+
+.fw-btn-libera:focus {
+    background-color: #4E9636;
+}
+
 /* Non cliccabile: niente colore, niente grassetto. Il grigio dice da solo
    che lì non si può fare nulla. */
 .fw-btn-spento {
