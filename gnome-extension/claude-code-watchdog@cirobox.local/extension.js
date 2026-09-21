@@ -1417,24 +1417,31 @@ class Indicatore extends PanelMenu.Button {
     _eseguiPulizia() {
         if (this._pulendo)
             return;
-        const progetto = this._dati?.progetto;
         const scelti = (this._righePulizia ?? []).filter(r => r.scelto).map(r => r.voce.target);
-        if (!progetto || !scelti.length) {
+        if (!scelti.length) {
             this._mostraEsito('Niente di selezionato.');
             return;
         }
-        const script = GLib.build_filenamev([progetto, 'bin', 'clean.sh']);
-        if (!GLib.file_test(script, GLib.FileTest.IS_EXECUTABLE)) {
-            this._mostraEsito('clean.sh non trovato.');
+        // reclaim.py e non clean.sh. Quello si cercava dentro il checkout del
+        // progetto, che in un'installazione normale non esiste: la condizione
+        // scattava sempre e il pulsante rispondeva «Niente di selezionato»
+        // anche con tutto spuntato. E dentro ha dnf5, journalctl e i coredump,
+        // che fuori da Fedora non hanno senso. reclaim.py viaggia
+        // nell'estensione e fa solo i target che questo pulsante puo' chiedere.
+        const script = this._percorsoScript('reclaim.py');
+        if (!script) {
+            this._mostraEsito('reclaim.py non trovato.');
             return;
         }
 
         this._pulendo = true;
         this._mostraEsito('Pulizia in corso…');
         try {
-            const proc = Gio.Subprocess.new([script, '--apply', ...scelti],
+            // STDERR separato e non unito: l'esito si legge come JSON, e un
+            // avviso finito in mezzo lo renderebbe illeggibile.
+            const proc = Gio.Subprocess.new([script, '--apply', '--json', ...scelti],
                                             Gio.SubprocessFlags.STDOUT_PIPE |
-                                            Gio.SubprocessFlags.STDERR_MERGE);
+                                            Gio.SubprocessFlags.STDERR_PIPE);
             proc.communicate_utf8_async(null, null, (src, res) => {
                 this._pulendo = false;
                 if (this._morto)
@@ -1442,11 +1449,12 @@ class Indicatore extends PanelMenu.Button {
                 let liberati = null;
                 try {
                     const [, stdout] = src.communicate_utf8_finish(res);
-                    const m = /Spazio liberato \(stima\): \*\*(\d+) MB\*\*/.exec(stdout ?? '');
-                    if (m)
-                        liberati = m[1];
+                    // Dato strutturato, non una frase da cercare con una
+                    // regex: il testo per l'utente si puo' riscrivere senza
+                    // accorgersi di aver rotto il conteggio.
+                    liberati = JSON.parse(stdout ?? '').liberatiMb ?? null;
                 } catch (e) {
-                    logError(e, 'claude-code-watchdog: pulizia, lettura output fallita');
+                    logError(e, 'claude-code-watchdog: pulizia, lettura esito fallita');
                 }
                 // Il dialogo si chiude da solo: restare aperto su un elenco
                 // ormai vuoto è solo confusione.
@@ -1459,7 +1467,7 @@ class Indicatore extends PanelMenu.Button {
             this._pulendo = false;
             this._chiudiPulizia();
             this._mostraEsito('Avvio della pulizia fallito.');
-            logError(e, 'claude-code-watchdog: clean.sh non avviato');
+            logError(e, 'claude-code-watchdog: reclaim.py non avviato');
         }
     }
 

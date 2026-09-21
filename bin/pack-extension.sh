@@ -23,7 +23,7 @@ fi
 
 # Gli script di raccolta viaggiano dentro il pacchetto: senza, su un PC che non
 # ha il progetto claude-code-watchdog l'estensione non avrebbe nulla da leggere.
-for s in claude-sessions.py collect-metrics.py collect-usage.py session-purge.py project-purge.py project-relocate.py; do
+for s in claude-sessions.py collect-metrics.py collect-usage.py session-purge.py project-purge.py project-relocate.py reclaim.py trash-scaduti.py; do
   cp -a "$WD_ROOT/bin/$s" "$SRC/$s"
   chmod +x "$SRC/$s"
 done

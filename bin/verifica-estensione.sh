@@ -100,6 +100,21 @@ for x in $_s; do
 done
 if [[ -z "$_manca" ]]; then echo "ok ($(echo "$_s" | wc -w))"; else echo "✗$_manca"; ko=1; fi
 
+# Gli script bundled si chiamano anche fra loro: reclaim.py ha bisogno di
+# trash-scaduti.py, collect-metrics.py di claude-sessions.py. Chi arriva
+# dentro l'estensione senza le sue dipendenze fallisce solo a pulsante
+# premuto, e nel journal.
+printf '  %-34s ' "dipendenze fra script bundled"
+_d=$(grep -hoE '(_script\(|SCRIPT_DIR / )"[a-z-]+\.py"' "$WD_ROOT"/bin/*.py \
+     | grep -oE '"[a-z-]+\.py"' | tr -d '"' | sort -u)
+_manca=""
+for x in $_d; do
+  [[ -f "$WD_ROOT/bin/$x" ]] || _manca="$_manca $x(assente)"
+  grep -q "$x" "$WD_ROOT/bin/install-extension.sh" || _manca="$_manca $x(non installato)"
+  grep -q "$x" "$WD_ROOT/bin/pack-extension.sh" || _manca="$_manca $x(non impacchettato)"
+done
+if [[ -z "$_manca" ]]; then echo "ok ($(echo "$_d" | wc -w))"; else echo "✗$_manca"; ko=1; fi
+
 echo
 if (( ko )); then echo "NON installare finché non è tutto a posto."; else echo "Tutto a posto."; fi
 exit $ko

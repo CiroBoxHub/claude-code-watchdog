@@ -170,6 +170,48 @@ uguale "clean.sh: rifiuta un target sconosciuto" \
 uguale "clean.sh: senza --apply non cancella niente" \
   "$("$WD_ROOT/bin/clean.sh" claude-stubs 2>/dev/null | grep -c 'comando:')" "1"
 
+# ----------------------------------------------------------- reclaim.py ---
+# E' lo script che viaggia dentro l'estensione: deve fare le stesse cose di
+# clean.sh sui target portabili, senza dipendere dal checkout del progetto.
+prepara
+mkdir -p "$HOME/.claude/jobs"
+head -c 100000 /dev/zero > "$HOME/.claude/jobs/vecchio.bin"
+touch -d "60 days ago" "$HOME/.claude/jobs/vecchio.bin"
+echo recente > "$HOME/.claude/jobs/nuovo.bin"
+
+uguale "reclaim: rifiuta un target sconosciuto" \
+  "$("$WD_ROOT/bin/reclaim.py" --apply pippo >/dev/null 2>&1; echo $?)" "2"
+uguale "reclaim: senza target non fa niente" \
+  "$("$WD_ROOT/bin/reclaim.py" --apply >/dev/null 2>&1; echo $?)" "2"
+uguale "reclaim: senza --apply non cancella niente" \
+  "$("$WD_ROOT/bin/reclaim.py" claude-jobs >/dev/null 2>&1
+     [[ -f "$HOME/.claude/jobs/vecchio.bin" ]] && echo intatto || echo sparito)" "intatto"
+uguale "reclaim: conta lo spazio anche a vuoto" \
+  "$("$WD_ROOT/bin/reclaim.py" --json claude-jobs 2>/dev/null \
+     | python3 -c 'import json,sys;print(json.load(sys.stdin)["voci"][0]["file"])')" "1"
+
+"$WD_ROOT/bin/reclaim.py" --apply claude-jobs >/dev/null 2>&1
+uguale "reclaim: toglie i file oltre la scadenza" \
+  "$([[ -f "$HOME/.claude/jobs/vecchio.bin" ]] && echo intatto || echo sparito)" "sparito"
+uguale "reclaim: lascia stare quelli recenti" \
+  "$([[ -f "$HOME/.claude/jobs/nuovo.bin" ]] && echo intatto || echo sparito)" "intatto"
+
+# Le finestre di scadenza stanno in due file: qui si calcolano i MB mostrati
+# nel pannello, li' si cancella. Divergere vorrebbe dire annunciare un numero
+# e liberarne un altro.
+uguale "reclaim: stesse scadenze di collect-metrics" \
+  "$(python3 -c '
+import re, sys, pathlib
+b = pathlib.Path(sys.argv[1])
+cm = (b / "collect-metrics.py").read_text()
+rc = (b / "reclaim.py").read_text()
+a = {m[0]: int(m[1]) for m in re.findall(r"num\(\"([A-Z_]+)\",\s*(\d+)\)", cm)}
+c = {m[0]: int(m[1]) for m in re.findall(r"\(\"([A-Z_]+)\",\s*(\d+)\)", rc)}
+comuni = sorted(set(a) & set(c))
+diverse = [k for k in comuni if a[k] != c[k]]
+print(",".join(diverse) if diverse else "coerenti", len(comuni))
+' "$WD_ROOT/bin")" "coerenti 6"
+
 echo
 if (( fallite )); then
   printf '\033[31m%d prove fallite\033[0m su %d\n' "$fallite" "$((passate+fallite))"

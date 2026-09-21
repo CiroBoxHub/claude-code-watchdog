@@ -24,7 +24,8 @@ il dry-run, mostra l'elenco, chiedi. Anche quando la risposta sembra ovvia.
     bin/scan-system.sh      stato del sistema         — sola lettura
     bin/scan-claude.sh      stato di ~/.claude        — sola lettura
     bin/claude-sessions.py  inventario conversazioni  — sola lettura
-    bin/clean.sh            pulizia                   — dry-run di default
+    bin/clean.sh            pulizia completa, solo Fedora — dry-run di default
+    bin/reclaim.py          pulizia portabile per l'estensione — dry-run di default
     bin/collect-metrics.py  metriche per il cruscotto — sola lettura
     bin/collect-usage.py    quota Claude               — pulisce il proprio scarto
     bin/session-purge.py    rimozione completa di una sessione — elenca, poi --apply
@@ -53,6 +54,19 @@ metrica che somma tutto faceva sembrare che fossero cresciute le conversazioni.
 `scomposizione` per cartella; il popup mostra le conversazioni, con il resto
 come contesto.
 
+**L'estensione può finire su una distribuzione qualsiasi.** Purché ci sia
+GNOME: `metadata.json` dichiara 48, 49 e 50. Gli script che viaggiano dentro
+di lei invocano solo `du`, `gio`, `gsettings` e `claude` — mai `dnf5`, mai
+`rpm`, mai percorsi sotto `/var`. Le parti specifiche di Fedora stanno in
+`scan-system.sh` e `clean.sh`, che non vengono copiati. Il pulsante «Libera
+spazio» chiama `reclaim.py`, non `clean.sh`: quest'ultimo si cercava dentro il
+checkout del progetto — che in un'installazione normale non esiste — e il
+pulsante rispondeva «Niente di selezionato» anche con tutto spuntato, qui come
+altrove. `reclaim.py` fa solo i sette target portabili (cestino, `~/.cache`,
+scarti di Claude), non chiede privilegi, ed è in dry-run senza `--apply`.
+Serve **Python 3.10** o superiore: le annotazioni `Path | None` si valutano a
+runtime.
+
 **La radice dei progetti si deduce, non si indovina.** L'impostazione
 `projects-root` ha come default la stringa vuota, che per lo schema significa
 «rilevamento automatico». Il rilevamento stava in `extension.js`, che lo
@@ -68,7 +82,7 @@ una copia che diverge.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              23 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh              30 prove funzionali, sandbox con HOME dirottata
     ./bin/verifica-estensione.sh  controlli statici (gira dentro install e pack)
 
 `prova.sh` esiste perché i controlli statici non bastano: dei difetti trovati
