@@ -8,15 +8,13 @@ reports/
 *.gschemas.compiled
 gschemas.compiled
 
-# Copie degli script dentro la cartella dell'estensione: le mette
-# install-extension.sh copiandole da bin/, e averle versionate due volte
-# significa vederle divergere senza accorgersene
-gnome-extension/*/collect-metrics.py
-gnome-extension/*/collect-usage.py
-gnome-extension/*/claude-sessions.py
-gnome-extension/*/session-purge.py
-gnome-extension/*/project-purge.py
-gnome-extension/*/project-relocate.py
+# Copie degli script dentro la cartella dell'estensione: le mettono
+# install-extension.sh e pack-extension.sh copiandole da bin/, e averle
+# versionate due volte significa vederle divergere senza accorgersene.
+# Un motivo solo invece dell'elenco: l'elenco va aggiornato a ogni script
+# nuovo, e chi se ne dimentica se ne accorge quando la copia e' gia' committata.
+# Sorgenti .py dentro l'estensione non ce ne sono: e' tutto JavaScript.
+gnome-extension/*/*.py
 
 __pycache__/
 *.pyc

@@ -1,44 +1,193 @@
 # claude-code-watchdog
 
-Sorveglianza e pulizia dello spazio su Fedora, con un occhio particolare ai dati
-che [Claude Code](https://claude.com/claude-code) lascia sul disco: trascrizioni
-delle conversazioni, memorie dei progetti, job, e la quota di utilizzo.
+Tiene d'occhio lo spazio su disco e i dati che
+[Claude Code](https://claude.com/claude-code) lascia dietro di sé —
+trascrizioni delle conversazioni, memorie dei progetti, job, quota di
+utilizzo — e li pulisce senza sorprese.
 
-Due parti che funzionano anche separate:
+Sono due strumenti che funzionano anche separati:
 
-- **Script da terminale** (`bin/`) — scansione, inventario delle conversazioni,
-  pulizia guidata, riparazione dei progetti spostati.
-- **Estensione GNOME** (`gnome-extension/`) — gli stessi dati nel pannello, con
-  un popup da cui si interviene senza aprire un terminale.
+| | Cosa fa | Dove gira |
+|---|---|---|
+| **Estensione GNOME** | Cruscotto nel pannello: disco, conversazioni per progetto, quota, spazio recuperabile, andamento nel tempo. Da lì si interviene senza aprire un terminale. | Qualunque distribuzione con GNOME |
+| **Script da terminale** (`bin/`) | Scansione del sistema, inventario delle conversazioni, pulizia guidata, riparazione dei progetti spostati. | Fedora per i target di sistema, ovunque per il resto |
+
+---
 
 ## La regola che tiene insieme tutto
 
-**Prima si guarda, poi si cancella. E si cancella nel cestino.**
+> **Prima si guarda, poi si cancella. E si cancella nel cestino.**
 
-Nessuno script cancella qualcosa senza averlo prima elencato voce per voce e
-aver ricevuto un sì esplicito. `clean.sh` è in dry-run se non riceve `--apply`.
-Le rimozioni passano da `gio trash`, quindi si recuperano dal gestore file.
+Nessuno script cancella niente senza averlo prima elencato voce per voce e
+aver ricevuto un sì esplicito. `clean.sh` e `reclaim.py` sono in **dry-run**
+finché non ricevono `--apply`. Le rimozioni che riguardano conversazioni
+passano da `gio trash`, quindi si recuperano dal gestore file.
 
-Questa regola è nata da un errore: il 2026-09-17 sono andate perse due
-conversazioni — una da 4380 messaggi — perché al posto del cestino c'era un
-`unlink()`.
-
-## Installare
-
-    git clone <questo-repo> && cd claude-code-watchdog
-    ./bin/prova.sh                 # 30 prove funzionali in sandbox
-    ./bin/install-extension.sh     # estensione GNOME, poi logout/login
-    gnome-extensions enable claude-code-watchdog@cirobox.local
-
-Gli script da terminale non richiedono installazione. L'estensione vuole GNOME
-Shell 48 o successivo; la sola lettura della quota richiede la CLI `claude` nel
-PATH.
-
-## Licenza
-
-GPL-2.0-or-later, la stessa di GNOME Shell. Vedi `LICENSE`.
+La regola è nata da un errore: due conversazioni — una da 4380 messaggi —
+sono andate perse perché al posto del cestino c'era un `unlink()`. L'elenco di
+conferma era corretto e chi ha confermato sapeva cosa stava facendo; il difetto
+era non lasciare un ripensamento possibile su dati che non si ricostruiscono.
 
 ---
+
+## Requisiti
+
+| Serve per | Requisito |
+|---|---|
+| Estensione | GNOME Shell **48, 49 o 50** |
+| Script Python | **Python 3.10** o superiore |
+| Cestino | `gio` (arriva con GLib, c'è già su ogni desktop GNOME) |
+| Lettura della quota | CLI `claude` nel `PATH` |
+| `scan-system.sh`, target di sistema di `clean.sh` | Fedora (`dnf5`, `rpm`) e systemd |
+
+L'estensione non dipende da nessuna di queste ultime: gli script che si porta
+dentro invocano soltanto `du`, `gio`, `gsettings` e `claude`.
+
+## Installazione
+
+    git clone https://github.com/CiroBoxHub/claude-code-watchdog
+    cd claude-code-watchdog
+
+    ./bin/prova.sh                 # 30 prove funzionali in sandbox
+    ./bin/install-extension.sh     # installa l'estensione
+    gnome-extensions enable claude-code-watchdog@cirobox.local
+
+Poi **logout e login**. Non è pignoleria: GNOME Shell tiene in cache il modulo
+ES già importato, quindi `disable/enable` non rilegge il codice. Su Wayland non
+esiste scorciatoia.
+
+Gli script da terminale non vanno installati: si usano dove sono.
+
+### Su un altro PC
+
+    ./bin/pack-extension.sh        # produce dist/*.zip (68 KB)
+
+    # sull'altra macchina
+    gnome-extensions install --force claude-code-watchdog@cirobox.local.shell-extension.zip
+    gnome-extensions enable claude-code-watchdog@cirobox.local
+    # logout e login
+
+Lo zip porta con sé gli otto script Python e le icone, quindi funziona anche
+dove il repository non è stato clonato.
+
+---
+
+## Il pannello
+
+Nel popup: disco, peso di `~/.claude` con la tendenza, quota (sessione
+corrente e settimana), spazio recuperabile, e l'elenco dei **progetti
+cliccabili**.
+
+Ogni riga di progetto si apre su tre azioni:
+
+| Azione | Cosa fa |
+|---|---|
+| **Cartella** | Apre la cartella di lavoro nel gestore file |
+| **Riprendi** | Apre il terminale ed esegue `claude --resume` lì dentro |
+| **Elimina dati** | Rimuove i dati che Claude Code tiene per proprio conto |
+
+**«Elimina dati» non tocca mai la cartella di lavoro.** Rimuove trascrizioni,
+memorie, job e scratchpad; i file veri restano. Lo script ha una rete di
+sicurezza che scarta qualunque percorso caschi dentro la cartella di lavoro,
+anche se ci finisse per errore.
+
+Se un progetto è stato spostato, la sua riga mostra **Correggi**: si indica la
+nuova cartella, lo strumento verifica che i file citati nelle conversazioni
+esistano davvero lì, e solo allora riscrive il percorso e sposta le
+trascrizioni. Il «+» accanto a «Progetti» ne crea uno nuovo e ci apre subito
+una sessione.
+
+### Libera spazio
+
+Il pulsante **Libera spazio…** non pulisce: apre l'elenco di cosa verrebbe
+tolto, voce per voce, con un interruttore per ciascuna. Si elimina solo dopo un
+secondo clic su **Elimina**.
+
+Tocca esclusivamente dati dell'utente, senza chiedere privilegi:
+
+`trash` · `usercache` · `claude-stubs` · `claude-jobs` ·
+`claude-snapshots` · `claude-paste` · `claude-filehistory`
+
+Cache dei pacchetti, journal e kernel richiedono root e restano appannaggio di
+`clean.sh` da terminale.
+
+### Impostazioni
+
+Dall'icona *Impostazioni e guida* nel popup si sceglie cosa compare nella
+barra, quali sezioni mostrare, ogni quanto aggiornare, ogni quanto rileggere la
+quota e dove nascono i progetti nuovi. La prima pagina è una guida che spiega
+ogni indicatore.
+
+Lasciando vuota la radice dei progetti viene dedotta da sola: è la cartella che
+contiene più progetti fra quelli già noti.
+
+### Come è fatto
+
+L'estensione **non calcola niente**. Legge
+`~/.local/share/claude-code-watchdog/metrics.json`, prodotto dal raccoglitore,
+e `history.jsonl` per il grafico. Correggere una misura significa toccare gli
+script, non il codice della shell.
+
+Per lo stesso motivo **in `extension.js` non c'è nessuna costante
+configurabile**: una costante lì si cambierebbe solo con logout e login. Tutto
+ciò che si regola sta in GSettings e viene riletto a ogni giro.
+
+I file del cruscotto contengono i nomi dei progetti — quindi, potenzialmente,
+dei clienti. La cartella è `700` e i file `600`.
+
+---
+
+## Da terminale
+
+    ./bin/scan-system.sh                 # stato del sistema
+    ./bin/scan-claude.sh                 # stato di ~/.claude
+    ./bin/claude-sessions.py             # inventario delle conversazioni
+    ./bin/claude-sessions.py --older-than 90
+
+    ./bin/clean.sh                       # anteprima: cosa si può liberare
+    ./bin/clean.sh --list                # elenco dei target
+    ./bin/clean.sh --apply               # esegue i target "sicuri"
+    ./bin/clean.sh --apply dnf journal   # solo questi due
+
+    ./bin/reclaim.py --apply trash usercache   # la variante portabile
+
+Gli scan sono a sola lettura.
+
+    ./bin/session-purge.py <id>          # elenca tutto ciò che appartiene a una sessione
+    ./bin/session-purge.py <id> --apply
+    ./bin/project-purge.py <cartella>    # i dati Claude di un intero progetto
+    ./bin/project-relocate.py <vecchia> <nuova>   # riaggancia un progetto spostato
+    ./bin/fix-cwd.py                     # allinea la cwd dichiarata alla cartella reale
+
+I target che richiedono root non possono usare `sudo` da dentro Claude Code:
+manca un terminale per la password, e nemmeno il prefisso `!` lo risolve.
+`clean.sh` ripiega su `pkexec`, che mostra il dialogo di autenticazione di
+GNOME sul desktop.
+
+### Target di pulizia
+
+**Sicuri** — inclusi quando non si specifica niente:
+
+`dnf` `journal` `coredump` `logs` `trash` `usercache` `flatpak`
+`claude-stubs` `claude-jobs` `claude-snapshots` `claude-paste`
+`claude-filehistory`
+
+**Delicati** — solo se richiesti per nome, mai in automatico:
+
+`kernels` `orphans` `claude-dups` `claude-projects`
+
+`reclaim.py` fa i sette portabili di quella prima lista: è lo script che
+viaggia dentro l'estensione, e non deve presumere né Fedora né privilegi.
+`clean.sh` resta la versione completa per la riga di comando.
+
+### Sessioni-fantasma
+
+Sono trascrizioni in cui l'assistente non ha mai risposto: le lasciano dietro
+le invocazioni non interattive di Claude — una statusline che chiama `/usage`,
+un hook, uno script SDK. Non sono conversazioni, si rigenerano da sole e
+gonfiano il selettore di `claude --resume`. Il target `claude-stubs` le manda
+nel cestino e non le cancella, perché il criterio «nessuna risposta» può
+pescare anche una conversazione vera interrotta prima della prima risposta.
 
 ## Da dentro Claude Code
 
@@ -46,121 +195,51 @@ GPL-2.0-or-later, la stessa di GNOME Shell. Vedi `LICENSE`.
 |---|---|
 | `/watchdog-check` | Report su sistema e Claude. Non tocca niente. |
 | `/watchdog-clean` | Mostra cosa si può liberare, chiede, poi libera. |
-| `/watchdog-sessions` | Elenco di tutte le chat, con il comando per riprenderle. |
+| `/watchdog-sessions` | Elenco delle chat, con il comando per riprenderle. |
 
-## Da terminale
+---
 
-    ./bin/scan-system.sh              # stato del sistema
-    ./bin/scan-claude.sh              # stato di ~/.claude
-    ./bin/claude-sessions.py          # inventario conversazioni
-    ./bin/claude-sessions.py --older-than 90
-    ./bin/clean.sh                    # anteprima: cosa si potrebbe liberare
-    ./bin/clean.sh --list             # target disponibili
-    ./bin/clean.sh --apply dnf journal   # esegue solo questi due
-
-Gli scan sono a sola lettura. `clean.sh` senza `--apply` non cancella niente.
-
-I target che richiedono privilegi di root non possono usare `sudo` da dentro
-Claude Code: manca un terminale per la password, e nemmeno il prefisso `!` lo
-risolve. Lo script ripiega su `pkexec`, che mostra il dialogo di
-autenticazione di GNOME sul desktop.
-
-## Cruscotto nel pannello GNOME
-
-Estensione `claude-code-watchdog@cirobox.local`: disco, peso di `~/.claude`,
-conversazioni per progetto, spazio recuperabile e andamento nel tempo.
-
-    ./bin/collect-metrics.py      # raccoglie le metriche (0,5 s)
-    ./bin/collect-usage.py        # legge la quota Claude (~2 s, un giro di rete)
-    ./bin/session-purge.py <id>   # elenca tutto ciò che appartiene a una sessione
-    ./bin/session-purge.py <id> --apply    # e lo rimuove
-    ./bin/project-purge.py <cartella>      # i dati Claude di un intero progetto
-    ./bin/project-purge.py <cartella> --apply
-    ./bin/install-extension.sh    # installa o reinstalla dopo una modifica
-    ./bin/pack-extension.sh       # crea lo zip per un altro PC
-
-Nel popup: disco, dati Claude con la tendenza, quota (sessione e settimana),
-spazio recuperabile, e l'elenco dei **progetti cliccabili** — ogni riga si apre
-su tre azioni: **Cartella**, **Riprendi** (apre il terminale ed esegue
-`claude --resume` lì dentro), **Elimina dati**.
-
-«Elimina dati» rimuove solo quello che Claude Code tiene per proprio conto —
-trascrizioni, memorie, job, scratchpad. **La cartella di lavoro non viene mai
-toccata**: lì ci sono i file veri. Lo script ha una rete di sicurezza che salta
-qualunque percorso caschi dentro la cartella di lavoro, anche se ci finisse per
-errore.
-
-Il «+» accanto a «Progetti» crea una cartella nuova e ci apre subito una
-sessione di Claude Code.
-
-Le impostazioni (icona `Impostazioni e guida` nel popup) scelgono cosa compare
-nella barra, quali sezioni mostrare, ogni quanto aggiornare, ogni quanto
-rileggere la quota e dove nascono i nuovi progetti. La prima pagina è una guida
-che spiega ogni indicatore.
-
-Nel popup c'è un pulsante **Libera spazio…**. Non pulisce: apre l'elenco di
-cosa verrebbe tolto, voce per voce, con un interruttore per ciascuna. Si
-elimina solo dopo un secondo clic su **Elimina**. Tocca esclusivamente dati
-dell'utente — cache pacchetti, journal e kernel richiedono root e restano
-appannaggio di `/watchdog-clean`.
-
-L'estensione **non calcola niente**: legge
-`~/.local/share/claude-code-watchdog/metrics.json`, prodotto dal raccoglitore, e
-`history.jsonl` per il grafico. Correggere una misura vuol dire toccare gli
-script, non il codice della shell.
-
-**Nessun parametro è una costante in `extension.js`.** GNOME Shell tiene in
-cache il modulo già importato, quindi una costante lì richiederebbe logout e
-login per cambiare. La cadenza si regola con `DASHBOARD_REFRESH_SECONDS` in
-`config/watchdog.conf`, finisce nel JSON e viene riletta a ogni giro.
-
-Dopo una modifica al sorgente dell'estensione: `./bin/install-extension.sh`,
-poi logout e login. Non esiste scorciatoia su Wayland.
-
-### Installarla su un altro PC
-
-    ./bin/pack-extension.sh                      # produce dist/*.zip (32 KB)
-    # sull'altra macchina:
-    gnome-extensions install --force <file>.zip
-    # logout e login, poi:
-    gnome-extensions enable claude-code-watchdog@cirobox.local
-
-Lo zip porta con sé i quattro script Python e le icone, quindi funziona anche
-dove la cartella `claude-code-watchdog` non c'è. Serve GNOME Shell 48 o successivo e, per la
-sola quota, la CLI `claude` nel PATH.
-
-## Soglie e retention
+## Configurazione
 
 Tutto in `config/watchdog.conf`: quanti giorni tenere i sottoprodotti di
 Claude, il tetto del journal, quanti kernel lasciare installati, le soglie
-oltre le quali `/watchdog-check` suona l'allarme. Gli script leggono da lì,
-non hanno numeri cablati dentro.
+oltre le quali scatta l'allarme. Gli script leggono da lì e non hanno numeri
+cablati dentro.
 
-## Target di pulizia
+| Chiave | Cosa regola |
+|---|---|
+| `CLAUDE_JOBS_RETENTION_DAYS` e affini | Quanto tenere job, snapshot, cronologia file, paste |
+| `TRASH_RETENTION_DAYS` | Dopo quanto un elemento cestinato è considerato scaduto |
+| `USER_CACHE_RETENTION_DAYS` | Quanto tenere i file stantii di `~/.cache` |
+| `JOURNAL_MAX_SIZE`, `COREDUMP_RETENTION_DAYS` | Limiti del journal e dei coredump |
+| `KEEP_KERNELS` | Quanti kernel lasciare installati |
+| `ALERT_*` | Soglie oltre le quali `/watchdog-check` segnala |
 
-**Sicuri** — inclusi quando non specifichi niente:
-`dnf` `journal` `coredump` `logs` `trash` `usercache` `flatpak`
-`claude-stubs` `claude-jobs` `claude-snapshots` `claude-paste`
-`claude-filehistory`
+Le impostazioni del pannello, invece, stanno in GSettings e si cambiano dalle
+preferenze dell'estensione: la cadenza di aggiornamento è `refresh-seconds`,
+non una chiave del file di configurazione.
 
-**Delicati** — solo se li chiedi per nome, e comunque non vengono eseguiti in
-automatico: `kernels` `orphans` `claude-dups` `claude-projects`
+Il cestino è potato leggendo `DeletionDate` dai `.trashinfo`, **non** l'mtime:
+un documento modificato due anni fa e buttato ieri ha l'mtime vecchio, e
+potarlo per quello lo distruggerebbe il giorno dopo averlo cestinato.
 
-## Cosa sono le "sessioni-fantasma"
+## Sviluppo
 
-Trascrizioni in cui l'assistente non ha mai risposto: le lascia dietro chi
-invoca Claude in modo non interattivo — una statusline che chiama `/usage`, un
-hook, uno script SDK. Si rigenerano da sole. Al primo giro qui erano 190.
+    ./bin/prova.sh                 # 30 prove funzionali, sandbox con HOME dirottata
+    ./bin/verifica-estensione.sh   # controlli statici
 
-Su questa macchina le genera l'estensione GNOME `claude-status@oakz.org`
-(indicatore di quota nel pannello), che lancia `claude -p "/usage"` a
-intervalli. Non consuma token. Dal 2026-09-16 l'intervallo è di 15 minuti
-invece di 5 — vedi `CLAUDE.md`, perché un aggiornamento dell'estensione lo
-rimette a 5.
+I controlli statici girano dentro `install-extension.sh` e `pack-extension.sh`,
+che si fermano se qualcosa non torna. Verificano la sintassi, lo schema
+GSettings, le icone, i metodi chiamati ma mai definiti, le chiavi GSettings
+inesistenti, le classi CSS non dichiarate e gli script che l'estensione cita ma
+che nessuno copia al suo interno.
 
-## Attenzione
+Le prove funzionali esistono perché i controlli statici non bastano: girano su
+dati finti in una sandbox con `HOME` dirottata, e coprono i casi in cui un
+difetto si vede solo eseguendo — una radice dedotta male, il cestino potato con
+il criterio sbagliato, due script che codificano lo stesso percorso in modo
+diverso.
 
-Le trascrizioni in `~/.claude/projects/-tmp/` risultano duplicate ma sono
-**backup voluti**: i progetti giravano da `/tmp`, il 2026-09-02 il PC si è
-spento e quelle copie sono l'unica cosa che si è salvata. Vedi il README in
-`~/Documenti/Claude/`.
+## Licenza
+
+GPL-2.0-or-later, la stessa di GNOME Shell. Vedi [`LICENSE`](LICENSE).
