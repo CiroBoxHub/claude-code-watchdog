@@ -105,8 +105,18 @@ if [[ -z "$_manca" ]]; then echo "ok ($(echo "$_s" | wc -w))"; else echo "✗$_m
 # dentro l'estensione senza le sue dipendenze fallisce solo a pulsante
 # premuto, e nel journal.
 printf '  %-34s ' "dipendenze fra script bundled"
-_d=$(grep -hoE '(_script\(|SCRIPT_DIR / )"[a-z-]+\.py"' "$WD_ROOT"/bin/*.py \
-     | grep -oE '"[a-z-]+\.py"' | tr -d '"' | sort -u)
+# Due forme: la chiamata per nome (_script("x.py")) e l'import di un modulo
+# fratello (import x), che collect-metrics fa con reclaim per non duplicarne
+# i conti. La seconda non si vede grep-ando i nomi di file.
+_d=$(
+  grep -hoE '(_script\(|SCRIPT_DIR / )"[a-z-]+\.py"' "$WD_ROOT"/bin/*.py \
+    | grep -oE '"[a-z-]+\.py"' | tr -d '"'
+  grep -hoE '^import [a-z_]+$' "$WD_ROOT"/bin/*.py \
+    | awk '{print $2".py"}' | while read -r m; do
+        [[ -f "$WD_ROOT/bin/$m" ]] && echo "$m"
+      done
+)
+_d=$(echo "$_d" | sort -u)
 _manca=""
 for x in $_d; do
   [[ -f "$WD_ROOT/bin/$x" ]] || _manca="$_manca $x(assente)"

@@ -75,7 +75,8 @@ uguale "collect-metrics: pubblica le soglie" \
 # La copia dentro l'estensione deve funzionare come quella nel progetto:
 # è il difetto che faceva riportare una macchina vuota.
 COPIA="$SANDBOX/finta-estensione"; mkdir -p "$COPIA"
-cp "$WD_ROOT/bin/collect-metrics.py" "$WD_ROOT/bin/claude-sessions.py" "$COPIA/"
+cp "$WD_ROOT/bin/collect-metrics.py" "$WD_ROOT/bin/claude-sessions.py" \
+   "$WD_ROOT/bin/reclaim.py" "$WD_ROOT/bin/trash-scaduti.py" "$COPIA/"
 rm -f "$M"; (cd "$COPIA" && ./collect-metrics.py --quiet >/dev/null 2>&1)
 uguale "collect-metrics: funziona anche copiato fuori da bin/" \
   "$(python3 -c "import json;print(json.load(open('$M'))['claude']['conversazioni'])" 2>/dev/null)" "1"
@@ -195,6 +196,54 @@ uguale "reclaim: toglie i file oltre la scadenza" \
   "$([[ -f "$HOME/.claude/jobs/vecchio.bin" ]] && echo intatto || echo sparito)" "sparito"
 uguale "reclaim: lascia stare quelli recenti" \
   "$([[ -f "$HOME/.claude/jobs/nuovo.bin" ]] && echo intatto || echo sparito)" "intatto"
+
+# Versioni di Claude Code. Quella in uso non si deduce dal numero piu' alto:
+# si risolve il link, perche' `claude install` puo' averlo riportato indietro.
+prepara
+mkdir -p "$HOME/.local/share/claude/versions" "$HOME/.local/bin"
+for v in 2.0.1 2.0.2 2.0.3 2.0.4; do
+  head -c 1000 /dev/zero > "$HOME/.local/share/claude/versions/$v"
+  chmod +x "$HOME/.local/share/claude/versions/$v"
+done
+touch -d "4 days ago" "$HOME/.local/share/claude/versions/2.0.1"
+touch -d "3 days ago" "$HOME/.local/share/claude/versions/2.0.2"
+touch -d "2 days ago" "$HOME/.local/share/claude/versions/2.0.3"
+touch -d "1 day ago"  "$HOME/.local/share/claude/versions/2.0.4"
+
+# Senza sapere quale gira, non si tocca niente: e' il caso di chi ha Claude
+# installato altrove, o di un PATH che non lo risolve.
+uguale "reclaim: senza sapere quale gira non tocca le versioni" \
+  "$("$WD_ROOT/bin/reclaim.py" --json claude-versions 2>/dev/null \
+     | python3 -c 'import json,sys;print(json.load(sys.stdin)["voci"][0]["file"])')" "0"
+
+ln -sf "$HOME/.local/share/claude/versions/2.0.4" "$HOME/.local/bin/claude"
+uguale "reclaim: tiene le due versioni piu' recenti" \
+  "$(PATH="$HOME/.local/bin:$PATH" "$WD_ROOT/bin/reclaim.py" --json claude-versions 2>/dev/null \
+     | python3 -c 'import json,sys;print(json.load(sys.stdin)["voci"][0]["file"])')" "2"
+
+# Il link punta alla piu' vecchia: quella non deve sparire, e al suo posto
+# ne esce di scena un'altra.
+ln -sf "$HOME/.local/share/claude/versions/2.0.1" "$HOME/.local/bin/claude"
+PATH="$HOME/.local/bin:$PATH" "$WD_ROOT/bin/reclaim.py" --apply claude-versions >/dev/null 2>&1
+uguale "reclaim: non tocca la versione a cui punta il link" \
+  "$([[ -f "$HOME/.local/share/claude/versions/2.0.1" ]] && echo intatta || echo sparita)" "intatta"
+
+# Segnalazioni: la coda, i rifiuti, e il fatto che il target agisca solo su
+# cio' che e' davvero in coda.
+prepara
+mkdir -p "$HOME/roba-da-buttare"
+echo x > "$HOME/roba-da-buttare/file"
+uguale "segnala: rifiuta un percorso fuori dalla home" \
+  "$("$WD_ROOT/bin/segnala.py" /etc >/dev/null 2>&1; echo $?)" "1"
+uguale "segnala: rifiuta quello che sta sotto ~/.claude" \
+  "$("$WD_ROOT/bin/segnala.py" "$HOME/.claude" >/dev/null 2>&1; echo $?)" "1"
+uguale "segnala: accetta e mette in coda" \
+  "$("$WD_ROOT/bin/segnala.py" "$HOME/roba-da-buttare" >/dev/null 2>&1; echo $?)" "0"
+uguale "segnala: segnalare non cancella" \
+  "$([[ -d "$HOME/roba-da-buttare" ]] && echo intatta || echo sparita)" "intatta"
+uguale "reclaim: un id non in coda non tocca niente" \
+  "$("$WD_ROOT/bin/reclaim.py" --apply segnalato:000000000000 --json 2>/dev/null \
+     | python3 -c 'import json,sys;print(json.load(sys.stdin)["voci"][0]["file"])')" "0"
 
 # Le finestre di scadenza stanno in due file: qui si calcolano i MB mostrati
 # nel pannello, li' si cancella. Divergere vorrebbe dire annunciare un numero

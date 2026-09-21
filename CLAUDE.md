@@ -26,6 +26,7 @@ il dry-run, mostra l'elenco, chiedi. Anche quando la risposta sembra ovvia.
     bin/claude-sessions.py  inventario conversazioni  — sola lettura
     bin/clean.sh            pulizia completa, solo Fedora — dry-run di default
     bin/reclaim.py          pulizia portabile per l'estensione — dry-run di default
+    bin/segnala.py          mette in coda un percorso perché il pannello lo mostri
     bin/collect-metrics.py  metriche per il cruscotto — sola lettura
     bin/collect-usage.py    quota Claude               — pulisce il proprio scarto
     bin/session-purge.py    rimozione completa di una sessione — elenca, poi --apply
@@ -53,6 +54,33 @@ metrica che somma tutto faceva sembrare che fossero cresciute le conversazioni.
 `collect-metrics.py` pubblica `conversazioniMb` accanto a `totaleMb` e una
 `scomposizione` per cartella; il popup mostra le conversazioni, con il resto
 come contesto.
+
+**Le versioni vecchie di Claude Code pesano più di tutto il resto.**
+`~/.local/share/claude/versions/` ne tiene una per aggiornamento, ~220 MB
+l'una, e non ne toglie mai nessuna: il 2026-09-21 erano quattro, 883 MB, contro
+i 394 MB di tutto ciò che il cruscotto misurava. Il target `claude-versions`
+tiene le `CLAUDE_KEEP_VERSIONS` più recenti più quella in uso. **Quella in uso
+si ricava risolvendo il link di `claude`, mai dal numero più alto**: dopo un
+aggiornamento andato male `claude install` può aver riportato indietro il link,
+e in quel caso la più recente sarebbe proprio quella da non toccare. Se non si
+riesce a stabilire quale sia, `versioni_vecchie()` torna una lista vuota: non
+si indovina.
+
+**Le segnalazioni sono l'unico modo per far arrivare nel pannello una cosa che
+nessuna categoria conosce.** `segnala.py` scrive un percorso in
+`segnalati.jsonl`, `collect-metrics.py` lo pubblica fra le voci recuperabili,
+il pulsante lo cestina. **Il pannello non accetta percorsi digitati** — un
+campo di testo che cancella sarebbe l'opposto di tutto il resto. `reclaim.py`
+agisce solo su percorsi che ritrova nella coda, qualunque target gli venga
+passato, e rivaluta i controlli al momento di cancellare: fra la segnalazione e
+il clic può essere nato un progetto proprio lì dentro.
+
+**`collect-metrics.py` importa `reclaim` invece di rifare i conti.** Le due
+voci nuove le calcola chi poi cancella, così il numero annunciato e quello
+liberato non possono divergere. L'import è dentro un `try`: se la copia dentro
+l'estensione fosse incompleta, mancano quelle due voci e non tutto il
+cruscotto. `verifica-estensione.sh` controlla anche gli `import` fra script
+fratelli, non solo le chiamate per nome.
 
 **L'estensione può finire su una distribuzione qualsiasi.** Purché ci sia
 GNOME: `metadata.json` dichiara 48, 49 e 50. Gli script che viaggiano dentro
@@ -82,7 +110,7 @@ una copia che diverge.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              30 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh              38 prove funzionali, sandbox con HOME dirottata
     ./bin/verifica-estensione.sh  controlli statici (gira dentro install e pack)
 
 `prova.sh` esiste perché i controlli statici non bastano: dei difetti trovati

@@ -29,6 +29,21 @@ def _radici() -> tuple[Path | None, Path]:
 
 
 ROOT, SCRIPT_DIR = _radici()
+
+# Le versioni vecchie di Claude Code e la coda delle segnalazioni le sa
+# reclaim.py, che è anche chi le cestina. Importarlo invece di rifare il
+# conto qui è l'unico modo perché il numero annunciato nel pannello e quello
+# liberato dal pulsante coincidano.
+sys.path.insert(0, str(SCRIPT_DIR))
+try:
+    import reclaim
+except Exception as _e:  # pragma: no cover - dipende da come e' stato copiato
+    # Se manca, le due voci che ne dipendono non compaiono e tutto il resto
+    # continua a funzionare. Un raccoglitore che muore per una voce in piu'
+    # lascerebbe il pannello senza nessun dato.
+    reclaim = None
+    print(f"reclaim.py non importabile, due voci non calcolate: {_e}",
+          file=sys.stderr)
 HOME = Path.home()
 CLAUDE = HOME / ".claude"
 OUT_DIR = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share")) / "claude-code-watchdog"
@@ -324,6 +339,26 @@ def main() -> int:
         "claude-filehistory")
     add("Paste cache", stale_mb(CLAUDE / "paste-cache", num("CLAUDE_PASTE_CACHE_RETENTION_DAYS", 14)),
         "claude-paste")
+    try:
+        vecchie = reclaim.versioni_vecchie() if reclaim else []
+        if vecchie:
+            add("Versioni di Claude Code", int(reclaim.peso(vecchie) / 1048576),
+                "claude-versions",
+                f"{len(vecchie)} versioni oltre quelle da tenere")
+    except Exception as e:
+        print(f"versioni di Claude non leggibili: {e}", file=sys.stderr)
+
+    # Segnalazioni: percorsi messi in coda a mano con segnala.py, che nessuna
+    # categoria conosce. Hanno sempre un dettaglio, così compaiono anche
+    # quando pesano meno di un MB — il motivo per cui sono lì è l'unica cosa
+    # che le rende comprensibili a chi le vede nel pannello.
+    try:
+        for s in (reclaim.segnalati() if reclaim else []):
+            add(s["nome"], int(reclaim.peso([s["percorso"]]) / 1048576),
+                f"segnalato:{s['id']}", s["motivo"] or str(s["percorso"]))
+    except Exception as e:
+        print(f"segnalazioni non leggibili: {e}", file=sys.stderr)
+
     # Le sessioni-fantasma pesano quasi nulla ma sporcano il selettore: qui
     # conta il numero, non i MB, altrimenti la voce non comparirebbe mai.
     if sess["fantasma"]:

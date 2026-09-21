@@ -48,7 +48,7 @@ dentro invocano soltanto `du`, `gio`, `gsettings` e `claude`.
     git clone https://github.com/CiroBoxHub/claude-code-watchdog
     cd claude-code-watchdog
 
-    ./bin/prova.sh                 # 30 prove funzionali in sandbox
+    ./bin/prova.sh                 # 38 prove funzionali in sandbox
     ./bin/install-extension.sh     # installa l'estensione
     gnome-extensions enable claude-code-watchdog@cirobox.local
 
@@ -105,11 +105,40 @@ secondo clic su **Elimina**.
 
 Tocca esclusivamente dati dell'utente, senza chiedere privilegi:
 
-`trash` · `usercache` · `claude-stubs` · `claude-jobs` ·
-`claude-snapshots` · `claude-paste` · `claude-filehistory`
+`trash` · `usercache` · `claude-versions` · `claude-stubs` ·
+`claude-jobs` · `claude-snapshots` · `claude-paste` · `claude-filehistory`
 
 Cache dei pacchetti, journal e kernel richiedono root e restano appannaggio di
 `clean.sh` da terminale.
+
+**`claude-versions`** è di solito la voce più grossa. Claude Code tiene tutte
+le versioni che ha installato in `~/.local/share/claude/versions/`, una per
+aggiornamento, circa 220 MB l'una, e non ne toglie mai nessuna. Si tengono le
+`CLAUDE_KEEP_VERSIONS` più recenti — due di serie, così un aggiornamento
+andato male si può annullare — più quella in uso, che non sempre è la più
+recente. La versione in esecuzione si ricava risolvendo il link di `claude`,
+mai dal numero più alto: se non si riesce a stabilire quale sia, la voce non
+compare affatto invece di tirare a indovinare.
+
+### Segnalazioni
+
+Per le cose che nessuna categoria conosce — una cartella dati rimasta da una
+rinomina, l'export di un esperimento — c'è una coda:
+
+    ./bin/segnala.py ~/.local/share/roba-vecchia --motivo "residuo di una rinomina"
+    ./bin/segnala.py --elenco
+    ./bin/segnala.py --togli ~/.local/share/roba-vecchia
+
+La voce compare nel pannello con nome, peso e motivo, insieme a tutte le altre,
+e si cestina con lo stesso pulsante. **Il pannello non ha un campo dove
+digitare un percorso**: mostra solo quello che è già in coda.
+
+Segnalare non cancella niente, scrive una riga in un file. Sia al momento di
+segnalare sia al momento di cestinare valgono gli stessi controlli: dentro la
+home, mai sotto `~/.claude` (per quello ci sono `session-purge.py` e
+`project-purge.py`, che verificano prima), mai una cartella che ne contiene una
+di lavoro. Il pulsante agisce solo su percorsi che trova davvero nella coda,
+qualunque cosa gli venga passata.
 
 ### Impostazioni
 
@@ -158,6 +187,7 @@ Gli scan sono a sola lettura.
     ./bin/project-purge.py <cartella>    # i dati Claude di un intero progetto
     ./bin/project-relocate.py <vecchia> <nuova>   # riaggancia un progetto spostato
     ./bin/fix-cwd.py                     # allinea la cwd dichiarata alla cartella reale
+    ./bin/segnala.py <percorso>          # mette in coda qualcosa da liberare
 
 I target che richiedono root non possono usare `sudo` da dentro Claude Code:
 manca un terminale per la password, e nemmeno il prefisso `!` lo risolve.
@@ -172,11 +202,14 @@ GNOME sul desktop.
 `claude-stubs` `claude-jobs` `claude-snapshots` `claude-paste`
 `claude-filehistory`
 
+`reclaim.py` aggiunge `claude-versions` e le segnalazioni, che `clean.sh` non
+ha: sono nati per il pannello.
+
 **Delicati** — solo se richiesti per nome, mai in automatico:
 
 `kernels` `orphans` `claude-dups` `claude-projects`
 
-`reclaim.py` fa i sette portabili di quella prima lista: è lo script che
+`reclaim.py` fa i sette portabili di quella lista: è lo script che
 viaggia dentro l'estensione, e non deve presumere né Fedora né privilegi.
 `clean.sh` resta la versione completa per la riga di comando.
 
@@ -213,6 +246,7 @@ cablati dentro.
 | `USER_CACHE_RETENTION_DAYS` | Quanto tenere i file stantii di `~/.cache` |
 | `JOURNAL_MAX_SIZE`, `COREDUMP_RETENTION_DAYS` | Limiti del journal e dei coredump |
 | `KEEP_KERNELS` | Quanti kernel lasciare installati |
+| `CLAUDE_KEEP_VERSIONS` | Quante versioni di Claude Code tenere, quella in uso compresa |
 | `ALERT_*` | Soglie oltre le quali `/watchdog-check` segnala |
 
 Le impostazioni del pannello, invece, stanno in GSettings e si cambiano dalle
@@ -225,7 +259,7 @@ potarlo per quello lo distruggerebbe il giorno dopo averlo cestinato.
 
 ## Sviluppo
 
-    ./bin/prova.sh                 # 30 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh                 # 38 prove funzionali, sandbox con HOME dirottata
     ./bin/verifica-estensione.sh   # controlli statici
 
 I controlli statici girano dentro `install-extension.sh` e `pack-extension.sh`,
