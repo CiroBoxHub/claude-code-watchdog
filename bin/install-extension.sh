@@ -26,7 +26,7 @@ cp -a "$SRC" "$DST"
 
 # Gli script viaggiano con l'estensione: così restano avviabili anche se la
 # cartella dati viene cancellata e il JSON con il percorso del progetto sparisce.
-for s in claude-sessions.py collect-metrics.py collect-usage.py session-purge.py project-purge.py project-relocate.py; do
+for s in claude-sessions.py collect-metrics.py collect-usage.py session-purge.py project-purge.py project-relocate.py reclaim.py trash-scaduti.py; do
   cp -a "$WD_ROOT/bin/$s" "$DST/$s"
   chmod +x "$DST/$s"
 done

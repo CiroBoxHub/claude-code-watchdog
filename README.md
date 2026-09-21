@@ -26,7 +26,7 @@ conversazioni — una da 4380 messaggi — perché al posto del cestino c'era un
 ## Installare
 
     git clone <questo-repo> && cd claude-code-watchdog
-    ./bin/prova.sh                 # 23 prove funzionali in sandbox
+    ./bin/prova.sh                 # 30 prove funzionali in sandbox
     ./bin/install-extension.sh     # estensione GNOME, poi logout/login
     gnome-extensions enable claude-code-watchdog@cirobox.local
 
