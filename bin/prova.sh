@@ -69,8 +69,8 @@ uguale "collect-metrics: conta le conversazioni" \
   "$(python3 -c "import json;print(json.load(open('$M'))['claude']['conversazioni'])")" "1"
 uguale "collect-metrics: scompone lo spazio" \
   "$(python3 -c "import json;print('scomposizione' in json.load(open('$M'))['claude'])")" "True"
-uguale "collect-metrics: pubblica il fondoscala della cache" \
-  "$(python3 -c "import json;print(json.load(open('$M'))['soglie']['cacheMb'])")" "2048"
+uguale "collect-metrics: fondoscala della cache di Claude, non di tutta ~/.cache" \
+  "$(python3 -c "import json;print(json.load(open('$M'))['soglie']['cacheMb'])")" "200"
 uguale "collect-metrics: pubblica chi occupa piu' cache" \
   "$(python3 -c "import json;print('cacheTop' in json.load(open('$M'))['claude'])")" "True"
 uguale "collect-metrics: pubblica le soglie" \
@@ -183,6 +183,19 @@ mkdir -p "$HOME/.claude/jobs"
 head -c 100000 /dev/zero > "$HOME/.claude/jobs/vecchio.bin"
 touch -d "60 days ago" "$HOME/.claude/jobs/vecchio.bin"
 echo recente > "$HOME/.claude/jobs/nuovo.bin"
+
+# La cache di Claude sta in ~/.cache, non in ~/.claude: due cartelle diverse,
+# e il target non deve pescare quella del browser che sta li' accanto.
+mkdir -p "$HOME/.cache/claude-cli-nodejs/progetto" "$HOME/.cache/google-chrome"
+echo log > "$HOME/.cache/claude-cli-nodejs/progetto/mcp.log"
+touch -d "30 days ago" "$HOME/.cache/claude-cli-nodejs/progetto/mcp.log"
+echo x > "$HOME/.cache/google-chrome/roba"
+touch -d "30 days ago" "$HOME/.cache/google-chrome/roba"
+"$WD_ROOT/bin/reclaim.py" --apply claude-cache >/dev/null 2>&1
+uguale "reclaim: toglie i log di Claude scaduti" \
+  "$([[ -f "$HOME/.cache/claude-cli-nodejs/progetto/mcp.log" ]] && echo intatto || echo sparito)" "sparito"
+uguale "reclaim: non tocca la cache del browser" \
+  "$([[ -f "$HOME/.cache/google-chrome/roba" ]] && echo intatto || echo sparito)" "intatto"
 
 uguale "reclaim: rifiuta un target sconosciuto" \
   "$("$WD_ROOT/bin/reclaim.py" --apply pippo >/dev/null 2>&1; echo $?)" "2"

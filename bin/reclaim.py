@@ -46,6 +46,7 @@ RETENTION = {
     "claude-snapshots":   ("CLAUDE_SHELL_SNAPSHOT_RETENTION_DAYS", 14),
     "claude-filehistory": ("CLAUDE_FILE_HISTORY_RETENTION_DAYS", 30),
     "claude-paste":       ("CLAUDE_PASTE_CACHE_RETENTION_DAYS", 14),
+    "claude-cache":       ("CLAUDE_CACHE_RETENTION_DAYS", 7),
 }
 
 # Quante versioni di Claude Code tenere, quella in uso compresa. Due e non una:
@@ -69,7 +70,13 @@ VERSIONI = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share")) / "claud
 SEGNALATI = (Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share"))
              / "claude-code-watchdog" / "segnalati.jsonl")
 
-TARGET = ["trash", "usercache", "claude-stubs", "claude-versions", *CARTELLE]
+# Le due cartelle di ~/.cache che sono di Claude Code: lo staging degli
+# aggiornamenti e i log degli MCP, divisi per progetto. Sono diagnostica: si
+# rigenerano al primo uso.
+CACHE_CLAUDE = [HOME / ".cache/claude", HOME / ".cache/claude-cli-nodejs"]
+
+TARGET = ["trash", "usercache", "claude-cache", "claude-stubs",
+          "claude-versions", *CARTELLE]
 
 
 def conf() -> dict:
@@ -315,6 +322,10 @@ def elenca(target: str) -> list[Path]:
     if target == "usercache":
         return scaduti(HOME / ".cache", giorni("usercache"))
 
+    if target == "claude-cache":
+        gg = giorni("claude-cache")
+        return [f for d in CACHE_CLAUDE for f in scaduti(d, gg)]
+
     sub, _ = CARTELLE[target]
     return scaduti(CLAUDE / sub, giorni(target))
 
@@ -397,8 +408,13 @@ def applica(target: str, percorsi: list[Path]) -> int:
             p.unlink(missing_ok=True)
         except OSError:
             continue
-    pota_vuote(HOME / ".cache" if target == "usercache"
-               else CLAUDE / CARTELLE[target][0])
+    if target == "usercache":
+        pota_vuote(HOME / ".cache")
+    elif target == "claude-cache":
+        for d in CACHE_CLAUDE:
+            pota_vuote(d)
+    else:
+        pota_vuote(CLAUDE / CARTELLE[target][0])
     return b
 
 
