@@ -172,6 +172,15 @@ vederle divergere senza accorgersene.
   Per controllare se il nuovo valore è attivo: svuota
   `~/.claude/projects/-home-utente/` e guarda a che distanza compare lo stub
   successivo.
+- **Se le finestre si aprono lente, è `burn-my-windows`.** Il 2026-09-22 ogni
+  dialogo — «Salva con nome», gli allegati — impiegava secondi ad aprirsi.
+  L'estensione anima l'apertura e la chiusura di ogni finestra e aveva **due**
+  effetti accesi insieme, `glitch` e `tv`. Disattivata, immediato. Non serve
+  logout: `gnome-extensions disable` basta, perché qui non si ricarica codice.
+  Scartati prima, con misura: enumerazione delle cartelle (3 ms), rete e GVfs
+  (7 ms), indicizzatore fermo, nessuna unità utente in errore, GPU a posto (la
+  shell rende sull'AMD integrata, la NVIDIA è sveglia a P8 — niente attese di
+  risveglio dal risparmio energetico).
 - `dnf5 repoquery --unneeded` elenca come "non necessari" anche pacchetti
   installati a mano (`7zip`, `arj`, `cabextract`). Non è una lista da eseguire
   alla cieca.
