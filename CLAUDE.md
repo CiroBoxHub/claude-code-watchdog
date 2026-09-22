@@ -172,15 +172,22 @@ vederle divergere senza accorgersene.
   Per controllare se il nuovo valore è attivo: svuota
   `~/.claude/projects/-home-utente/` e guarda a che distanza compare lo stub
   successivo.
-- **Se le finestre si aprono lente, è `burn-my-windows`.** Il 2026-09-22 ogni
-  dialogo — «Salva con nome», gli allegati — impiegava secondi ad aprirsi.
-  L'estensione anima l'apertura e la chiusura di ogni finestra e aveva **due**
-  effetti accesi insieme, `glitch` e `tv`. Disattivata, immediato. Non serve
-  logout: `gnome-extensions disable` basta, perché qui non si ricarica codice.
-  Scartati prima, con misura: enumerazione delle cartelle (3 ms), rete e GVfs
-  (7 ms), indicizzatore fermo, nessuna unità utente in errore, GPU a posto (la
-  shell rende sull'AMD integrata, la NVIDIA è sveglia a P8 — niente attese di
-  risveglio dal risparmio energetico).
+- **Se le finestre si aprono lente, sono le estensioni di GNOME: due, non
+  una.** Il 2026-09-22 dialoghi e avvii di app impiegavano secondi.
+  `burn-my-windows` anima apertura e chiusura di ogni finestra e aveva **due**
+  effetti accesi insieme (`glitch` e `tv`); spenta, i dialoghi sono tornati
+  immediati ma l'avvio delle app no. Il resto era **`dash-to-panel`**, che si
+  mette in mezzo all'avvio: spenta anche quella, veloce. È di serie in tutto —
+  nessuna sua opzione differisce dal default — quindi non c'è niente da
+  regolare: o la si tiene col ritardo o si sta senza.
+  Non serve logout: `gnome-extensions disable` ha effetto subito, perché lì non
+  si ricarica codice, si ferma e basta.
+  **Il colpevole non è l'applicazione.** Dal journal: scope creato alle
+  17:56:33.481, primo disegno a 17:56:33.700 — 219 ms. Scartati prima, con
+  misura: enumerazione delle cartelle (3 ms), rete e GVfs (7 ms), indicizzatore
+  fermo, nessuna unità utente in errore, PSI a zero su CPU, memoria e I/O con
+  20 GB liberi e swap intatta, GPU a posto (la shell rende sull'AMD integrata,
+  la NVIDIA è sveglia a P8 — niente attese di risveglio).
 - `dnf5 repoquery --unneeded` elenca come "non necessari" anche pacchetti
   installati a mano (`7zip`, `arj`, `cabextract`). Non è una lista da eseguire
   alla cieca.
