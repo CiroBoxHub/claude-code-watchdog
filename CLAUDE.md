@@ -56,6 +56,15 @@ metrica che somma tutto faceva sembrare che fossero cresciute le conversazioni.
 `scomposizione` per cartella; il popup mostra le conversazioni, con il resto
 come contesto.
 
+**`~/.cache/claude/staging` non è cache: è l'aggiornamento in volo.** Claude
+Code ci scarica la versione nuova, ~220 MB che compaiono in pochi secondi e
+spariscono appena il file passa in `versions/`. Contarli faceva sbattere la
+barra della cache al massimo e tornare giù a ogni aggiornamento — segnalato
+dall'uso il 2026-09-24 e verificato nello storico: `204 → 215 → 223 → 227 →
+228 MB` in cinque secondi alle 00:10:55-59, e la versione `2.1.281` scritta
+in `versions/` alle 00:10:59, lo stesso secondo. Escluso dalla misura **e**
+dal target `claude-cache`, che altrimenti poteva cestinare il download a metà.
+
 **Le versioni vecchie di Claude Code pesano più di tutto il resto.**
 `~/.local/share/claude/versions/` ne tiene una per aggiornamento, ~220 MB
 l'una, e non ne toglie mai nessuna: il 2026-09-21 erano quattro, 883 MB, contro
@@ -224,7 +233,7 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              81 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh              83 prove funzionali, sandbox con HOME dirottata
     ./bin/prova-js.sh           25 prove sulle funzioni pure di extension.js
     ./bin/verifica-estensione.sh  controlli statici + le prove JS (gira dentro
                                   install e pack, che si fermano se qualcosa

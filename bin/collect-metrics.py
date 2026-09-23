@@ -218,8 +218,18 @@ def cache_claude() -> tuple[int, str, int]:
     cartelle = [HOME / ".cache/claude", HOME / ".cache/claude-cli-nodejs"]
     voci = []
     for d in cartelle:
-        if d.is_dir():
-            voci.append((du_mb(d), d.name))
+        if not d.is_dir():
+            continue
+        mb = du_mb(d)
+        if d.name == "claude":
+            # Meno lo staging: lì Claude Code scarica la versione nuova, ~220 MB
+            # che compaiono in pochi secondi e spariscono appena il file passa
+            # in versions/. Contarli faceva sbattere la barra al massimo e
+            # tornare giù a ogni aggiornamento — verificato il 2026-09-24, la
+            # 2.1.281 scritta alle 00:10:59 e il picco a 228 MB allo stesso
+            # secondo. Non è spazio recuperabile: è un download in corso.
+            mb = max(0, mb - du_mb(d / "staging"))
+        voci.append((mb, d.name))
     if not voci:
         return 0, "", 0
     voci.sort(reverse=True)
