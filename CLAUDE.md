@@ -95,6 +95,26 @@ scarti di Claude), non chiede privilegi, ed è in dry-run senza `--apply`.
 Serve **Python 3.10** o superiore: le annotazioni `Path | None` si valutano a
 runtime.
 
+**«Dentro la radice» vuol dire a qualunque profondità, e lo decide Python.**
+Il 2026-09-23 un progetto creato col «+» è comparso fra quelli «fuori dai
+progetti»: dentro ci era nata una sottocartella e una sessione ci aveva
+lavorato, quindi il suo `cwd` era `progetto/Electra`. La regola in
+`extension.js` confrontava **solo il genitore** con la radice, e una
+sottocartella non è figlia diretta. Succede ogni volta che si lavora dentro un
+repository clonato nel progetto, cioè spesso.
+Ora la calcola `collect-metrics.py` (`dentro_radice()`) e la pubblica come
+`dentroRadice` su ogni progetto; l'estensione la legge e basta. Il motivo non è
+estetico: **in JavaScript quella regola non si può provare**, in Python sì, e
+ora cinque prove coprono figlia diretta, annidata, fuori, radice ignota e il
+tranello del prefisso (`~/Documenti/Claude-vecchio` comincia come
+`~/Documenti/Claude` ma non è dentro niente — il confronto è sui componenti del
+percorso, non sul testo).
+**Le righe annidate non si fondono con quella del progetto padre.**
+`project-purge.py` abbina per `cwd` esatto: una riga che sommasse due sessioni
+direbbe «2» e ne cancellerebbe una sola, in silenzio. Restano righe distinte, e
+il nome porta il percorso relativo (`electra-release/Electra`) perché due
+sottocartelle `src` di progetti diversi non si chiamino uguale.
+
 **La radice dei progetti si deduce, non si indovina.** L'impostazione
 `projects-root` ha come default la stringa vuota, che per lo schema significa
 «rilevamento automatico». Il rilevamento stava in `extension.js`, che lo
@@ -110,7 +130,7 @@ una copia che diverge.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              42 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh              53 prove funzionali, sandbox con HOME dirottata
     ./bin/verifica-estensione.sh  controlli statici (gira dentro install e pack)
 
 `prova.sh` esiste perché i controlli statici non bastano: dei difetti trovati

@@ -87,6 +87,59 @@ uguale "collect-metrics: funziona anche copiato fuori da bin/" \
 uguale "collect-metrics: senza progetto non inventa una radice" \
   "$(python3 -c "import json;print(json.load(open('$M'))['progetto'])" 2>/dev/null)" "None"
 
+# Una sessione aperta in una sottocartella del progetto: capita ogni volta che
+# si lavora dentro un repository clonato li'. Deve restare dentro la radice e
+# chiamarsi col percorso relativo, se no due «src» di progetti diversi
+# sarebbero due righe con lo stesso nome.
+prepara
+mkdir -p "$SANDBOX/lavoro/progetto/sub"
+d="$HOME/.claude/projects/-sotto"
+mkdir -p "$d"
+printf '{"type":"user","cwd":"%s","timestamp":"2026-09-01T10:00:00Z","message":{"role":"user","content":"x"}}\n{"type":"assistant","cwd":"%s","timestamp":"2026-09-01T10:00:01Z","message":{"role":"assistant"}}\n' \
+  "$SANDBOX/lavoro/progetto/sub" "$SANDBOX/lavoro/progetto/sub" \
+  > "$d/cccccccc-0000-0000-0000-000000000003.jsonl"
+"$WD_ROOT/bin/collect-metrics.py" --quiet --radice-progetti "$SANDBOX/lavoro" >/dev/null 2>&1
+uguale "collect-metrics: un progetto annidato porta il percorso relativo nel nome" \
+  "$(python3 -c "
+import json,sys
+d=json.load(open('$M'))
+n=[p['nome'] for p in d['claude']['progetti'] if p['percorso'].endswith('/progetto/sub')]
+print(n[0] if n else 'assente')")" "progetto/sub"
+
+# La regola «dentro la radice», caso per caso. Sta in Python apposta per
+# poterla provare: in extension.js non si poteva, e sbagliarla ha fatto
+# comparire un progetto vero fra quelli «fuori dai progetti».
+uguale "dentro-radice: figlia diretta" \
+  "$(python3 -c "
+import sys;sys.path.insert(0,'$WD_ROOT/bin')
+import importlib.util as u
+s=u.spec_from_file_location('cm','$WD_ROOT/bin/collect-metrics.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+from pathlib import Path
+print(m.dentro_radice('/casa/Claude/progetto', Path('/casa/Claude')))")" "True"
+uguale "dentro-radice: annidata in profondita'" \
+  "$(python3 -c "
+import importlib.util as u
+s=u.spec_from_file_location('cm','$WD_ROOT/bin/collect-metrics.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+from pathlib import Path
+print(m.dentro_radice('/casa/Claude/prog/src/interno', Path('/casa/Claude')))")" "True"
+uguale "dentro-radice: non si fa ingannare da un nome che inizia uguale" \
+  "$(python3 -c "
+import importlib.util as u
+s=u.spec_from_file_location('cm','$WD_ROOT/bin/collect-metrics.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+from pathlib import Path
+print(m.dentro_radice('/casa/Claude-vecchio/prog', Path('/casa/Claude')))")" "False"
+uguale "dentro-radice: fuori del tutto" \
+  "$(python3 -c "
+import importlib.util as u
+s=u.spec_from_file_location('cm','$WD_ROOT/bin/collect-metrics.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+from pathlib import Path
+print(m.dentro_radice('/tmp/prog', Path('/casa/Claude')))")" "False"
+uguale "dentro-radice: senza radice nota non afferma niente" \
+  "$(python3 -c "
+import importlib.util as u
+s=u.spec_from_file_location('cm','$WD_ROOT/bin/collect-metrics.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+print(m.dentro_radice('/casa/Claude/prog', None))")" "False"
+
 # Cartelle di progetto senza conversazioni. La sandbox lavora sotto /tmp, che
 # la deduzione scarta apposta: lì dentro ci sono decine di cartelle che non
 # sono progetti di nessuno.
@@ -261,6 +314,68 @@ uguale "segnala: segnalare non cancella" \
 uguale "reclaim: un id non in coda non tocca niente" \
   "$("$WD_ROOT/bin/reclaim.py" --apply segnalato:000000000000 --json 2>/dev/null \
      | python3 -c 'import json,sys;print(json.load(sys.stdin)["voci"][0]["file"])')" "0"
+
+# Una segnalazione fatta quando il percorso era innocuo, e nel frattempo li'
+# dentro e' nato un progetto. Il controllo va rifatto al momento di
+# cancellare, non solo al momento di segnalare.
+prepara
+mkdir -p "$SANDBOX/lavoro/diventa-progetto"
+"$WD_ROOT/bin/segnala.py" "$SANDBOX/lavoro/diventa-progetto" >/dev/null 2>&1
+d="$HOME/.claude/projects/-diventato"
+mkdir -p "$d"
+printf '{"type":"user","cwd":"%s","timestamp":"2026-09-01T10:00:00Z","message":{"role":"user","content":"x"}}\n{"type":"assistant","cwd":"%s","timestamp":"2026-09-01T10:00:01Z","message":{"role":"assistant"}}\n' \
+  "$SANDBOX/lavoro/diventa-progetto" "$SANDBOX/lavoro/diventa-progetto" \
+  > "$d/dddddddd-0000-0000-0000-000000000004.jsonl"
+"$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1
+sigla=$(python3 -c "
+import importlib.util as u
+s=u.spec_from_file_location('rc','$WD_ROOT/bin/reclaim.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+from pathlib import Path
+print(m.ident(Path('$SANDBOX/lavoro/diventa-progetto')))")
+"$WD_ROOT/bin/reclaim.py" --apply "segnalato:$sigla" >/dev/null 2>&1
+uguale "reclaim: rifiuta una segnalazione diventata cartella di lavoro" \
+  "$([[ -d "$SANDBOX/lavoro/diventa-progetto" ]] && echo intatta || echo sparita)" "intatta"
+
+# Un progetto annidato si purga da solo: project-purge abbina per cwd esatto,
+# quindi la riga del figlio non deve portarsi via le sessioni del padre.
+prepara
+for c in prog prog-sub; do :; done
+d1="$HOME/.claude/projects/-padre"; d2="$HOME/.claude/projects/-figlio"
+mkdir -p "$d1" "$d2" "$SANDBOX/lavoro/prog/sub"
+printf '{"type":"user","cwd":"%s","timestamp":"2026-09-01T10:00:00Z","message":{"role":"user","content":"x"}}\n{"type":"assistant","cwd":"%s","timestamp":"2026-09-01T10:00:01Z","message":{"role":"assistant"}}\n' \
+  "$SANDBOX/lavoro/prog" "$SANDBOX/lavoro/prog" > "$d1/eeeeeeee-0000-0000-0000-000000000005.jsonl"
+printf '{"type":"user","cwd":"%s","timestamp":"2026-09-01T10:00:00Z","message":{"role":"user","content":"x"}}\n{"type":"assistant","cwd":"%s","timestamp":"2026-09-01T10:00:01Z","message":{"role":"assistant"}}\n' \
+  "$SANDBOX/lavoro/prog/sub" "$SANDBOX/lavoro/prog/sub" > "$d2/ffffffff-0000-0000-0000-000000000006.jsonl"
+uguale "project-purge: la riga del figlio non tocca le sessioni del padre" \
+  "$("$WD_ROOT/bin/project-purge.py" "$SANDBOX/lavoro/prog/sub" --json 2>/dev/null \
+     | python3 -c "import json,sys;v=json.load(sys.stdin)['voci'];print(sum(1 for x in v if 'eeeeeeee' in x['percorso']))")" "0"
+uguale "project-purge: la riga del figlio trova la propria sessione" \
+  "$("$WD_ROOT/bin/project-purge.py" "$SANDBOX/lavoro/prog/sub" --json 2>/dev/null \
+     | python3 -c "import json,sys;print(len(json.load(sys.stdin)['sessioni']))")" "1"
+
+# Il caso che il 2026-09-16 stava per far perdere dati: una cartella di
+# projects/ con sessioni di cwd diversi. Deve elencare i SINGOLI FILE, mai la
+# cartella, se no cancellare il progetto A porta via le conversazioni di B.
+prepara
+mkdir -p "$SANDBOX/lavoro/alfa" "$SANDBOX/lavoro/beta"
+dc="$HOME/.claude/projects/-condivisa"; mkdir -p "$dc"
+for par in "alfa:11111111" "beta:22222222"; do
+  n=${par%%:*}; i=${par##*:}
+  printf '{"type":"user","cwd":"%s","timestamp":"2026-09-01T10:00:00Z","message":{"role":"user","content":"x"}}\n{"type":"assistant","cwd":"%s","timestamp":"2026-09-01T10:00:01Z","message":{"role":"assistant"}}\n' \
+    "$SANDBOX/lavoro/$n" "$SANDBOX/lavoro/$n" > "$dc/$i-0000-0000-0000-000000000007.jsonl"
+done
+uguale "project-purge: in una cartella condivisa elenca i file, non la cartella" \
+  "$("$WD_ROOT/bin/project-purge.py" "$SANDBOX/lavoro/alfa" --json 2>/dev/null \
+     | python3 -c "
+import json,sys
+v=json.load(sys.stdin)['voci']
+print('cartella' if any(x['tipo']=='cartella' and x['percorso'].endswith('-condivisa') for x in v) else 'file')")" "file"
+uguale "project-purge: in una cartella condivisa non tocca le sessioni altrui" \
+  "$("$WD_ROOT/bin/project-purge.py" "$SANDBOX/lavoro/alfa" --json 2>/dev/null \
+     | python3 -c "
+import json,sys
+v=json.load(sys.stdin)['voci']
+print(sum(1 for x in v if '22222222' in x['percorso']))")" "0"
 
 # Le finestre di scadenza stanno in due file: qui si calcolano i MB mostrati
 # nel pannello, li' si cancella. Divergere vorrebbe dire annunciare un numero

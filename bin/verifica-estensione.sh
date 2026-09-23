@@ -125,6 +125,37 @@ for x in $_d; do
 done
 if [[ -z "$_manca" ]]; then echo "ok ($(echo "$_d" | wc -w))"; else echo "✗$_manca"; ko=1; fi
 
+# Ogni campo che extension.js legge dal JSON deve essere un campo che qualche
+# script scrive davvero. E' il controllo che coglie il rinominare `cacheHomeMb`
+# in `cacheMb` lasciando indietro chi lo leggeva: un errore che non rompe
+# niente a vista, la barra mostra zero e nessuno se ne accorge.
+#
+# LIMITE, verificato con una mutazione: confronta il nome contro l'unione dei
+# campi di TUTTI gli script, quindi coglie un campo sparito dappertutto ma non
+# un campo spostato da un oggetto all'altro — li' il nome resta scritto
+# altrove. Per quello serve una prova funzionale, non un controllo statico.
+printf '  %-34s ' "campi letti ma mai scritti"
+_out=$(python3 - "$SRC/extension.js" "$WD_ROOT"/bin/*.py <<'PYEOF'
+import re, sys, pathlib
+js = pathlib.Path(sys.argv[1]).read_text()
+scritti = set()
+for f in sys.argv[2:]:
+    scritti |= set(re.findall(r'"([a-zA-Z_][a-zA-Z0-9_]*)"\s*:', pathlib.Path(f).read_text()))
+# Le variabili in cui extension.js tiene pezzi di JSON letto dagli script.
+sorgenti = ("d", "claude", "disco", "rec", "q")
+metodi = {"map","filter","length","forEach","find","slice","join","push","some",
+          "includes","toFixed","replace","split","startsWith","trim","sort",
+          "reduce","indexOf","endsWith","padStart","toString","keys","values",
+          "entries","concat","every","flat","at","repeat","substring"}
+mancanti = sorted({
+    f"{v}.{c}" for v in sorgenti
+    for c in re.findall(rf"\b{v}\.([a-zA-Z_][a-zA-Z0-9_]*)", js)
+    if c not in metodi and c not in scritti})
+print(" ".join(mancanti))
+PYEOF
+)
+if [[ -z "$_out" ]]; then echo "ok"; else echo "✗ $_out"; ko=1; fi
+
 echo
 if (( ko )); then echo "NON installare finché non è tutto a posto."; else echo "Tutto a posto."; fi
 exit $ko
