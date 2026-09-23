@@ -167,6 +167,16 @@ PYEOF
 )
 if [[ -z "$_out" ]]; then echo "ok"; else echo "✗ $_out"; ko=1; fi
 
+# Le funzioni pure di extension.js, eseguite davvero. I controlli qui sopra
+# sono statici: vedono la sintassi e i nomi, non il comportamento — e il
+# comportamento, su GNOME, si scopre solo dopo logout e login.
+printf '  %-34s ' "funzioni JS: comportamento"
+if _js=$("$WD_ROOT/bin/prova-js.sh" 2>&1); then
+  echo "ok ($(echo "$_js" | grep -c 'ok'))"
+else
+  echo "✗"; echo "$_js" | grep -A1 "KO" | sed 's/^/      /'; ko=1
+fi
+
 echo
 if (( ko )); then echo "NON installare finché non è tutto a posto."; else echo "Tutto a posto."; fi
 exit $ko

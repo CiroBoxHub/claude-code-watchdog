@@ -35,6 +35,7 @@ il dry-run, mostra l'elenco, chiedi. Anche quando la risposta sembra ovvia.
     bin/fix-cwd.py          allinea la cwd dichiarata alla cartella reale
     bin/trash-scaduti.py    elementi del cestino oltre la retention
     bin/prova.sh            collaudo funzionale su dati finti in sandbox
+    bin/prova-js.sh         esegue le funzioni pure di extension.js con gjs
     bin/verifica-estensione.sh controlli statici, obbligatori prima di installare
     bin/install-extension.sh installa l'estensione GNOME
     bin/pack-extension.sh   crea lo zip distribuibile in dist/
@@ -224,7 +225,17 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 ## Prima di dire «fatto»
 
     ./bin/prova.sh              81 prove funzionali, sandbox con HOME dirottata
-    ./bin/verifica-estensione.sh  controlli statici (gira dentro install e pack)
+    ./bin/prova-js.sh           25 prove sulle funzioni pure di extension.js
+    ./bin/verifica-estensione.sh  controlli statici + le prove JS (gira dentro
+                                  install e pack, che si fermano se qualcosa
+                                  non torna)
+
+**Il JavaScript va eseguito, non solo controllato.** Fino al 2026-09-24 nessuna
+prova ne eseguiva una riga: si verificavano sintassi, metodi, chiavi GSettings,
+classi CSS e campi letti, ma il comportamento no — e su GNOME il comportamento
+si vede solo dopo logout e login, quindi un difetto lì resta invisibile per
+ore. `prova-js.sh` estrae le funzioni senza dipendenze da GNOME **dal sorgente
+vero** (non da una copia, che diverge) e le esegue con `gjs`.
 
 `prova.sh` esiste perché i controlli statici non bastano: dei difetti trovati
 dalla revisione del 2026-09-17, tre sarebbero caduti lì — la radice sbagliata
