@@ -190,6 +190,37 @@ trascrizioni a ogni giro per riottenere gli stessi numeri. Con la cache dei
 metadati l'inventario è passato da 0,62 s a 0,08 s. Se un domani risale, è lì
 che si guarda per primo.
 
+## Come si lavora qui
+
+Regole nate dal 2026-09-23, quando la stessa regola è stata riscritta quattro
+volte e ogni correzione conteneva il difetto successivo. Cinque giri di
+`/code-review`, quattro difetti trovati dentro le correzioni precedenti.
+
+**1. La tabella dei casi prima del codice.** Toccando una regola con casi
+limite — quale cartella è la radice, quale percorso sta dentro quale — si
+scrive prima l'elenco dei casi con la risposta attesa, e lo si fa fallire.
+Chi implementa senza tabella scopre i casi uno alla volta, dal revisore.
+
+**2. Ogni prova nuova va verificata con una mutazione.** Si rimette il difetto
+e si controlla che la prova diventi rossa. Due prove scritte qui passavano col
+difetto reintrodotto: una non riproduceva lo scenario, l'altra scriveva JSON
+non valido invece del payload voluto. **Una prova che non fallisce mai è
+peggio di nessuna prova**, perché autorizza a non guardare.
+
+**3. Una correzione che aggiunge una condizione a una condizione è un
+sintomo.** «Si ripiega, ma solo se…», «solo se è anche…»: a quel punto la
+regola non è capita. Si riscrive dall'enunciato, non dall'eccezione.
+
+**4. Chi confronta percorsi risolve entrambi i lati e confronta i
+componenti.** `resolve()` su tutti e due, e `in p.parents` invece di
+`startswith`. Qui è costato quattro difetti distinti: la rete di sicurezza di
+`project-purge`, `ammissibile()` in `reclaim`, l'esclusione della home nella
+deduzione della radice, la cartella dati del cruscotto.
+
+**5. Un file nasce coi permessi giusti, non li riceve dopo.** `os.open` con il
+modo, mai `write_text` seguito da `chmod`: in mezzo il contenuto è leggibile a
+tutti, e qui dentro ci sono i nomi dei clienti.
+
 ## Prima di dire «fatto»
 
     ./bin/prova.sh              81 prove funzionali, sandbox con HOME dirottata
