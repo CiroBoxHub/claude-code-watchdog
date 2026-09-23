@@ -98,6 +98,11 @@ CACHE = (Path(os.environ.get("XDG_CACHE_HOME") or (HOME / ".cache"))
 # sbagliati senza che niente segnali l'errore.
 CACHE_VERSIONE = 1
 
+# Quanto si aspetta prima di dire che una trascrizione senza risposte è uno
+# scarto. Due minuti: la lettura della quota ne impiega due o tre secondi, una
+# sessione interattiva può metterci molto di più a ricevere la prima risposta.
+ATTESA_SCARTO_S = 120
+
 
 def _cache_leggi() -> dict:
     try:
@@ -255,7 +260,16 @@ def main() -> int:
     # conversazione: sono gli scarti lasciati da invocazioni non interattive
     # (statusline che chiama /usage, hook, script SDK). Si contano a parte,
     # altrimenti seppelliscono il lavoro vero.
-    stubs = [s for s in sessions if s["n_asst"] == 0]
+    # Una trascrizione senza risposte dell'assistente ma scritta ADESSO non è
+    # uno scarto: è un'invocazione in corso. Può essere la nostra lettura della
+    # quota, che accende una CLI e la spegne un secondo dopo — nel pannello si
+    # vedeva «1 sessione fantasma» comparire e sparire a ogni aggiornamento —
+    # oppure una sessione interattiva vera che ha già scritto la domanda e non
+    # ha ancora ricevuto risposta. Per qualunque controllo automatico le due
+    # sono identiche, quindi si aspetta.
+    adesso = datetime.now(timezone.utc).timestamp()
+    stubs = [s for s in sessions
+             if s["n_asst"] == 0 and adesso - s["mtime"] > ATTESA_SCARTO_S]
     real, dups = split_duplicates([s for s in sessions if s["n_asst"] > 0])
 
     if args.stubs:

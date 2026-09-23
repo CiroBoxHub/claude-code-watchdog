@@ -39,6 +39,9 @@ prepara() {
   } > "$d/aaaaaaaa-0000-0000-0000-000000000001.jsonl"
   printf '{"type":"user","cwd":"/tmp/progetto","timestamp":"2026-09-01T10:00:00Z","message":{"role":"user","content":"x"}}\n' \
       > "$d/bbbbbbbb-0000-0000-0000-000000000002.jsonl"
+  # Invecchiata oltre ATTESA_SCARTO_S: una trascrizione senza risposte scritta
+  # adesso e' un'invocazione in corso, non uno scarto.
+  touch -d "10 minutes ago" "$d/bbbbbbbb-0000-0000-0000-000000000002.jsonl"
   mkdir -p "$HOME/.claude/session-env/aaaaaaaa-0000-0000-0000-000000000001"
 }
 
@@ -127,15 +130,17 @@ print(f.read_text(), resti)")" "originale []"
 prepara
 export XDG_CACHE_HOME="$HOME/.cache"
 mkdir -p "$HOME/.cache/claude-code-watchdog"
-for rotta in '[]' '{"versione":1,"voci":[]}' '{"versione":1}' 'non json'; do
-  echo "$rotta" > "$HOME/.cache/claude-code-watchdog/sessioni.json"
-  "$WD_ROOT/bin/claude-sessions.py" --stubs >/dev/null 2>&1 || { echo "ROTTA con $rotta"; break; }
+# Fuori dalla sostituzione di comando: dentro, le virgolette del JSON vanno
+# protette e i payload arrivavano a destinazione con le barre rovesciate
+# dentro — JSON non valido, che finiva nel ramo sbagliato. La prova passava
+# anche rimettendo il difetto, verificato con una mutazione.
+rotte=('[]' '{"versione":1,"voci":[]}' '{"versione":1}' '{"versione":1,"voci":"x"}' 'non json')
+_esito=tutte-ok
+for rotta in "${rotte[@]}"; do
+  printf '%s' "$rotta" > "$HOME/.cache/claude-code-watchdog/sessioni.json"
+  "$WD_ROOT/bin/claude-sessions.py" --stubs >/dev/null 2>&1 || { _esito="rotta su: $rotta"; break; }
 done
-uguale "cache: una cache malformata non ferma l'inventario" \
-  "$(for rotta in '[]' '{\"versione\":1,\"voci\":[]}' '{\"versione\":1}' 'non json'; do
-       echo "$rotta" > "$HOME/.cache/claude-code-watchdog/sessioni.json"
-       "$WD_ROOT/bin/claude-sessions.py" --stubs >/dev/null 2>&1 || { echo rotta; exit; }
-     done; echo tutte-ok)" "tutte-ok"
+uguale "cache: una cache malformata non ferma l'inventario" "$_esito" "tutte-ok"
 uguale "cache: non lascia temporanei in giro" \
   "$(ls "$HOME/.cache/claude-code-watchdog"/*.tmp 2>/dev/null | wc -l)" "0"
 unset XDG_CACHE_HOME
@@ -152,6 +157,21 @@ f=d/'t.jsonl'; f.write_text('a'); f.chmod(0o600)
 m.scrivi_atomico(f,'b')
 n=d/'nuovo.jsonl'; m.scrivi_atomico(n,'c')
 print(oct(f.stat().st_mode & 0o777), oct(n.stat().st_mode & 0o777))")" "0o600 0o600"
+
+# Una trascrizione senza risposte ma scritta adesso e' un'invocazione in
+# corso, non uno scarto: la nostra lettura della quota ne crea una e la toglie
+# due secondi dopo, e nel pannello si vedeva «1 sessione fantasma» comparire e
+# sparire a ogni aggiornamento. Peggio: `clean.sh claude-stubs` avrebbe potuto
+# cestinare una sessione interattiva vera in attesa della prima risposta.
+prepara
+d="$HOME/.claude/projects/-tmp-progetto"
+printf '{"type":"user","cwd":"/tmp/progetto","timestamp":"2026-09-01T10:00:00Z","message":{"role":"user","content":"appena partita"}}\n' \
+  > "$d/99999999-0000-0000-0000-000000000099.jsonl"
+uguale "scarti: una trascrizione appena scritta non e' uno scarto" \
+  "$("$WD_ROOT/bin/claude-sessions.py" --stubs 2>/dev/null | grep -c 99999999)" "0"
+touch -d "10 minutes ago" "$d/99999999-0000-0000-0000-000000000099.jsonl"
+uguale "scarti: dopo l'attesa lo diventa" \
+  "$("$WD_ROOT/bin/claude-sessions.py" --stubs 2>/dev/null | grep -c 99999999)" "1"
 
 # ------------------------------------------------- collect-metrics.py ---
 prepara
@@ -589,6 +609,38 @@ uguale "rete: un nome che inizia uguale non è dentro" \
   "$(pp "$SANDBOX/lavoro/vero-vecchio" "$SANDBOX/lavoro/vero")" "False"
 uguale "rete: i dati di Claude non sono dentro la cartella di lavoro" \
   "$(pp "$HOME/.claude/projects/-x" "$SANDBOX/lavoro/vero")" "False"
+
+# I file del cruscotto non si possono segnalare. Cestinare metrics.json non
+# toglierebbe solo un dato: cartelle_di_lavoro() lo legge, e senza quello la
+# protezione sui progetti smette di scattare per tutto il resto del giro.
+prepara
+"$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1
+uguale "segnala: rifiuta i file del cruscotto" \
+  "$("$WD_ROOT/bin/segnala.py" "$HOME/.local/share/claude-code-watchdog/metrics.json" >/dev/null 2>&1; echo $?)" "1"
+uguale "segnala: rifiuta anche la cartella dati" \
+  "$("$WD_ROOT/bin/segnala.py" "$HOME/.local/share/claude-code-watchdog" >/dev/null 2>&1; echo $?)" "1"
+
+# Il temporaneo della scrittura atomica non deve mai essere leggibile a tutti,
+# nemmeno per l'istante fra la creazione e il chmod: dentro ci sono i nomi dei
+# progetti. Si prova osservando il file mentre viene scritto.
+uguale "scrittura atomica: il temporaneo nasce gia' riservato" \
+  "$(python3 -c "
+import importlib.util as u, os, threading, time
+from pathlib import Path
+s=u.spec_from_file_location('fc','$WD_ROOT/bin/fix-cwd.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+d=Path('$SANDBOX/tmpmode'); d.mkdir(parents=True, exist_ok=True)
+f=d/'t.jsonl'; f.write_text('a'); f.chmod(0o600)
+visti=[]
+def spia():
+    for _ in range(4000):
+        for x in d.iterdir():
+            if x.name.endswith('.tmp'):
+                try: visti.append(x.stat().st_mode & 0o777)
+                except OSError: pass
+th=threading.Thread(target=spia); th.start()
+m.scrivi_atomico(f, 'b'*2_000_000)
+th.join()
+print('tutti-riservati' if all(v == 0o600 for v in visti) else f'esposto: {set(visti)}')")" "tutti-riservati"
 
 # Il caso che il 2026-09-16 stava per far perdere dati: una cartella di
 # projects/ con sessioni di cwd diversi. Deve elencare i SINGOLI FILE, mai la

@@ -238,8 +238,13 @@ def ammissibile(percorso: Path) -> str | None:
         dati = SEGNALATI.parent.resolve()
     except OSError:
         dati = SEGNALATI.parent
-    if p == dati:
-        return "e' la cartella dati del cruscotto"
+    if p == dati or dati in p.parents:
+        # Anche i file dentro, non solo la cartella. Cestinare `metrics.json`
+        # non toglie solo un dato: `cartelle_di_lavoro()` lo legge, e senza
+        # quello la protezione «contiene la cartella di lavoro di un progetto»
+        # smette di scattare per tutti i percorsi valutati dopo, nello stesso
+        # giro. Una rimozione innocua che ne abilita una pericolosa.
+        return "e' dentro la cartella dati del cruscotto"
     for lavoro in cartelle_di_lavoro():
         if p == lavoro or p in lavoro.parents:
             return f"contiene la cartella di lavoro di un progetto ({lavoro})"
