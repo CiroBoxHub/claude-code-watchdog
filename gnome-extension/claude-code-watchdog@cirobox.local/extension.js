@@ -157,7 +157,15 @@ function fmtAzzeramento(iso) {
 function taglia(testo, n) {
     if (!testo)
         return '';
-    return testo.length > n ? `${testo.slice(0, n - 1)}…` : testo;
+    if (testo.length <= n)
+        return testo;
+    // Un nome con le barre e' un percorso relativo alla radice, e li' la parte
+    // che identifica sta in fondo: `cliente/repo-alfa/src` e
+    // `cliente/repo-beta/src` tagliati da sinistra diventano due righe uguali,
+    // ognuna col proprio «Elimina dati». Si taglia dalla testa.
+    if (testo.includes('/'))
+        return `…${testo.slice(-(n - 1))}`;
+    return `${testo.slice(0, n - 1)}…`;
 }
 
 /* ------------------------------------------------------------- grafico --- */
@@ -665,6 +673,16 @@ class Indicatore extends PanelMenu.Button {
             if (chiave === 'usage-interval-seconds' || chiave === 'usage-enabled')
                 this._riprogrammaQuota();
             this._costruisciPannello();
+            // La radice la calcola collect-metrics.py e finisce nel JSON:
+            // rileggere il file non basta, va rifatta la raccolta. Senza,
+            // cambiare la cartella dei progetti non si vedeva fino al giro
+            // successivo — fino a dieci minuti dopo.
+            if (chiave === 'projects-root') {
+                this._firmaProgetti = null;
+                this._firmaAltre = null;
+                this._raccogli();
+                return;
+            }
             this._leggi();
         });
 
@@ -1113,9 +1131,13 @@ class Indicatore extends PanelMenu.Button {
        rifarlo a ogni aggiornamento chiuderebbe le righe aperte e farebbe
        perdere i clic sotto il mouse. */
     _disegnaElenco(contenitore, elenco, chiaveFirma, vero, vuoto) {
+        // `nome` e `dentroRadice` entrano nella firma: da quando li calcola
+        // Python non sono piu' funzione del solo percorso — cambiando la
+        // radice un progetto si rinomina senza che il percorso si muova, e
+        // senza questi due le righe restavano quelle vecchie sullo schermo.
         const firma = JSON.stringify(elenco.map(p =>
-            [p.percorso, p.mb, p.sessioni, p.messaggi, p.esiste,
-             (p.problemi ?? []).map(x => x.codice)]));
+            [p.percorso, p.nome, p.dentroRadice, p.mb, p.sessioni, p.messaggi,
+             p.esiste, (p.problemi ?? []).map(x => x.codice)]));
         if (firma === this[chiaveFirma])
             return this[vero ? '_righeProgetto' : '_righeAltre'] ?? [];
 

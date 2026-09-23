@@ -140,10 +140,19 @@ import re, sys, pathlib
 js = pathlib.Path(sys.argv[1]).read_text()
 scritti = set()
 for f in sys.argv[2:]:
-    scritti |= set(re.findall(r'"([a-zA-Z_][a-zA-Z0-9_]*)"\s*:', pathlib.Path(f).read_text()))
+    src = pathlib.Path(f).read_text()
+    # Due forme: la chiave in un dizionario letterale e l'assegnazione per
+    # indice, `e["problemi"] = ...`, che i campi calcolati dopo usano.
+    scritti |= set(re.findall(r'"([a-zA-Z_][a-zA-Z0-9_]*)"\s*:', src))
+    scritti |= set(re.findall(r'\[\s*"([a-zA-Z_][a-zA-Z0-9_]*)"\s*\]\s*=', src))
 # Le variabili in cui extension.js tiene pezzi di JSON letto dagli script.
-sorgenti = ("d", "claude", "disco", "rec", "q")
+# `p` e' la riga di progetto, che ha campi suoi (dentroRadice, nome…).
+sorgenti = ("d", "claude", "disco", "rec", "q", "p")
+# Metodi, non campi del JSON: `p` e `d` sono anche nomi di variabili locali
+# per oggetti GObject, e i loro metodi non vanno cercati fra i campi.
 metodi = {"map","filter","length","forEach","find","slice","join","push","some",
+          "get_string","get_int","get_boolean","set_string","connect","disconnect",
+          "destroy","add_child","get_parent","bind","resolve","query_info",
           "includes","toFixed","replace","split","startsWith","trim","sort",
           "reduce","indexOf","endsWith","padStart","toString","keys","values",
           "entries","concat","every","flat","at","repeat","substring"}
