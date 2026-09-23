@@ -84,6 +84,44 @@ d=json.load(open(c))
 print(all(os.path.exists(k) for k in d['voci']))")" "True"
 unset XDG_CACHE_HOME
 
+# XDG_* impostata ma vuota vale come non impostata, dice la specifica.
+# Path("") è Path("."): i dati sarebbero finiti nella cartella da cui è partita
+# la shell, che per l'estensione è imprevedibile.
+prepara
+(cd "$SANDBOX" && XDG_DATA_HOME= "$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1)
+uguale "XDG vuota: i dati vanno nel posto di sempre" \
+  "$([[ -f "$HOME/.local/share/claude-code-watchdog/metrics.json" ]] && echo si || echo no)" "si"
+uguale "XDG vuota: non crea cartelle nel percorso corrente" \
+  "$([[ -d "$SANDBOX/claude-code-watchdog" ]] && echo creata || echo nessuna)" "nessuna"
+
+# La riscrittura delle trascrizioni è atomica: un'interruzione a metà non deve
+# lasciare una conversazione troncata. Si prova la funzione, perché il caso
+# vero — il processo ucciso a metà scrittura — non si riproduce.
+prepara
+uguale "scrittura atomica: sostituisce senza lasciare temporanei" \
+  "$(python3 -c "
+import importlib.util as u, os
+from pathlib import Path
+s=u.spec_from_file_location('fc','$WD_ROOT/bin/fix-cwd.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+d=Path('$SANDBOX/atom'); d.mkdir(parents=True, exist_ok=True)
+f=d/'x.jsonl'; f.write_text('vecchio')
+m.scrivi_atomico(f, 'nuovo')
+resti=[x.name for x in d.iterdir() if x.name != 'x.jsonl']
+print(f.read_text(), resti)")" "nuovo []"
+uguale "scrittura atomica: se fallisce non tocca l'originale" \
+  "$(python3 -c "
+import importlib.util as u
+from pathlib import Path
+s=u.spec_from_file_location('fc','$WD_ROOT/bin/fix-cwd.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+d=Path('$SANDBOX/atom2'); d.mkdir(parents=True, exist_ok=True)
+f=d/'y.jsonl'; f.write_text('originale')
+try:
+    m.scrivi_atomico(f, object())   # non è testo: solleva
+except Exception:
+    pass
+resti=[x.name for x in d.iterdir() if x.name != 'y.jsonl']
+print(f.read_text(), resti)")" "originale []"
+
 # ------------------------------------------------- collect-metrics.py ---
 prepara
 "$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1

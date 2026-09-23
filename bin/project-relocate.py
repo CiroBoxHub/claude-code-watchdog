@@ -25,6 +25,24 @@ PROJECTS = HOME / ".claude" / "projects"
 JOBS = HOME / ".claude" / "jobs"
 
 
+
+def scrivi_atomico(destinazione: Path, testo: str) -> None:
+    """Scrive su file temporaneo accanto alla destinazione, poi rinomina.
+
+    `write_text` diretto non è atomico: un'interruzione a metà lascia una
+    trascrizione troncata, cioè una conversazione persa a pezzi. Il rename
+    dentro la stessa cartella — quindi lo stesso filesystem — o riesce del
+    tutto o non fa niente. Il nome porta il pid: due esecuzioni in parallelo
+    non devono contendersi lo stesso temporaneo.
+    """
+    tmp = destinazione.with_name(f"{destinazione.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(testo)
+        tmp.replace(destinazione)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
 def codifica(percorso: str) -> str:
     """Nome cartella di projects/ per una cwd.
 
@@ -159,7 +177,7 @@ def sposta(ris: dict) -> tuple[list[str], int]:
                 if isinstance(d, dict) and d.get("cwd") == vecchia:
                     d["cwd"] = nuova
                 righe.append(json.dumps(d, ensure_ascii=False))
-            arrivo.write_text("\n".join(righe) + "\n")
+            scrivi_atomico(arrivo, "\n".join(righe) + "\n")
         except OSError as e:
             errori.append(f"{orig}: {e}")
             continue
