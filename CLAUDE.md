@@ -163,6 +163,23 @@ scritta una a mano. **Lo script non legge gsettings**: lo schema non è
 installato a livello di sistema, e una seconda copia della regola di scelta è
 una copia che diverge.
 
+## Quanto costa, misurato
+
+    raccolta metriche    0,41 s ogni  600 s   0,07% di una CPU
+    lettura quota        2,57 s ogni 1800 s   0,14%  (picco 323 MB)
+                                              ----
+                                              0,21%
+
+Aprire il popup **non lancia nessun processo**: rilegge il JSON e avvia
+l'orologio dell'età, che si ferma alla chiusura. Il costo è tutto nei due
+timer, e la quota è la voce più pesante — ma quei 323 MB sono la CLI di
+Claude, non codice nostro, e il dato di quota in locale non esiste.
+
+Il 2026-09-23 la raccolta stava a 0,69 s: riparsava 70 MB e 24.600 righe di
+trascrizioni a ogni giro per riottenere gli stessi numeri. Con la cache dei
+metadati l'inventario è passato da 0,62 s a 0,08 s. Se un domani risale, è lì
+che si guarda per primo.
+
 ## Prima di dire «fatto»
 
     ./bin/prova.sh              72 prove funzionali, sandbox con HOME dirottata
