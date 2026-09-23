@@ -62,12 +62,12 @@ CARTELLE = {
     "claude-paste":       ("paste-cache", "Paste cache"),
 }
 
-VERSIONI = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share")) / "claude/versions"
+VERSIONI = Path(os.environ.get("XDG_DATA_HOME") or (HOME / ".local/share")) / "claude/versions"
 
 # Coda delle segnalazioni: percorsi trovati a mano che il pannello mostra come
 # tutte le altre voci. Non e' un campo dove si digita un percorso — ci si
 # scrive con `segnala.py`, e reclaim.py agisce solo su cio' che trova qui.
-SEGNALATI = (Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share"))
+SEGNALATI = (Path(os.environ.get("XDG_DATA_HOME") or (HOME / ".local/share"))
              / "claude-code-watchdog" / "segnalati.jsonl")
 
 # Le due cartelle di ~/.cache che sono di Claude Code: lo staging degli
@@ -216,13 +216,20 @@ def ammissibile(percorso: Path) -> str | None:
     """
     try:
         p = percorso.resolve()
+        # Risolti anche questi: `p` passa da resolve(), e con una home che è
+        # un collegamento (`/home/tizio` → `/dati/tizio`) il confronto con un
+        # `HOME` non risolto dichiara «fuori dalla home» qualunque cosa — e il
+        # pulsante non cestinerebbe più niente. Chi confronta percorsi deve
+        # risolvere entrambi i lati.
+        casa = HOME.resolve()
+        claude = CLAUDE.resolve()
     except OSError:
         return "percorso irrisolvibile"
     if not p.is_absolute():
         return "percorso non assoluto"
-    if p == HOME or HOME not in p.parents:
+    if p == casa or casa not in p.parents:
         return "fuori dalla home"
-    if p == CLAUDE or CLAUDE in p.parents:
+    if p == claude or claude in p.parents:
         # Trascrizioni e memorie hanno strumenti loro, che verificano prima di
         # toccare: session-purge.py e project-purge.py. Passare di qui
         # salterebbe quelle verifiche.

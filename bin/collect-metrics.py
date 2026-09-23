@@ -46,7 +46,7 @@ except Exception as _e:  # pragma: no cover - dipende da come e' stato copiato
           file=sys.stderr)
 HOME = Path.home()
 CLAUDE = HOME / ".claude"
-OUT_DIR = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share")) / "claude-code-watchdog"
+OUT_DIR = Path(os.environ.get("XDG_DATA_HOME") or (HOME / ".local/share")) / "claude-code-watchdog"
 METRICS = OUT_DIR / "metrics.json"
 USAGE = OUT_DIR / "usage.json"
 HISTORY = OUT_DIR / "history.jsonl"
@@ -129,51 +129,44 @@ def radice_progetti(esplicita: str | None, progetti: list[dict]) -> Path | None:
         p = Path(esplicita).expanduser()
         return p if p.is_dir() else None
 
-    conta: dict[Path, int] = {}
+    # Per ogni possibile radice si contano i PROGETTI che avrebbe: le sue
+    # figlie dirette che contengono almeno un cwd. La radice e' quella che ne
+    # ha di piu'.
+    #
+    # Contare i genitori dei cwd non basta, e le due versioni precedenti sono
+    # cadute qui: `progetto/src` e `progetto/docs` fanno sembrare `progetto`
+    # una radice con due progetti, e una sessione in `~/Documenti/Scaricati`
+    # ne fa sembrare una `~/Documenti`. Contando i figli distinti, `progetto`
+    # ne ha due (`src`, `docs`) ma anche `L` ne ha due (`a`, `b`) — e a parita'
+    # vince la meno profonda, che e' quella giusta. Con `~/Documenti/Claude`
+    # a quattro progetti e `~/Documenti` a due, vince Claude senza pareggi.
+    progetti_per_radice: dict[Path, set[Path]] = {}
     for e in progetti:
         perc = e.get("percorso") or ""
         if not perc.startswith("/"):
             continue
-        genitore = Path(perc).parent
-        # La home non è una radice di progetti: prenderla vorrebbe dire
-        # elencare Scaricati, Immagini e il resto come se fossero lavoro.
-        # `/tmp` lo stesso, ed è pieno di cartelle che non sono progetti.
-        # Si esclude /tmp **come cartella**, non ogni percorso che cominci
-        # così: `/tmp/lavoro/prog` ha per genitore `/tmp/lavoro`, che è una
-        # radice legittima quanto un'altra — e scartarla impediva di provare
-        # la deduzione nella sandbox, che vive sotto /tmp.
-        if genitore == HOME or genitore == Path("/") or genitore == Path("/tmp"):
-            continue
-        conta[genitore] = conta.get(genitore, 0) + 1
-    # Un candidato che è ESSO STESSO la cartella di lavoro di un progetto non è
-    # una radice: è un progetto. I suoi voti vanno a chi lo contiene, se c'è.
-    # Senza, due sessioni in `progetto/src` e `progetto/docs` farebbero
-    # eleggere radice `progetto` e tutti i fratelli finirebbero fuori.
-    #
-    # La condizione «è un cwd» non è un dettaglio: ripiegando ogni candidato
-    # annidato, una sola sessione aperta in `~/Documenti/Scaricati` sposterebbe
-    # la radice da `~/Documenti/Claude` a `~/Documenti`, e il pannello
-    # elencherebbe Scaricati e Immagini come progetti. `~/Documenti/Claude` è
-    # annidata in `~/Documenti` ma non è il cwd di nessuno: è una radice.
-    # Rilevato da /code-review il 2026-09-23, riprodotto prima di correggere.
-    #
-    # Dai più profondi, così le catene (`a/b/c` dentro `a/b` dentro `a`) si
-    # ripiegano fino in fondo.
-    cartelle_di_lavoro = {Path(e.get("percorso") or "") for e in progetti}
-    for c in sorted(conta, key=lambda x: len(x.parts), reverse=True):
-        if c not in conta or c not in cartelle_di_lavoro:
-            continue
-        for antenato in c.parents:
-            if antenato in conta:
-                conta[antenato] += conta.pop(c)
-                break
-
-    if not conta:
+        p = Path(perc)
+        # Ogni antenato e' una radice possibile; il progetto che avrebbe sotto
+        # e' la figlia diretta dell'antenato lungo questo percorso.
+        figlia = p
+        for antenato in p.parents:
+            # La home non e' una radice di progetti: prenderla vorrebbe dire
+            # elencare Scaricati, Immagini e il resto come se fossero lavoro.
+            # `/tmp` lo stesso. Si escludono come cartelle, non come prefisso:
+            # `/tmp/lavoro` e' una radice legittima quanto un'altra.
+            if antenato not in (HOME, Path("/"), Path("/tmp")):
+                progetti_per_radice.setdefault(antenato, set()).add(figlia)
+            figlia = antenato
+    if not progetti_per_radice:
         return None
-    # A parità di conteggio si ordina per percorso, così due esecuzioni di
-    # fila danno la stessa risposta invece di alternarsi.
-    migliore, quanti = max(conta.items(), key=lambda kv: (kv[1], str(kv[0])))
-    # Un progetto solo non è un indizio: con due progetti in due posti diversi
+
+    # A parita' di progetti vince la meno profonda, e a parita' di profondita'
+    # l'ordine alfabetico: due esecuzioni di fila devono dare la stessa
+    # risposta, se no l'elenco cambia da un giro all'altro.
+    migliore = max(progetti_per_radice,
+                   key=lambda r: (len(progetti_per_radice[r]), -len(r.parts), str(r)))
+    quanti = len(progetti_per_radice[migliore])
+    # Un progetto solo non e' un indizio: con due progetti in due posti diversi
     # si sceglierebbe a sorte, e l'elenco cambierebbe da un giro all'altro.
     if quanti < 2 or not migliore.is_dir():
         return None

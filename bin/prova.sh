@@ -189,6 +189,37 @@ import json;d=json.load(open('$M'))
 r=d['radiceProgetti'] or ''
 print('/'.join(r.rsplit('/',2)[-2:]) if r else 'nessuna')")" "D/Claude"
 
+# La deduzione della radice, caso per caso e su cartelle vere. Tre versioni di
+# questa regola hanno sbagliato: contare i genitori dei cwd non basta, e
+# nemmeno ripiegare i candidati annidati. Si contano i PROGETTI che ogni
+# possibile radice avrebbe, cioe' le sue figlie diritte che contengono un cwd.
+prepara
+uguale "radice: la regola su tutti i casi noti" \
+  "$(python3 - "$WD_ROOT" "$SANDBOX/rad" <<'EOF'
+import importlib.util as u, os, sys
+from pathlib import Path
+s = u.spec_from_file_location("cm", sys.argv[1] + "/bin/collect-metrics.py")
+m = u.module_from_spec(s); s.loader.exec_module(m)
+base = sys.argv[2]
+casi = [
+  ("progetti e sottocartelle di uno",      ["L/a","L/b","L/a/src","L/a/docs"], "L"),
+  ("sessioni SOLO nelle sottocartelle",    ["L2/a/src","L2/a/docs","L2/b"],    "L2"),
+  ("una sessione in una cartella sorella", ["D/Claude/a","D/Claude/b","D/Claude/c","D/Scaricati"], "D/Claude"),
+  ("catena profonda",                      ["K/b/c/x","K/b/c","K/d"],          "K"),
+  ("un progetto solo, non si indovina",    ["S/uno"],                          None),
+]
+rotti = []
+for nome, rel, atteso in casi:
+    for r in rel:
+        os.makedirs(f"{base}/{r}", exist_ok=True)
+    got = m.radice_progetti(None, [{"percorso": f"{base}/{r}"} for r in rel])
+    att = f"{base}/{atteso}" if atteso else None
+    if (str(got) if got else None) != att:
+        rotti.append(nome)
+print(",".join(rotti) if rotti else "tutti")
+EOF
+)" "tutti"
+
 # La regola «dentro la radice», caso per caso. Sta in Python apposta per
 # poterla provare: in extension.js non si poteva, e sbagliarla ha fatto
 # comparire un progetto vero fra quelli «fuori dai progetti».

@@ -130,13 +130,19 @@ conserva solo i file visti nel giro corrente. Raccolta: **0,69 s → 0,37 s**.
 sta attenta.** Con `progetto/src` e `progetto/docs` come cwd, due voti vanno a
 `progetto`, che verrebbe eletto radice: i progetti fratelli finirebbero tutti
 fuori e ogni sottocartella comparirebbe come progetto a zero sessioni.
-`radice_progetti()` ripiega i candidati annidati su chi li contiene, partendo
-dai più profondi — ma **solo quelli che sono essi stessi la cartella di lavoro
-di un progetto**. Senza quella condizione una sola sessione aperta in
-`~/Documenti/Scaricati` spostava la radice da `~/Documenti/Claude` a
-`~/Documenti`, ed erano Scaricati e Immagini a comparire come progetti: lo
-stesso difetto, un livello più su. Due giri di `/code-review`, due difetti
-introdotti dalle correzioni precedenti. Rilevato da `/code-review` il 2026-09-23, riprodotto prima di
+**Non si contano i genitori dei `cwd`: si contano i progetti.** Per ogni
+possibile radice si guarda quante sue *figlie dirette* contengono almeno un
+`cwd`, e vince chi ne ha di più; a parità la meno profonda. Tre versioni di
+questa regola hanno sbagliato prima di arrivarci, e ogni volta il difetto era
+nella correzione precedente:
+1. contando i genitori, `progetto/src` e `progetto/docs` eleggevano `progetto`;
+2. ripiegando ogni candidato annidato, una sessione in `~/Documenti/Scaricati`
+   spostava la radice a `~/Documenti` e Scaricati diventava un progetto;
+3. ripiegando solo i candidati che sono `cwd`, un progetto le cui sessioni
+   stanno tutte in sottocartelle non veniva ripiegato e vinceva lui.
+Contando i progetti, tutti e quattro i casi vengono giusti senza casi
+speciali. La prova è tabellare (`radice: la regola su tutti i casi noti`) e
+verificata con una mutazione sul criterio di parità. Rilevato da `/code-review` il 2026-09-23, riprodotto prima di
 correggere. **`/tmp` si scarta come cartella, non come prefisso**: `/tmp/lavoro`
 è una radice legittima, e scartare tutto ciò che comincia per `/tmp` rendeva
 impossibile provare la deduzione, perché la sandbox di `prova.sh` vive lì.
@@ -159,7 +165,7 @@ una copia che diverge.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              67 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh              68 prove funzionali, sandbox con HOME dirottata
     ./bin/verifica-estensione.sh  controlli statici (gira dentro install e pack)
 
 `prova.sh` esiste perché i controlli statici non bastano: dei difetti trovati
