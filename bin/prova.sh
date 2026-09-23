@@ -173,6 +173,24 @@ touch -d "10 minutes ago" "$d/99999999-0000-0000-0000-000000000099.jsonl"
 uguale "scarti: dopo l'attesa lo diventa" \
   "$("$WD_ROOT/bin/claude-sessions.py" --stubs 2>/dev/null | grep -c 99999999)" "1"
 
+# Lo staging di Claude Code non è cache: è la versione che sta scaricando,
+# ~220 MB che compaiono in pochi secondi. Contarla faceva sbattere la barra al
+# massimo a ogni aggiornamento, e il target di pulizia avrebbe potuto
+# cestinare il download a metà.
+prepara
+mkdir -p "$HOME/.cache/claude/staging" "$HOME/.cache/claude-cli-nodejs/p"
+head -c 3000000 /dev/zero > "$HOME/.cache/claude/staging/versione-nuova"
+echo log > "$HOME/.cache/claude-cli-nodejs/p/mcp.log"
+"$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1
+# 1 MB e non 0: du arrotonda a 1 la cartella dei log. Senza l'esclusione
+# sarebbero 4, perche' lo staging finto pesa 3 MB.
+uguale "cache: lo staging non entra nella misura" \
+  "$(python3 -c "import json;print(json.load(open('$HOME/.local/share/claude-code-watchdog/metrics.json'))['claude']['cacheMb'])")" "1"
+touch -d "30 days ago" "$HOME/.cache/claude/staging/versione-nuova"
+"$WD_ROOT/bin/reclaim.py" --apply claude-cache >/dev/null 2>&1
+uguale "cache: la pulizia non tocca il download in corso" \
+  "$([[ -f "$HOME/.cache/claude/staging/versione-nuova" ]] && echo intatto || echo sparito)" "intatto"
+
 # ------------------------------------------------- collect-metrics.py ---
 prepara
 "$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1

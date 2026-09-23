@@ -348,7 +348,12 @@ def elenca(target: str) -> list[Path]:
 
     if target == "claude-cache":
         gg = giorni("claude-cache")
-        return [f for d in CACHE_CLAUDE for f in scaduti(d, gg)]
+        staging = HOME / ".cache/claude/staging"
+        # Mai lo staging: lì c'è la versione che Claude Code sta scaricando, e
+        # cestinarla a metà rompe l'aggiornamento. Non è cache stantia, è un
+        # trasferimento in corso.
+        return [f for d in CACHE_CLAUDE for f in scaduti(d, gg)
+                if staging not in f.parents]
 
     sub, _ = CARTELLE[target]
     return scaduti(CLAUDE / sub, giorni(target))
