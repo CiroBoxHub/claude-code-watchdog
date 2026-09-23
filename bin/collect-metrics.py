@@ -145,14 +145,23 @@ def radice_progetti(esplicita: str | None, progetti: list[dict]) -> Path | None:
         if genitore == HOME or genitore == Path("/") or genitore == Path("/tmp"):
             continue
         conta[genitore] = conta.get(genitore, 0) + 1
-    # Un candidato che sta DENTRO un altro candidato non e' una radice: e' un
-    # progetto di quella radice. I suoi voti vanno a chi lo contiene. Senza
-    # questo, due sessioni aperte in `progetto/src` e `progetto/docs` fanno
-    # eleggere radice `progetto` stesso — e tutti i progetti fratelli finiscono
-    # «fuori dai progetti». Si parte dai piu' profondi, cosi' le catene
-    # (`a/b/c` dentro `a/b` dentro `a`) si ripiegano fino in fondo.
+    # Un candidato che è ESSO STESSO la cartella di lavoro di un progetto non è
+    # una radice: è un progetto. I suoi voti vanno a chi lo contiene, se c'è.
+    # Senza, due sessioni in `progetto/src` e `progetto/docs` farebbero
+    # eleggere radice `progetto` e tutti i fratelli finirebbero fuori.
+    #
+    # La condizione «è un cwd» non è un dettaglio: ripiegando ogni candidato
+    # annidato, una sola sessione aperta in `~/Documenti/Scaricati` sposterebbe
+    # la radice da `~/Documenti/Claude` a `~/Documenti`, e il pannello
+    # elencherebbe Scaricati e Immagini come progetti. `~/Documenti/Claude` è
+    # annidata in `~/Documenti` ma non è il cwd di nessuno: è una radice.
+    # Rilevato da /code-review il 2026-09-23, riprodotto prima di correggere.
+    #
+    # Dai più profondi, così le catene (`a/b/c` dentro `a/b` dentro `a`) si
+    # ripiegano fino in fondo.
+    cartelle_di_lavoro = {Path(e.get("percorso") or "") for e in progetti}
     for c in sorted(conta, key=lambda x: len(x.parts), reverse=True):
-        if c not in conta:
+        if c not in conta or c not in cartelle_di_lavoro:
             continue
         for antenato in c.parents:
             if antenato in conta:
