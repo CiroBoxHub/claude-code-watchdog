@@ -459,9 +459,11 @@ export default class WatchdogPreferences extends ExtensionPreferences {
         radice.add(inUso);
 
         spiega(radice, 'Vuoto = automatico',
-               'Si usa la cartella che contiene il progetto claude-code-watchdog. ' +
-               'Per sceglierne un\u2019altra scrivi un percorso assoluto, o uno ' +
-               'che inizia con la tilde.');
+               'Si deduce dai progetti che hanno gi\u00e0 delle conversazioni: ' +
+               'fra tutte le cartelle che ne contengono, vince quella che ne ha ' +
+               'di pi\u00f9. Ne servono almeno due, e la home e /tmp non si ' +
+               'considerano mai. Per sceglierne un\u2019altra scrivi un percorso ' +
+               'assoluto, o uno che inizia con la tilde.');
 
         const conReadme = new Adw.SwitchRow({
             title: 'Crea un README.md',

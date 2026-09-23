@@ -122,6 +122,37 @@ except Exception:
 resti=[x.name for x in d.iterdir() if x.name != 'y.jsonl']
 print(f.read_text(), resti)")" "originale []"
 
+# Una cache malformata non deve far saltare l'inventario: da --stubs dipendono
+# reclaim.py e clean.sh, e un inventario che muore li ferma entrambi.
+prepara
+export XDG_CACHE_HOME="$HOME/.cache"
+mkdir -p "$HOME/.cache/claude-code-watchdog"
+for rotta in '[]' '{"versione":1,"voci":[]}' '{"versione":1}' 'non json'; do
+  echo "$rotta" > "$HOME/.cache/claude-code-watchdog/sessioni.json"
+  "$WD_ROOT/bin/claude-sessions.py" --stubs >/dev/null 2>&1 || { echo "ROTTA con $rotta"; break; }
+done
+uguale "cache: una cache malformata non ferma l'inventario" \
+  "$(for rotta in '[]' '{\"versione\":1,\"voci\":[]}' '{\"versione\":1}' 'non json'; do
+       echo "$rotta" > "$HOME/.cache/claude-code-watchdog/sessioni.json"
+       "$WD_ROOT/bin/claude-sessions.py" --stubs >/dev/null 2>&1 || { echo rotta; exit; }
+     done; echo tutte-ok)" "tutte-ok"
+uguale "cache: non lascia temporanei in giro" \
+  "$(ls "$HOME/.cache/claude-code-watchdog"/*.tmp 2>/dev/null | wc -l)" "0"
+unset XDG_CACHE_HOME
+
+# La scrittura atomica non deve declassare i permessi: le trascrizioni stanno
+# a 600 e contengono i nomi dei progetti, quindi dei clienti.
+uguale "scrittura atomica: conserva i permessi dell'originale" \
+  "$(python3 -c "
+import importlib.util as u, os
+from pathlib import Path
+s=u.spec_from_file_location('fc','$WD_ROOT/bin/fix-cwd.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+d=Path('$SANDBOX/perm'); d.mkdir(parents=True, exist_ok=True)
+f=d/'t.jsonl'; f.write_text('a'); f.chmod(0o600)
+m.scrivi_atomico(f,'b')
+n=d/'nuovo.jsonl'; m.scrivi_atomico(n,'c')
+print(oct(f.stat().st_mode & 0o777), oct(n.stat().st_mode & 0o777))")" "0o600 0o600"
+
 # ------------------------------------------------- collect-metrics.py ---
 prepara
 "$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1
@@ -246,6 +277,16 @@ casi = [
   ("catena profonda",                      ["K/b/c/x","K/b/c","K/d"],          "K"),
   ("un progetto solo, non si indovina",    ["S/uno"],                          None),
 ]
+# Una cartella SOPRA la home: nella sandbox e' il livello che contiene la home
+# finta. Farebbe due «progetti» (la home e la cartella accanto) ed essendo meno
+# profonda vincerebbe il pareggio. Niente che stia sopra la home e' una radice.
+sopra = os.path.dirname(os.environ["HOME"])
+assoluti = [
+  ("cartelle sopra la home fuori gara",
+   [f"{os.environ['HOME']}/D/Cl/a", f"{os.environ['HOME']}/D/Cl/b",
+    f"{sopra}/accanto/cliente"],
+   f"{os.environ['HOME']}/D/Cl"),
+]
 rotti = []
 for nome, rel, atteso in casi:
     for r in rel:
@@ -254,9 +295,35 @@ for nome, rel, atteso in casi:
     att = f"{base}/{atteso}" if atteso else None
     if (str(got) if got else None) != att:
         rotti.append(nome)
+for nome, percorsi, atteso in assoluti:
+    for pc in percorsi:
+        os.makedirs(pc, exist_ok=True)
+    got = m.radice_progetti(None, [{"percorso": pc} for pc in percorsi])
+    if (str(got) if got else None) != atteso:
+        rotti.append(nome)
 print(",".join(rotti) if rotti else "tutti")
 EOF
 )" "tutti"
+
+# Limite noto, fissato apposta: quando UN progetto ha piu' sottocartelle con
+# sessioni di quanti progetti abbia la radice, vince il progetto. Con
+# `L/a/src`, `L/a/docs`, `L/a/test` e `L/b`, `L/a` fa 3 e `L` fa 2. Dai soli
+# dati le due letture sono equivalenti; si risolve scrivendo la radice nelle
+# preferenze. La prova sta qui perche' il giorno che la regola cambia si
+# sappia che questo comportamento cambia con lei.
+uguale "radice: limite noto, un progetto con piu' sottocartelle della radice" \
+  "$(python3 - "$WD_ROOT" "$SANDBOX/lim" <<'EOF'
+import importlib.util as u, os, sys
+s = u.spec_from_file_location("cm", sys.argv[1] + "/bin/collect-metrics.py")
+m = u.module_from_spec(s); s.loader.exec_module(m)
+base = sys.argv[2]
+rel = ["L/a/src", "L/a/docs", "L/a/test", "L/b"]
+for r in rel:
+    os.makedirs(f"{base}/{r}", exist_ok=True)
+got = m.radice_progetti(None, [{"percorso": f"{base}/{r}"} for r in rel])
+print(str(got).replace(base + "/", ""))
+EOF
+)" "L/a"
 
 # La regola «dentro la radice», caso per caso. Sta in Python apposta per
 # poterla provare: in extension.js non si poteva, e sbagliarla ha fatto

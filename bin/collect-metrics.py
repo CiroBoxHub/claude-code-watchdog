@@ -108,6 +108,41 @@ def arg(nome: str) -> str | None:
     return None
 
 
+CASA = None          # HOME risolta, calcolata una volta sola
+
+
+def candidabile(cartella: Path) -> bool:
+    """Se una cartella può essere la radice dei progetti.
+
+    La home no: prenderla vorrebbe dire elencare Scaricati, Immagini e il
+    resto come se fossero lavoro. `/tmp` no, ed è escluso come cartella e non
+    come prefisso — `/tmp/lavoro` è una radice legittima quanto un'altra.
+
+    E **niente che stia sopra la home**: `/home` e `/` non sono cartelle di
+    progetti, ma contando ogni antenato entravano in gara, e a parità vincono
+    perché sono le meno profonde. Con due progetti in `~/Documenti/Claude` e
+    uno in `/home/lavoro/cliente`, `/home` faceva due «progetti» (`tizio` e
+    `lavoro`) e vinceva: il pannello avrebbe elencato la home di ogni utente.
+
+    La home si confronta **risolta**: i `cwd` nelle trascrizioni sono percorsi
+    fisici, perché `getcwd` scioglie i collegamenti. Con `/home/tizio` che è
+    un link a `/dati/tizio`, un `HOME` non risolto non combacia con nessun cwd
+    e l'esclusione non scatta mai.
+    """
+    global CASA
+    if CASA is None:
+        try:
+            CASA = HOME.resolve()
+        except OSError:
+            CASA = HOME
+    if cartella in (HOME, CASA, Path("/"), Path("/tmp")):
+        return False
+    # Sopra la home: `/`, `/home`, e su qualche sistema anche di più.
+    if cartella in CASA.parents:
+        return False
+    return True
+
+
 def radice_progetti(esplicita: str | None, progetti: list[dict]) -> Path | None:
     """La cartella dove nascono i progetti nuovi, o None se non si sa.
 
@@ -150,11 +185,7 @@ def radice_progetti(esplicita: str | None, progetti: list[dict]) -> Path | None:
         # e' la figlia diretta dell'antenato lungo questo percorso.
         figlia = p
         for antenato in p.parents:
-            # La home non e' una radice di progetti: prenderla vorrebbe dire
-            # elencare Scaricati, Immagini e il resto come se fossero lavoro.
-            # `/tmp` lo stesso. Si escludono come cartelle, non come prefisso:
-            # `/tmp/lavoro` e' una radice legittima quanto un'altra.
-            if antenato not in (HOME, Path("/"), Path("/tmp")):
+            if candidabile(antenato):
                 progetti_per_radice.setdefault(antenato, set()).add(figlia)
             figlia = antenato
     if not progetti_per_radice:

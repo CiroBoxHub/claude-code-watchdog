@@ -689,16 +689,14 @@ class Indicatore extends PanelMenu.Button {
                 // La bandiera si legge PRIMA: `_raccogli()` la alza anche
                 // quando la raccolta la fa partire davvero, quindi dopo la
                 // chiamata e' sempre vera e la condizione non direbbe niente.
-                const giaInVolo = this._inCorso;
                 this._raccogli();
-                // Se una raccolta era gia' in volo, `_raccogli()` ha rinunciato
-                // e quella in corso e' partita con la radice vecchia. Si
-                // rilegge comunque, se no `_costruisciPannello()` ha appena
-                // azzerato le etichette e il pannello resterebbe a trattini
-                // fino al giro dopo. La radice nuova arriva col ciclo
-                // successivo.
-                if (giaInVolo)
-                    this._leggi();
+                // Si rilegge SEMPRE, non solo quando una raccolta era gia' in
+                // volo: `_costruisciPannello()` ha appena ricreato le etichette
+                // vuote, e senza questa lettura il pannello resta a trattini
+                // per tutta la durata del sottoprocesso — o per sempre, se
+                // quello si impianta e la callback non arriva mai. Costa una
+                // lettura di metrics.json; i dati nuovi arrivano dopo.
+                this._leggi();
                 return;
             }
             this._leggi();

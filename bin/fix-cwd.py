@@ -36,8 +36,17 @@ def scrivi_atomico(destinazione: Path, testo: str) -> None:
     non devono contendersi lo stesso temporaneo.
     """
     tmp = destinazione.with_name(f"{destinazione.name}.{os.getpid()}.tmp")
+    # I permessi dell'originale vanno riportati a mano: un file nuovo nasce
+    # secondo la umask, di solito 0644, e `write_text` su un file esistente
+    # invece li conservava. Qui dentro ci sono i nomi dei progetti — quindi
+    # dei clienti — e le trascrizioni stanno a 600.
+    try:
+        modo = destinazione.stat().st_mode & 0o777
+    except OSError:
+        modo = 0o600
     try:
         tmp.write_text(testo)
+        tmp.chmod(modo)
         tmp.replace(destinazione)
     except BaseException:
         tmp.unlink(missing_ok=True)
