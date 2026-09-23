@@ -249,7 +249,15 @@ def cartelle_di_lavoro() -> list[Path]:
     out = []
     for e in d.get("claude", {}).get("progetti", []):
         perc = e.get("percorso") or ""
-        if perc.startswith("/"):
+        if not perc.startswith("/"):
+            continue
+        # Risolti: `ammissibile()` risolve il percorso da cestinare, e
+        # confrontarlo con uno non risolto fa mancare il riconoscimento
+        # quando di mezzo c'e' un collegamento — per esempio una home che
+        # e' un link. Chi confronta percorsi deve risolvere entrambi i lati.
+        try:
+            out.append(Path(perc).resolve())
+        except OSError:
             out.append(Path(perc))
     return out
 

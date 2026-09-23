@@ -157,15 +157,21 @@ function fmtAzzeramento(iso) {
 function taglia(testo, n) {
     if (!testo)
         return '';
-    if (testo.length <= n)
-        return testo;
-    // Un nome con le barre e' un percorso relativo alla radice, e li' la parte
-    // che identifica sta in fondo: `cliente/repo-alfa/src` e
-    // `cliente/repo-beta/src` tagliati da sinistra diventano due righe uguali,
-    // ognuna col proprio «Elimina dati». Si taglia dalla testa.
-    if (testo.includes('/'))
-        return `…${testo.slice(-(n - 1))}`;
-    return `${testo.slice(0, n - 1)}…`;
+    return testo.length > n ? `${testo.slice(0, n - 1)}…` : testo;
+}
+
+/* Un nome di progetto puo' essere un percorso relativo alla radice, e li' la
+   parte che identifica sta in fondo: `cliente/repo-alfa/src` e
+   `cliente/repo-beta/src` tagliati da sinistra diventano due righe uguali,
+   ognuna col proprio «Elimina dati». Vale per i nomi, non per i messaggi
+   d'errore, che di barre ne hanno e vanno letti dall'inizio: per quelli resta
+   `taglia`. */
+function tagliaNome(nome, n) {
+    if (!nome)
+        return '';
+    if (nome.length <= n)
+        return nome;
+    return nome.includes('/') ? `…${nome.slice(-(n - 1))}` : `${nome.slice(0, n - 1)}…`;
 }
 
 /* ------------------------------------------------------------- grafico --- */
@@ -523,7 +529,7 @@ class RigaProgetto extends St.BoxLayout {
             testa.add_style_class_name('fw-proj-problema');
         }
 
-        const nome = new St.Label({text: taglia(progetto.nome, problemi.length ? 27 : 30),
+        const nome = new St.Label({text: tagliaNome(progetto.nome, problemi.length ? 27 : 30),
                                    style_class: 'fw-proj-name'});
         testi.add_child(nome);
         const plurale = progetto.sessioni === 1 ? 'sessione' : 'sessioni';
@@ -681,6 +687,13 @@ class Indicatore extends PanelMenu.Button {
                 this._firmaProgetti = null;
                 this._firmaAltre = null;
                 this._raccogli();
+                // `_raccogli()` rinuncia se una raccolta e' gia' in volo, e
+                // quella e' partita con la radice vecchia. Si rilegge comunque:
+                // senza, `_costruisciPannello()` ha appena azzerato le
+                // etichette e il pannello resterebbe a trattini fino al giro
+                // dopo. La radice nuova arriva col ciclo successivo.
+                if (this._inCorso)
+                    this._leggi();
                 return;
             }
             this._leggi();
@@ -2019,8 +2032,8 @@ class Indicatore extends PanelMenu.Button {
         }
         riga?.chiudiConferma();
         this._mostraEsito(riga?.vero === false
-            ? `Rimozione delle sessioni di ${taglia(p.nome, 20)}…`
-            : `Rimozione dei dati di ${taglia(p.nome, 24)}…`);
+            ? `Rimozione delle sessioni di ${tagliaNome(p.nome, 20)}…`
+            : `Rimozione dei dati di ${tagliaNome(p.nome, 24)}…`);
         try {
             const proc = Gio.Subprocess.new([script, p.percorso, '--apply'],
                                             Gio.SubprocessFlags.STDOUT_SILENCE |
@@ -2032,8 +2045,8 @@ class Indicatore extends PanelMenu.Button {
                 // fallita: dirlo, invece di annunciare un successo.
                 const ok = proc.get_successful();
                 this._mostraEsito(ok
-                    ? `Dati di ${taglia(p.nome, 22)} rimossi.`
-                    : `Rimozione incompleta per ${taglia(p.nome, 18)}.`);
+                    ? `Dati di ${tagliaNome(p.nome, 22)} rimossi.`
+                    : `Rimozione incompleta per ${tagliaNome(p.nome, 18)}.`);
                 this._raccogli();
             });
         } catch (e) {

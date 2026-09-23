@@ -115,12 +115,28 @@ direbbe «2» e ne cancellerebbe una sola, in silenzio. Restano righe distinte, 
 il nome porta il percorso relativo (`electra-release/Electra`) perché due
 sottocartelle `src` di progetti diversi non si chiamino uguale.
 
+**Il raccoglitore non rilegge le trascrizioni che non sono cambiate.**
+Erano 70 MB e 24.600 righe riparsate ogni dieci minuti per riottenere gli
+stessi numeri. `claude-sessions.py` tiene una cache dei metadati per file in
+`~/.cache/claude-code-watchdog/sessioni.json`, con chiave su data di modifica
+**e** dimensione: la sola data non basta se due scritture cadono nello stesso
+nanosecondo, la sola dimensione se una riga ne sostituisce un'altra di pari
+lunghezza. `CACHE_VERSIONE` va alzata quando `scan_file()` cambia cosa
+restituisce, se no una cache vecchia dà numeri sbagliati senza segnalare
+niente. Sta in `~/.cache` perché è rigenerabile, si scrive con rename atomico e
+conserva solo i file visti nel giro corrente. Raccolta: **0,69 s → 0,37 s**.
+
 **La deduzione della radice si fa avvelenare dalle sottocartelle, se non
 sta attenta.** Con `progetto/src` e `progetto/docs` come cwd, due voti vanno a
 `progetto`, che verrebbe eletto radice: i progetti fratelli finirebbero tutti
 fuori e ogni sottocartella comparirebbe come progetto a zero sessioni.
 `radice_progetti()` ripiega i candidati annidati su chi li contiene, partendo
-dai più profondi. Rilevato da `/code-review` il 2026-09-23, riprodotto prima di
+dai più profondi — ma **solo quelli che sono essi stessi la cartella di lavoro
+di un progetto**. Senza quella condizione una sola sessione aperta in
+`~/Documenti/Scaricati` spostava la radice da `~/Documenti/Claude` a
+`~/Documenti`, ed erano Scaricati e Immagini a comparire come progetti: lo
+stesso difetto, un livello più su. Due giri di `/code-review`, due difetti
+introdotti dalle correzioni precedenti. Rilevato da `/code-review` il 2026-09-23, riprodotto prima di
 correggere. **`/tmp` si scarta come cartella, non come prefisso**: `/tmp/lavoro`
 è una radice legittima, e scartare tutto ciò che comincia per `/tmp` rendeva
 impossibile provare la deduzione, perché la sandbox di `prova.sh` vive lì.
@@ -143,7 +159,7 @@ una copia che diverge.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              57 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh              67 prove funzionali, sandbox con HOME dirottata
     ./bin/verifica-estensione.sh  controlli statici (gira dentro install e pack)
 
 `prova.sh` esiste perché i controlli statici non bastano: dei difetti trovati

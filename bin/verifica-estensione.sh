@@ -144,7 +144,9 @@ for f in sys.argv[2:]:
     # Due forme: la chiave in un dizionario letterale e l'assegnazione per
     # indice, `e["problemi"] = ...`, che i campi calcolati dopo usano.
     scritti |= set(re.findall(r'"([a-zA-Z_][a-zA-Z0-9_]*)"\s*:', src))
-    scritti |= set(re.findall(r'\[\s*"([a-zA-Z_][a-zA-Z0-9_]*)"\s*\]\s*=', src))
+    # `=` e non `==`: un campo soltanto CONFRONTATO non è un campo scritto,
+    # e contarlo tale lascerebbe verde il controllo dopo averlo rimosso.
+    scritti |= set(re.findall(r'\[\s*"([a-zA-Z_][a-zA-Z0-9_]*)"\s*\]\s*=(?!=)', src))
 # Le variabili in cui extension.js tiene pezzi di JSON letto dagli script.
 # `p` e' la riga di progetto, che ha campi suoi (dentroRadice, nome…).
 sorgenti = ("d", "claude", "disco", "rec", "q", "p")
@@ -158,7 +160,7 @@ metodi = {"map","filter","length","forEach","find","slice","join","push","some",
           "entries","concat","every","flat","at","repeat","substring"}
 mancanti = sorted({
     f"{v}.{c}" for v in sorgenti
-    for c in re.findall(rf"\b{v}\.([a-zA-Z_][a-zA-Z0-9_]*)", js)
+    for c in re.findall(rf"\b{v}\??\.([a-zA-Z_][a-zA-Z0-9_]*)", js)
     if c not in metodi and c not in scritti})
 print(" ".join(mancanti))
 PYEOF

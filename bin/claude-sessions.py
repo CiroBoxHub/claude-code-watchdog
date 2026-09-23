@@ -12,11 +12,12 @@ trascrizione, che è il percorso reale.
 
 SOLA LETTURA. Non tocca niente.
 """
-import json, sys, argparse
+import json, os, sys, argparse
 from datetime import datetime, timezone
 from pathlib import Path
 
-PROJECTS = Path.home() / ".claude" / "projects"
+HOME = Path.home()
+PROJECTS = HOME / ".claude" / "projects"
 
 def scan_file(path: Path) -> dict | None:
     """Estrae i metadati di una trascrizione.
@@ -83,17 +84,82 @@ def scan_file(path: Path) -> dict | None:
     }
 
 
-def collect() -> list[dict]:
+# Cache dei metadati per file. Le trascrizioni si scrivono in coda: una
+# conversazione chiusa non cambia più, ma senza cache si riparsa a ogni giro —
+# qui sono 70 MB e 24.600 righe ogni dieci minuti, per riottenere gli stessi
+# numeri. Sta in ~/.cache perché è materiale rigenerabile: cancellarla costa
+# una lettura in più, non un dato.
+CACHE = (Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache"))
+         / "claude-code-watchdog" / "sessioni.json")
+# Da alzare quando scan_file cambia cosa restituisce: una cache scritta dalla
+# versione precedente contiene campi vecchi, e riusarla darebbe numeri
+# sbagliati senza che niente segnali l'errore.
+CACHE_VERSIONE = 1
+
+
+def _cache_leggi() -> dict:
+    try:
+        d = json.loads(CACHE.read_text())
+    except Exception:
+        return {}
+    return d.get("voci", {}) if d.get("versione") == CACHE_VERSIONE else {}
+
+
+def _cache_scrivi(voci: dict) -> None:
+    """Scrive la cache senza lasciarla a metà se il processo muore.
+
+    Su file temporaneo e poi rename, che è atomico: un JSON troncato verrebbe
+    scartato al giro dopo, ma meglio non produrlo affatto.
+    """
+    try:
+        CACHE.parent.mkdir(parents=True, exist_ok=True)
+        CACHE.parent.chmod(0o700)
+        tmp = CACHE.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"versione": CACHE_VERSIONE, "voci": voci}))
+        tmp.chmod(0o600)
+        tmp.replace(CACHE)
+    except OSError:
+        # Una cache che non si scrive non è un errore: si riparsa e basta.
+        pass
+
+
+def collect(usa_cache: bool = True) -> list[dict]:
     if not PROJECTS.is_dir():
         return []
+    vecchia = _cache_leggi() if usa_cache else {}
+    nuova = {}
     out = []
     # glob e non rglob: rglob pesca anche <sessione>/subagents/agent-*.jsonl,
     # che hanno risposte dell'assistente ma non sono conversazioni — hanno id
     # che `claude -r` non sa riprendere e gonfiano tutti i conteggi.
     for f in PROJECTS.glob("*/*.jsonl"):
-        s = scan_file(f)
+        try:
+            st = f.stat()
+        except OSError:
+            continue
+        chiave = str(f)
+        # Dimensione E data di modifica: la sola data non basta se due
+        # scritture cadono nello stesso nanosecondo, la sola dimensione non
+        # basta se una riga ne sostituisce un'altra di pari lunghezza.
+        impronta = [st.st_mtime_ns, st.st_size]
+        voce = vecchia.get(chiave)
+        if voce and voce.get("impronta") == impronta:
+            s = dict(voce["dati"])
+            s["file"] = f
+        else:
+            s = scan_file(f)
+            if s:
+                voce = {"impronta": impronta,
+                        "dati": {k: (str(v) if isinstance(v, Path) else v)
+                                 for k, v in s.items()}}
         if s:
             out.append(s)
+            if voce:
+                # Solo i file visti adesso: così la cache non conserva
+                # trascrizioni cancellate e non cresce senza fine.
+                nuova[chiave] = voce
+    if usa_cache:
+        _cache_scrivi(nuova)
     out.sort(key=lambda s: s["mtime"], reverse=True)
     return out
 

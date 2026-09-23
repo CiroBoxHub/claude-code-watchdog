@@ -153,6 +153,27 @@ def trova(cwd: str) -> dict:
             "cartellaLavoroEsiste": Path(cwd).is_dir()}
 
 
+def dentro_cartella_di_lavoro(percorso, cwd: str) -> bool:
+    """Se `percorso` cade dentro la cartella di lavoro del progetto.
+
+    È la rete che impedisce di cancellare lavoro vero, quindi sbaglia solo in
+    eccesso: se non si riesce a risolvere un percorso lo si tratta come se
+    fosse dentro, e quella voce non si tocca.
+
+    Due precauzioni che il confronto testuale non aveva. **Si risolvono
+    entrambi i lati**: `cwd` passa già da `realpath`, e con una home che è un
+    collegamento il confronto fra `/home/tizio/...` e `/dati/tizio/...` non
+    combaciava e la rete non scattava. **Si confrontano i componenti**, non il
+    testo: `lavoro-vecchio` comincia come `lavoro` senza starci dentro.
+    """
+    try:
+        pr = Path(percorso).resolve()
+        lavoro = Path(cwd).resolve()
+    except OSError:
+        return True
+    return pr == lavoro or lavoro in pr.parents
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -190,7 +211,7 @@ def main() -> int:
         # Rete di sicurezza: qualunque cosa dentro la cartella di lavoro non si
         # tocca, per nessun motivo. Un errore di percorso qui cancellerebbe
         # lavoro vero.
-        if str(p) == args.cwd or str(p).startswith(args.cwd.rstrip("/") + "/"):
+        if dentro_cartella_di_lavoro(p, args.cwd):
             errori.append(f"saltato (dentro la cartella di lavoro): {p}")
             continue
         if args.definitivo:

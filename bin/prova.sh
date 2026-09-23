@@ -60,6 +60,30 @@ cp "$HOME/.claude/projects/-tmp-progetto/aaaaaaaa-0000-0000-0000-000000000001.js
 uguale "claude-sessions: ignora i subagenti" \
   "$("$WD_ROOT/bin/claude-sessions.py" --format json 2>/dev/null | python3 -c 'import json,sys;print(len(json.load(sys.stdin)["reali"]))')" "1"
 
+# La cache dei metadati non deve mai dare numeri vecchi. Vale la pena provarla
+# perche' una cache sbagliata non segnala niente: mostra dati plausibili.
+prepara
+export XDG_CACHE_HOME="$HOME/.cache"
+f="$HOME/.claude/projects/-tmp-progetto/aaaaaaaa-0000-0000-0000-000000000001.jsonl"
+msg() { "$WD_ROOT/bin/claude-sessions.py" --format json 2>/dev/null \
+        | python3 -c 'import json,sys;print(json.load(sys.stdin)["reali"][0]["n_msg"])'; }
+prima=$(msg)
+uguale "cache: il secondo giro da' lo stesso conteggio" "$(msg)" "$prima"
+printf '{"type":"user","cwd":"/tmp/progetto","timestamp":"2026-09-01T10:00:02Z","message":{"role":"user","content":"ancora"}}\n' >> "$f"
+uguale "cache: una trascrizione cresciuta viene riletta" \
+  "$(msg)" "$((prima + 1))"
+rm -f "$f"
+uguale "cache: una trascrizione sparita non resta in cache" \
+  "$("$WD_ROOT/bin/claude-sessions.py" --format json 2>/dev/null \
+     | python3 -c 'import json,sys;print(len(json.load(sys.stdin)["reali"]))')" "0"
+uguale "cache: non conserva voci di file inesistenti" \
+  "$(python3 -c "
+import json,os
+c=os.path.expanduser('$HOME/.cache/claude-code-watchdog/sessioni.json')
+d=json.load(open(c))
+print(all(os.path.exists(k) for k in d['voci']))")" "True"
+unset XDG_CACHE_HOME
+
 # ------------------------------------------------- collect-metrics.py ---
 prepara
 "$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1
@@ -144,6 +168,26 @@ uguale "radice: senza radice dedotta non si scrive dentroRadice" \
   "$(python3 -c "
 import json;d=json.load(open('$M'))
 print(d['radiceProgetti'] is None and not any('dentroRadice' in p for p in d['claude']['progetti']))")" "True"
+
+# Il ripiegamento dei candidati annidati deve essere condizionale: si ripiega
+# un candidato solo se e' ESSO STESSO la cartella di lavoro di un progetto.
+# Senza la condizione, una sessione aperta in una cartella sorella (Scaricati)
+# sposterebbe la radice un livello piu' su e il pannello elencherebbe
+# Scaricati e Immagini come progetti.
+prepara
+mkdir -p "$HOME/D/Claude/a" "$HOME/D/Claude/b" "$HOME/D/Claude/c" "$HOME/D/Scaricati"
+i=0
+for cwd in "$HOME/D/Claude/a" "$HOME/D/Claude/b" "$HOME/D/Claude/c" "$HOME/D/Scaricati"; do
+  i=$((i+1)); dd="$HOME/.claude/projects/-sor$i"; mkdir -p "$dd"
+  printf '{"type":"user","cwd":"%s","timestamp":"2026-09-01T10:00:00Z","message":{"role":"user","content":"x"}}\n{"type":"assistant","cwd":"%s","timestamp":"2026-09-01T10:00:01Z","message":{"role":"assistant"}}\n' \
+    "$cwd" "$cwd" > "$dd/8000000$i-0000-0000-0000-00000000000$i.jsonl"
+done
+"$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1
+uguale "radice: una sessione in una cartella sorella non la sposta piu' su" \
+  "$(python3 -c "
+import json;d=json.load(open('$M'))
+r=d['radiceProgetti'] or ''
+print('/'.join(r.rsplit('/',2)[-2:]) if r else 'nessuna')")" "D/Claude"
 
 # La regola «dentro la radice», caso per caso. Sta in Python apposta per
 # poterla provare: in extension.js non si poteva, e sbagliarla ha fatto
@@ -390,6 +434,25 @@ uguale "project-purge: la riga del figlio non tocca le sessioni del padre" \
 uguale "project-purge: la riga del figlio trova la propria sessione" \
   "$("$WD_ROOT/bin/project-purge.py" "$SANDBOX/lavoro/prog/sub" --json 2>/dev/null \
      | python3 -c "import json,sys;print(len(json.load(sys.stdin)['sessioni']))")" "1"
+
+# La rete che impedisce di cancellare lavoro vero. Sbaglia solo in eccesso.
+prepara
+mkdir -p "$SANDBOX/lavoro/vero/dentro" "$SANDBOX/lavoro/vero-vecchio"
+ln -sfn "$SANDBOX/lavoro/vero" "$SANDBOX/lavoro/collegamento"
+pp() { python3 -c "
+import importlib.util as u
+s=u.spec_from_file_location('pp','$WD_ROOT/bin/project-purge.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+print(m.dentro_cartella_di_lavoro('$1','$2'))"; }
+uguale "rete: la cartella di lavoro stessa non si tocca" \
+  "$(pp "$SANDBOX/lavoro/vero" "$SANDBOX/lavoro/vero")" "True"
+uguale "rete: quello che ci sta dentro non si tocca" \
+  "$(pp "$SANDBOX/lavoro/vero/dentro" "$SANDBOX/lavoro/vero")" "True"
+uguale "rete: riconosce il lavoro raggiunto per collegamento" \
+  "$(pp "$SANDBOX/lavoro/collegamento/dentro" "$SANDBOX/lavoro/vero")" "True"
+uguale "rete: un nome che inizia uguale non è dentro" \
+  "$(pp "$SANDBOX/lavoro/vero-vecchio" "$SANDBOX/lavoro/vero")" "False"
+uguale "rete: i dati di Claude non sono dentro la cartella di lavoro" \
+  "$(pp "$HOME/.claude/projects/-x" "$SANDBOX/lavoro/vero")" "False"
 
 # Il caso che il 2026-09-16 stava per far perdere dati: una cartella di
 # projects/ con sessioni di cwd diversi. Deve elencare i SINGOLI FILE, mai la
