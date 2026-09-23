@@ -274,7 +274,8 @@ potarlo per quello lo distruggerebbe il giorno dopo averlo cestinato.
 ## Sviluppo
 
     ./bin/prova.sh                 # 81 prove funzionali, sandbox con HOME dirottata
-    ./bin/verifica-estensione.sh   # controlli statici
+    ./bin/prova-js.sh              # 25 prove sulle funzioni pure di extension.js
+    ./bin/verifica-estensione.sh   # controlli statici, e le prove JS
 
 I controlli statici girano dentro `install-extension.sh` e `pack-extension.sh`,
 che si fermano se qualcosa non torna. Verificano la sintassi, lo schema
