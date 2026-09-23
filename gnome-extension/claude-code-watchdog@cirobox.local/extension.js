@@ -686,13 +686,18 @@ class Indicatore extends PanelMenu.Button {
             if (chiave === 'projects-root') {
                 this._firmaProgetti = null;
                 this._firmaAltre = null;
+                // La bandiera si legge PRIMA: `_raccogli()` la alza anche
+                // quando la raccolta la fa partire davvero, quindi dopo la
+                // chiamata e' sempre vera e la condizione non direbbe niente.
+                const giaInVolo = this._inCorso;
                 this._raccogli();
-                // `_raccogli()` rinuncia se una raccolta e' gia' in volo, e
-                // quella e' partita con la radice vecchia. Si rilegge comunque:
-                // senza, `_costruisciPannello()` ha appena azzerato le
-                // etichette e il pannello resterebbe a trattini fino al giro
-                // dopo. La radice nuova arriva col ciclo successivo.
-                if (this._inCorso)
+                // Se una raccolta era gia' in volo, `_raccogli()` ha rinunciato
+                // e quella in corso e' partita con la radice vecchia. Si
+                // rilegge comunque, se no `_costruisciPannello()` ha appena
+                // azzerato le etichette e il pannello resterebbe a trattini
+                // fino al giro dopo. La radice nuova arriva col ciclo
+                // successivo.
+                if (giaInVolo)
                     this._leggi();
                 return;
             }

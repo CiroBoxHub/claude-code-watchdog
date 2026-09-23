@@ -10,7 +10,9 @@ cambiata tra le versioni di Claude Code (cliente_alfa è diventato
 cliente-alfa) e non è invertibile. Si usa il campo `cwd` scritto dentro la
 trascrizione, che è il percorso reale.
 
-SOLA LETTURA. Non tocca niente.
+SOLA LETTURA sui dati di Claude: non ne tocca nessuno. Scrive soltanto
+la propria cache dei metadati sotto ~/.cache, che e' rigenerabile —
+cancellarla costa una lettura in piu', non un dato.
 """
 import json, os, sys, argparse
 from datetime import datetime, timezone
@@ -89,7 +91,7 @@ def scan_file(path: Path) -> dict | None:
 # qui sono 70 MB e 24.600 righe ogni dieci minuti, per riottenere gli stessi
 # numeri. Sta in ~/.cache perché è materiale rigenerabile: cancellarla costa
 # una lettura in più, non un dato.
-CACHE = (Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache"))
+CACHE = (Path(os.environ.get("XDG_CACHE_HOME") or (HOME / ".cache"))
          / "claude-code-watchdog" / "sessioni.json")
 # Da alzare quando scan_file cambia cosa restituisce: una cache scritta dalla
 # versione precedente contiene campi vecchi, e riusarla darebbe numeri
@@ -114,7 +116,10 @@ def _cache_scrivi(voci: dict) -> None:
     try:
         CACHE.parent.mkdir(parents=True, exist_ok=True)
         CACHE.parent.chmod(0o700)
-        tmp = CACHE.with_suffix(".tmp")
+        # Nome temporaneo per processo: due esecuzioni in parallelo — il
+        # giro dell'estensione e una invocazione a mano — scriverebbero lo
+        # stesso file e una rinominerebbe il buffer a meta' dell'altra.
+        tmp = CACHE.with_suffix(f".{os.getpid()}.tmp")
         tmp.write_text(json.dumps({"versione": CACHE_VERSIONE, "voci": voci}))
         tmp.chmod(0o600)
         tmp.replace(CACHE)
@@ -143,8 +148,13 @@ def collect(usa_cache: bool = True) -> list[dict]:
         # basta se una riga ne sostituisce un'altra di pari lunghezza.
         impronta = [st.st_mtime_ns, st.st_size]
         voce = vecchia.get(chiave)
-        if voce and voce.get("impronta") == impronta:
-            s = dict(voce["dati"])
+        dati = voce.get("dati") if isinstance(voce, dict) else None
+        # `dati` si legge con get: una cache scritta a meta', modificata a
+        # mano o da una versione che ha scordato di alzare CACHE_VERSIONE
+        # farebbe saltare l'intero inventario — compreso `--stubs`, da cui
+        # dipendono reclaim.py e clean.sh. Mancando, si riparsa.
+        if dati and voce.get("impronta") == impronta:
+            s = dict(dati)
             s["file"] = f
         else:
             s = scan_file(f)
