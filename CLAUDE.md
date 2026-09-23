@@ -115,6 +115,19 @@ direbbe «2» e ne cancellerebbe una sola, in silenzio. Restano righe distinte, 
 il nome porta il percorso relativo (`electra-release/Electra`) perché due
 sottocartelle `src` di progetti diversi non si chiamino uguale.
 
+**La deduzione della radice si fa avvelenare dalle sottocartelle, se non
+sta attenta.** Con `progetto/src` e `progetto/docs` come cwd, due voti vanno a
+`progetto`, che verrebbe eletto radice: i progetti fratelli finirebbero tutti
+fuori e ogni sottocartella comparirebbe come progetto a zero sessioni.
+`radice_progetti()` ripiega i candidati annidati su chi li contiene, partendo
+dai più profondi. Rilevato da `/code-review` il 2026-09-23, riprodotto prima di
+correggere. **`/tmp` si scarta come cartella, non come prefisso**: `/tmp/lavoro`
+è una radice legittima, e scartare tutto ciò che comincia per `/tmp` rendeva
+impossibile provare la deduzione, perché la sandbox di `prova.sh` vive lì.
+**Senza radice dedotta `dentroRadice` non si emette**: scrivere `false` su
+tutto svuoterebbe la sezione «Progetti» mentre il «+» continua a proporre la
+home, e si creerebbe un progetto che poi non compare.
+
 **La radice dei progetti si deduce, non si indovina.** L'impostazione
 `projects-root` ha come default la stringa vuota, che per lo schema significa
 «rilevamento automatico». Il rilevamento stava in `extension.js`, che lo
@@ -130,7 +143,7 @@ una copia che diverge.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              53 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh              57 prove funzionali, sandbox con HOME dirottata
     ./bin/verifica-estensione.sh  controlli statici (gira dentro install e pack)
 
 `prova.sh` esiste perché i controlli statici non bastano: dei difetti trovati

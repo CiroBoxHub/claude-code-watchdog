@@ -106,6 +106,45 @@ d=json.load(open('$M'))
 n=[p['nome'] for p in d['claude']['progetti'] if p['percorso'].endswith('/progetto/sub')]
 print(n[0] if n else 'assente')")" "progetto/sub"
 
+# La radice non deve farsi avvelenare dalle sottocartelle. Due sessioni aperte
+# in `progetto/src` e `progetto/docs` votano per `progetto`, che cosi' verrebbe
+# eletto radice: i progetti fratelli finirebbero tutti «fuori dai progetti» e
+# ogni sottocartella di `progetto` comparirebbe come progetto a zero sessioni.
+# La sandbox sta sotto la home finta e non sotto /tmp, che la deduzione scarta.
+prepara
+mkdir -p "$HOME/L/a/src" "$HOME/L/a/docs" "$HOME/L/b" "$HOME/L/mai-usato"
+i=0
+for cwd in "$HOME/L/a" "$HOME/L/b" "$HOME/L/a/src" "$HOME/L/a/docs"; do
+  i=$((i+1)); dd="$HOME/.claude/projects/-vot$i"; mkdir -p "$dd"
+  printf '{"type":"user","cwd":"%s","timestamp":"2026-09-01T10:00:00Z","message":{"role":"user","content":"x"}}\n{"type":"assistant","cwd":"%s","timestamp":"2026-09-01T10:00:01Z","message":{"role":"assistant"}}\n' \
+    "$cwd" "$cwd" > "$dd/9000000$i-0000-0000-0000-00000000000$i.jsonl"
+done
+"$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1
+uguale "radice: le sottocartelle non fanno eleggere il progetto come radice" \
+  "$(python3 -c "
+import json;d=json.load(open('$M'))
+r=d['radiceProgetti'] or ''
+print(r.rsplit('/',1)[-1] if r else 'nessuna')")" "L"
+uguale "radice: il progetto fratello resta dentro" \
+  "$(python3 -c "
+import json;d=json.load(open('$M'))
+n=[p for p in d['claude']['progetti'] if p['percorso'].endswith('/L/b')]
+print(n[0]['dentroRadice'] if n else 'assente')")" "True"
+uguale "radice: le cartelle senza conversazioni portano dentroRadice" \
+  "$(python3 -c "
+import json;d=json.load(open('$M'))
+z=[p for p in d['claude']['progetti'] if p['sessioni']==0]
+print(all('dentroRadice' in p for p in z) if z else 'nessuna')")" "True"
+
+# Senza radice dedotta il campo non si emette, se no la sezione «Progetti» si
+# svuoterebbe mentre il «+» continua a proporre la home.
+prepara
+"$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1
+uguale "radice: senza radice dedotta non si scrive dentroRadice" \
+  "$(python3 -c "
+import json;d=json.load(open('$M'))
+print(d['radiceProgetti'] is None and not any('dentroRadice' in p for p in d['claude']['progetti']))")" "True"
+
 # La regola «dentro la radice», caso per caso. Sta in Python apposta per
 # poterla provare: in extension.js non si poteva, e sbagliarla ha fatto
 # comparire un progetto vero fra quelli «fuori dai progetti».
@@ -339,7 +378,6 @@ uguale "reclaim: rifiuta una segnalazione diventata cartella di lavoro" \
 # Un progetto annidato si purga da solo: project-purge abbina per cwd esatto,
 # quindi la riga del figlio non deve portarsi via le sessioni del padre.
 prepara
-for c in prog prog-sub; do :; done
 d1="$HOME/.claude/projects/-padre"; d2="$HOME/.claude/projects/-figlio"
 mkdir -p "$d1" "$d2" "$SANDBOX/lavoro/prog/sub"
 printf '{"type":"user","cwd":"%s","timestamp":"2026-09-01T10:00:00Z","message":{"role":"user","content":"x"}}\n{"type":"assistant","cwd":"%s","timestamp":"2026-09-01T10:00:01Z","message":{"role":"assistant"}}\n' \

@@ -137,10 +137,28 @@ def radice_progetti(esplicita: str | None, progetti: list[dict]) -> Path | None:
         genitore = Path(perc).parent
         # La home non è una radice di progetti: prenderla vorrebbe dire
         # elencare Scaricati, Immagini e il resto come se fossero lavoro.
-        # /tmp lo stesso, ed è pieno di cartelle che non sono progetti.
-        if genitore == HOME or str(genitore) == "/" or str(genitore).startswith("/tmp"):
+        # `/tmp` lo stesso, ed è pieno di cartelle che non sono progetti.
+        # Si esclude /tmp **come cartella**, non ogni percorso che cominci
+        # così: `/tmp/lavoro/prog` ha per genitore `/tmp/lavoro`, che è una
+        # radice legittima quanto un'altra — e scartarla impediva di provare
+        # la deduzione nella sandbox, che vive sotto /tmp.
+        if genitore == HOME or genitore == Path("/") or genitore == Path("/tmp"):
             continue
         conta[genitore] = conta.get(genitore, 0) + 1
+    # Un candidato che sta DENTRO un altro candidato non e' una radice: e' un
+    # progetto di quella radice. I suoi voti vanno a chi lo contiene. Senza
+    # questo, due sessioni aperte in `progetto/src` e `progetto/docs` fanno
+    # eleggere radice `progetto` stesso — e tutti i progetti fratelli finiscono
+    # «fuori dai progetti». Si parte dai piu' profondi, cosi' le catene
+    # (`a/b/c` dentro `a/b` dentro `a`) si ripiegano fino in fondo.
+    for c in sorted(conta, key=lambda x: len(x.parts), reverse=True):
+        if c not in conta:
+            continue
+        for antenato in c.parents:
+            if antenato in conta:
+                conta[antenato] += conta.pop(c)
+                break
+
     if not conta:
         return None
     # A parità di conteggio si ordina per percorso, così due esecuzioni di
@@ -294,7 +312,15 @@ def sessions() -> dict:
         # La regola «sta dentro la radice» la decide qui, non l'estensione:
         # in JavaScript non si puo' provarla, e sbagliarla ha gia' fatto
         # comparire un progetto vero fra quelli «fuori dai progetti».
-        e["dentroRadice"] = dentro_radice(e["percorso"], radice)
+        #
+        # Senza radice dedotta il campo NON si emette. Scrivere `false` su
+        # tutto svuoterebbe la sezione «Progetti» mentre il pulsante «+»
+        # continua a proporre la home: si creerebbe un progetto che poi non
+        # compare. Omettendolo, l'estensione usa il proprio ripiego, che la
+        # home la considera radice — e le due meta' del pannello tornano
+        # d'accordo su dove stiano i progetti.
+        if radice:
+            e["dentroRadice"] = dentro_radice(e["percorso"], radice)
 
     if radice:
         gia_elencati = {e["percorso"] for e in top}
@@ -303,8 +329,13 @@ def sessions() -> dict:
                 continue
             if str(c) in gia_elencati:
                 continue
-            top.append({"nome": c.name, "percorso": str(c), "mb": 0,
-                        "sessioni": 0, "messaggi": 0, "esiste": True})
+            # Stessi campi delle altre righe, `dentroRadice` compreso: sono
+            # dentro per costruzione, ma lasciarlo assente faceva ricadere
+            # l'estensione sulla vecchia regola del genitore proprio sulle
+            # righe nate qui.
+            top.append({"nome": nome_progetto(str(c), radice), "percorso": str(c),
+                        "mb": 0, "sessioni": 0, "messaggi": 0, "esiste": True,
+                        "dentroRadice": True})
 
     # Elenco delle sessioni per il menu cliccabile dell'estensione: id intero
     # (serve a --resume e alla rimozione), percorso di lavoro e peso.
