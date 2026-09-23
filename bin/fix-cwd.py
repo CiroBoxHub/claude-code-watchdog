@@ -25,6 +25,24 @@ HOME = Path.home()
 PROJECTS = HOME / ".claude" / "projects"
 
 
+
+def scrivi_atomico(destinazione: Path, testo: str) -> None:
+    """Scrive su file temporaneo accanto alla destinazione, poi rinomina.
+
+    `write_text` diretto non è atomico: un'interruzione a metà lascia una
+    trascrizione troncata, cioè una conversazione persa a pezzi. Il rename
+    dentro la stessa cartella — quindi lo stesso filesystem — o riesce del
+    tutto o non fa niente. Il nome porta il pid: due esecuzioni in parallelo
+    non devono contendersi lo stesso temporaneo.
+    """
+    tmp = destinazione.with_name(f"{destinazione.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(testo)
+        tmp.replace(destinazione)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
 def codifica(percorso) -> str:
     return re.sub(r"[^A-Za-z0-9-]", "-", str(percorso))
 
@@ -34,7 +52,7 @@ def mappa_cartelle(profondita: int = 2) -> dict[str, str]:
     radici = [HOME, HOME / "Documenti", Path("/tmp")]
     # la radice dei progetti, se il watchdog sa dov'è
     try:
-        dati = json.loads((Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share"))
+        dati = json.loads((Path(os.environ.get("XDG_DATA_HOME") or (HOME / ".local/share"))
                            / "claude-code-watchdog" / "metrics.json").read_text())
         if dati.get("progetto"):
             radici.append(Path(dati["progetto"]).parent)
@@ -188,7 +206,7 @@ def correggi(v: dict) -> str | None:
             if r.returncode != 0:
                 return f"copia di sicurezza fallita: {(r.stderr or '').strip()}"
 
-        f.write_text("\n".join(righe) + "\n")
+        scrivi_atomico(f, "\n".join(righe) + "\n")
         return None
     except (OSError, subprocess.SubprocessError) as e:
         return str(e)

@@ -165,7 +165,7 @@ una copia che diverge.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              68 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh              72 prove funzionali, sandbox con HOME dirottata
     ./bin/verifica-estensione.sh  controlli statici (gira dentro install e pack)
 
 `prova.sh` esiste perché i controlli statici non bastano: dei difetti trovati
