@@ -102,9 +102,18 @@ CACHE_VERSIONE = 1
 def _cache_leggi() -> dict:
     try:
         d = json.loads(CACHE.read_text())
+        if not isinstance(d, dict) or d.get("versione") != CACHE_VERSIONE:
+            return {}
+        voci = d.get("voci")
+        # Anche la forma va controllata, non solo la versione: un file scritto
+        # a meta', modificato a mano o prodotto da una versione che ha scordato
+        # di alzare CACHE_VERSIONE puo' essere JSON valido e struttura
+        # sbagliata. Senza questo, `[]` al posto dell'oggetto faceva saltare
+        # l'intero inventario — `--stubs` compreso, da cui dipendono reclaim.py
+        # e clean.sh.
+        return voci if isinstance(voci, dict) else {}
     except Exception:
         return {}
-    return d.get("voci", {}) if d.get("versione") == CACHE_VERSIONE else {}
 
 
 def _cache_scrivi(voci: dict) -> None:
@@ -120,9 +129,15 @@ def _cache_scrivi(voci: dict) -> None:
         # giro dell'estensione e una invocazione a mano — scriverebbero lo
         # stesso file e una rinominerebbe il buffer a meta' dell'altra.
         tmp = CACHE.with_suffix(f".{os.getpid()}.tmp")
-        tmp.write_text(json.dumps({"versione": CACHE_VERSIONE, "voci": voci}))
-        tmp.chmod(0o600)
-        tmp.replace(CACHE)
+        try:
+            tmp.write_text(json.dumps({"versione": CACHE_VERSIONE, "voci": voci}))
+            tmp.chmod(0o600)
+            tmp.replace(CACHE)
+        except BaseException:
+            # Col nome per pid, un temporaneo abbandonato non verrebbe mai
+            # riusato ne' potato da nessuno: si toglie subito.
+            tmp.unlink(missing_ok=True)
+            raise
     except OSError:
         # Una cache che non si scrive non è un errore: si riparsa e basta.
         pass

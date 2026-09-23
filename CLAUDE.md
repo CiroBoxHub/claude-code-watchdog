@@ -140,8 +140,18 @@ nella correzione precedente:
    spostava la radice a `~/Documenti` e Scaricati diventava un progetto;
 3. ripiegando solo i candidati che sono `cwd`, un progetto le cui sessioni
    stanno tutte in sottocartelle non veniva ripiegato e vinceva lui.
-Contando i progetti, tutti e quattro i casi vengono giusti senza casi
-speciali. La prova è tabellare (`radice: la regola su tutti i casi noti`) e
+Contando i progetti vengono giusti senza casi speciali, **purché i candidati
+siano limitati**: `/home` e `/` farebbero anche loro due «progetti» (le home
+degli utenti) e, essendo meno profondi, vincerebbero il pareggio. Niente che
+stia sopra la home può essere una radice, e la home si confronta **risolta**
+perché i `cwd` nelle trascrizioni sono percorsi fisici — `getcwd` scioglie i
+collegamenti.
+**Limite noto**: se un progetto ha più sottocartelle con sessioni di quanti
+progetti abbia la radice (`L/a/src`, `L/a/docs`, `L/a/test` contro `L/b`),
+vince `L/a`. Dai soli dati le due letture sono equivalenti; si risolve
+scrivendo la radice nelle preferenze. C'è una prova che fissa il
+comportamento, così il giorno che la regola cambia si sa che cambia anche
+questo. La prova è tabellare (`radice: la regola su tutti i casi noti`) e
 verificata con una mutazione sul criterio di parità. Rilevato da `/code-review` il 2026-09-23, riprodotto prima di
 correggere. **`/tmp` si scarta come cartella, non come prefisso**: `/tmp/lavoro`
 è una radice legittima, e scartare tutto ciò che comincia per `/tmp` rendeva
@@ -182,7 +192,7 @@ che si guarda per primo.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              72 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh              76 prove funzionali, sandbox con HOME dirottata
     ./bin/verifica-estensione.sh  controlli statici (gira dentro install e pack)
 
 `prova.sh` esiste perché i controlli statici non bastano: dei difetti trovati

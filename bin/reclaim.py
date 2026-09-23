@@ -234,7 +234,11 @@ def ammissibile(percorso: Path) -> str | None:
         # toccare: session-purge.py e project-purge.py. Passare di qui
         # salterebbe quelle verifiche.
         return "sotto ~/.claude: usa session-purge.py o project-purge.py"
-    if p == SEGNALATI.parent:
+    try:
+        dati = SEGNALATI.parent.resolve()
+    except OSError:
+        dati = SEGNALATI.parent
+    if p == dati:
         return "e' la cartella dati del cruscotto"
     for lavoro in cartelle_di_lavoro():
         if p == lavoro or p in lavoro.parents:

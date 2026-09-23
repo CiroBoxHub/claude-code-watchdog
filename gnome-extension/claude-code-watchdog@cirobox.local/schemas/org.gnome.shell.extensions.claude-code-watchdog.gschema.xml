@@ -100,10 +100,12 @@
       <default>''</default>
       <summary>Cartella dove nascono i nuovi progetti</summary>
       <description>
-        Vuoto significa rilevamento automatico: la cartella che contiene il
-        progetto claude-code-watchdog. Il pulsante «Nuovo progetto» crea qui la
-        cartella e ci apre una sessione di Claude Code.
-      </description>
+          Vuoto significa rilevamento automatico: si deduce dai progetti che
+          hanno già delle conversazioni, prendendo la cartella che ne contiene
+          di più. Ne servono almeno due; la home e /tmp non si considerano mai.
+          Il pulsante «Nuovo progetto» crea qui la cartella e ci apre una
+          sessione di Claude Code.
+        </description>
     </key>
 
     <key name="new-project-readme" type="b">
