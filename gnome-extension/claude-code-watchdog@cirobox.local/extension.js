@@ -686,9 +686,6 @@ class Indicatore extends PanelMenu.Button {
             if (chiave === 'projects-root') {
                 this._firmaProgetti = null;
                 this._firmaAltre = null;
-                // La bandiera si legge PRIMA: `_raccogli()` la alza anche
-                // quando la raccolta la fa partire davvero, quindi dopo la
-                // chiamata e' sempre vera e la condizione non direbbe niente.
                 this._raccogli();
                 // Si rilegge SEMPRE, non solo quando una raccolta era gia' in
                 // volo: `_costruisciPannello()` ha appena ricreato le etichette

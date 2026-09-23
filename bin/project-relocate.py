@@ -45,8 +45,12 @@ def scrivi_atomico(destinazione: Path, testo: str) -> None:
     except OSError:
         modo = 0o600
     try:
-        tmp.write_text(testo)
-        tmp.chmod(modo)
+        # Si crea GIA' col modo giusto invece di correggerlo dopo: fra la
+        # scrittura e il chmod il contenuto — che porta i nomi dei clienti —
+        # resterebbe leggibile a tutti per tutta la durata della scrittura.
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, modo)
+        with os.fdopen(fd, "w") as fh:
+            fh.write(testo)
         tmp.replace(destinazione)
     except BaseException:
         tmp.unlink(missing_ok=True)

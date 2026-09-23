@@ -321,7 +321,11 @@ def sessions() -> dict:
     # Se ne emettono molti: l'estensione li divide in due sezioni (progetti e
     # fuori dai progetti) e applica lì il suo limite. Tagliare a 8 qui
     # significherebbe far competere le due sezioni per gli stessi posti.
-    top = sorted(by_proj.values(), key=lambda e: -e["mb"])[:40]
+    # A parità di peso si ordina per percorso: l'ordine di partenza è quello
+    # del glob, che il filesystem non garantisce uguale fra due giri. Se
+    # cambiasse, cambierebbe la firma delle righe e il pannello le
+    # ridisegnerebbe tutte senza motivo.
+    top = sorted(by_proj.values(), key=lambda e: (-e["mb"], e["percorso"]))[:40]
     for e in top:
         e["mb"] = round(e["mb"], 1)
 
