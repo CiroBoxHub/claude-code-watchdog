@@ -175,6 +175,42 @@ def cache_claude() -> tuple[int, str, int]:
     return sum(m for m, _ in voci), voci[0][1], voci[0][0]
 
 
+def dentro_radice(percorso: str, radice: Path | None) -> bool:
+    """Se il progetto sta dentro la radice, a qualunque profondita'.
+
+    Il confronto e' sui componenti del percorso e non sul prefisso testuale:
+    con `radice = ~/Documenti/Claude`, la cartella `~/Documenti/Claude-vecchio`
+    comincia con la stessa stringa ma non e' dentro niente.
+
+    Profondita' qualunque, non solo figlia diretta: una sessione aperta in una
+    sottocartella del progetto ha quel cwd, ed e' dentro la radice comunque.
+    """
+    if not radice:
+        return False
+    try:
+        return Path(percorso) == radice or radice in Path(percorso).parents
+    except (OSError, ValueError):
+        return False
+
+
+def nome_progetto(percorso: str, radice: Path | None) -> str:
+    """Come si chiama un progetto nell'elenco.
+
+    Il nome della cartella, salvo quando sta annidato dentro la radice: li'
+    serve il percorso relativo, se no due sottocartelle «src» di progetti
+    diversi comparirebbero come due righe chiamate uguale.
+    """
+    p = Path(percorso)
+    if radice:
+        try:
+            rel = p.relative_to(radice)
+            if len(rel.parts) > 1:
+                return str(rel)
+        except ValueError:
+            pass
+    return p.name or percorso
+
+
 def problemi_progetto(cwd: str, cartelle_condivise: set[str]) -> list[dict]:
     """Cosa c'è che non va in un progetto, in forma leggibile.
 
@@ -249,6 +285,17 @@ def sessions() -> dict:
     # queste pesano zero. Il campo «problemi» lo riempie il giro più sotto,
     # insieme a tutte le altre.
     radice = radice_progetti(arg("--radice-progetti"), top)
+
+    # I nomi si assegnano ora, non nel raggruppamento: la radice si deduce dai
+    # progetti, quindi prima di averli tutti non si sa rispetto a cosa il nome
+    # sarebbe relativo.
+    for e in top:
+        e["nome"] = nome_progetto(e["percorso"], radice)
+        # La regola «sta dentro la radice» la decide qui, non l'estensione:
+        # in JavaScript non si puo' provarla, e sbagliarla ha gia' fatto
+        # comparire un progetto vero fra quelli «fuori dai progetti».
+        e["dentroRadice"] = dentro_radice(e["percorso"], radice)
+
     if radice:
         gia_elencati = {e["percorso"] for e in top}
         for c in sorted(radice.iterdir()):

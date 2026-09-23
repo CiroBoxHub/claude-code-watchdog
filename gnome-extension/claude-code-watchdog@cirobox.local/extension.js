@@ -1070,8 +1070,16 @@ class Indicatore extends PanelMenu.Button {
         const radice = this._radiceProgetti();
         const tutte = claude.progetti ?? [];
         const quanti = s.get_int('max-projects');
-        const veri = tutte.filter(p => GLib.path_get_dirname(p.percorso ?? '') === radice);
-        const altre = tutte.filter(p => GLib.path_get_dirname(p.percorso ?? '') !== radice);
+        // `dentroRadice` lo decide collect-metrics.py, che e' provabile: qui
+        // si legge e basta. La regola tiene i progetti annidati — una sessione
+        // aperta in una sottocartella ha quel cwd — e non si fa ingannare da
+        // un nome che comincia uguale («Claude-vecchio» accanto a «Claude»).
+        // Il ripiego sul confronto col genitore serve solo a un metrics.json
+        // scritto da una versione precedente.
+        const dentro = p => p.dentroRadice
+            ?? (GLib.path_get_dirname(p.percorso ?? '') === radice);
+        const veri = tutte.filter(dentro);
+        const altre = tutte.filter(p => !dentro(p));
 
         const prog = s.get_boolean('show-projects');
         this._testaProgetti.visible = prog;
