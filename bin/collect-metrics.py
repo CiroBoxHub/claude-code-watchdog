@@ -272,6 +272,51 @@ def nome_progetto(percorso: str, radice: Path | None) -> str:
     return p.name or percorso
 
 
+# Il conto di ~/.cache stantia si tiene da parte: attraversa 40.000 file per un
+# numero che cambia al massimo una volta ogni USER_CACHE_RETENTION_DAYS per
+# file, ed è l'80% del costo di una raccolta. Con la cadenza a un minuto sono
+# 16 secondi di I/O all'ora, per riottenere sempre lo stesso valore.
+USERCACHE = (Path(os.environ.get("XDG_CACHE_HOME") or (HOME / ".cache"))
+             / "claude-code-watchdog" / "usercache.json")
+# Dieci minuti: il valore si muove di pochi MB al giorno, e chi libera lo
+# spazio invalida il file (lo fa reclaim.py), quindi dopo una pulizia il
+# numero è subito giusto invece di restare vecchio fino alla scadenza.
+USERCACHE_TTL_S = 600
+
+
+def cache_stantia_mb(giorni: int) -> int:
+    """MB di ~/.cache non toccati da più di `giorni`, con memoria.
+
+    Si ricalcola se il valore è vecchio o se la retention è cambiata: un
+    numero calcolato con una finestra diversa non risponde alla domanda.
+    """
+    try:
+        d = json.loads(USERCACHE.read_text())
+        if (isinstance(d, dict) and d.get("giorni") == giorni
+                and time.time() - d.get("quando", 0) < USERCACHE_TTL_S
+                and isinstance(d.get("mb"), int)):
+            return d["mb"]
+    except Exception:
+        pass
+
+    mb = stale_mb(HOME / ".cache", giorni)
+    try:
+        USERCACHE.parent.mkdir(parents=True, exist_ok=True)
+        USERCACHE.parent.chmod(0o700)
+        tmp = USERCACHE.with_suffix(f".{os.getpid()}.tmp")
+        try:
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w") as fh:
+                json.dump({"quando": time.time(), "giorni": giorni, "mb": mb}, fh)
+            tmp.replace(USERCACHE)
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
+    except OSError:
+        pass          # non poterla scrivere significa ricalcolare, non fallire
+    return mb
+
+
 def problemi_progetto(cwd: str, cartelle_condivise: set[str]) -> list[dict]:
     """Cosa c'è che non va in un progetto, in forma leggibile.
 
@@ -476,7 +521,7 @@ def main() -> int:
 
     add("Cestino", stale_mb(HOME / ".local/share/Trash", num("TRASH_RETENTION_DAYS", 30)),
         "trash")
-    add("~/.cache stantia", stale_mb(HOME / ".cache", num("USER_CACHE_RETENTION_DAYS", 60)),
+    add("~/.cache stantia", cache_stantia_mb(num("USER_CACHE_RETENTION_DAYS", 60)),
         "usercache")
     add("Job Claude", stale_mb(CLAUDE / "jobs", num("CLAUDE_JOBS_RETENTION_DAYS", 30)),
         "claude-jobs")

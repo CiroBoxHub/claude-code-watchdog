@@ -439,6 +439,14 @@ def applica(target: str, percorsi: list[Path]) -> int:
             continue
     if target == "usercache":
         pota_vuote(HOME / ".cache")
+        # Il conto tenuto da parte da collect-metrics.py ora è sbagliato: si
+        # butta, così il pannello mostra il valore vero al giro dopo invece di
+        # annunciare spazio che è già stato liberato.
+        try:
+            (Path(os.environ.get("XDG_CACHE_HOME") or (HOME / ".cache"))
+             / "claude-code-watchdog" / "usercache.json").unlink(missing_ok=True)
+        except OSError:
+            pass
     elif target == "claude-cache":
         for d in CACHE_CLAUDE:
             pota_vuote(d)
