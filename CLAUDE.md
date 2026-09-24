@@ -186,20 +186,30 @@ una copia che diverge.
 
 ## Quanto costa, misurato
 
-    raccolta metriche    0,41 s ogni  600 s   0,07% di una CPU
+    raccolta metriche    0,14 s ogni   60 s   0,23% di una CPU
     lettura quota        2,57 s ogni 1800 s   0,14%  (picco 323 MB)
                                               ----
-                                              0,21%
+                                              0,37%
+
+**La cadenza qui è 60 secondi, non i 600 di serie**: i conti vanno fatti su
+quella, se no si sottostima di dieci volte.
 
 Aprire il popup **non lancia nessun processo**: rilegge il JSON e avvia
 l'orologio dell'età, che si ferma alla chiusura. Il costo è tutto nei due
 timer, e la quota è la voce più pesante — ma quei 323 MB sono la CLI di
 Claude, non codice nostro, e il dato di quota in locale non esiste.
 
-Il 2026-09-23 la raccolta stava a 0,69 s: riparsava 70 MB e 24.600 righe di
-trascrizioni a ogni giro per riottenere gli stessi numeri. Con la cache dei
-metadati l'inventario è passato da 0,62 s a 0,08 s. Se un domani risale, è lì
-che si guarda per primo.
+Due volte la raccolta è stata dimezzata togliendo lavoro rifatto da zero:
+- **0,69 → 0,41 s**: riparsava 70 MB e 24.600 righe di trascrizioni a ogni
+  giro. Cache dei metadati per file, inventario da 0,62 a 0,08 s.
+- **0,41 → 0,14 s**: `stale_mb(~/.cache)` attraversava **40.471 file** per un
+  numero che cambia al massimo una volta ogni 60 giorni per file — l'80% del
+  costo. Ora si tiene da parte per dieci minuti, e `reclaim.py` lo butta
+  quando libera davvero quello spazio: una memoria su un numero che il
+  pulsante fa scendere annuncerebbe spazio già liberato.
+
+Se un domani risale, si profila con lo stesso metodo: importare il modulo e
+cronometrare le singole funzioni, non indovinare.
 
 ## Come si lavora qui
 
@@ -234,7 +244,7 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              83 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh              86 prove funzionali, sandbox con HOME dirottata
     ./bin/prova-js.sh           25 prove sulle funzioni pure di extension.js
     ./bin/prova-shell.sh        carica l'estensione in una shell annidata (~1 min)
     ./bin/verifica-estensione.sh  controlli statici + le prove JS (gira dentro

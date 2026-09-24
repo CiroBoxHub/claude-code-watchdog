@@ -191,6 +191,32 @@ touch -d "30 days ago" "$HOME/.cache/claude/staging/versione-nuova"
 uguale "cache: la pulizia non tocca il download in corso" \
   "$([[ -f "$HOME/.cache/claude/staging/versione-nuova" ]] && echo intatto || echo sparito)" "intatto"
 
+# Il conto di ~/.cache stantia si tiene da parte perche' costa 40.000 file.
+# Una memoria su un numero che il pulsante fa scendere e' pericolosa: puo'
+# annunciare spazio gia' liberato.
+prepara
+export XDG_CACHE_HOME="$HOME/.cache"
+mkdir -p "$HOME/.cache/vecchiume"
+head -c 5000000 /dev/zero > "$HOME/.cache/vecchiume/grosso"
+touch -d "200 days ago" "$HOME/.cache/vecchiume/grosso"
+mem="$HOME/.cache/claude-code-watchdog/usercache.json"
+"$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1
+uguale "memoria cache: scrive il conto" \
+  "$([[ -f "$mem" ]] && echo si || echo no)" "si"
+uguale "memoria cache: con una retention diversa ricalcola" \
+  "$(python3 -c "
+import importlib.util as u, json, os
+s=u.spec_from_file_location('cm','$WD_ROOT/bin/collect-metrics.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+a=m.cache_stantia_mb(100)
+d=json.load(open('$mem'))
+print(d['giorni'])")" "100"
+# La pulizia deve buttarla: se no il pannello annuncia spazio gia' tolto.
+"$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1
+"$WD_ROOT/bin/reclaim.py" --apply usercache >/dev/null 2>&1
+uguale "memoria cache: la pulizia la invalida" \
+  "$([[ -f "$mem" ]] && echo resta || echo buttata)" "buttata"
+unset XDG_CACHE_HOME
+
 # ------------------------------------------------- collect-metrics.py ---
 prepara
 "$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1
