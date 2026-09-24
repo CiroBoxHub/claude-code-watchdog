@@ -36,6 +36,7 @@ il dry-run, mostra l'elenco, chiedi. Anche quando la risposta sembra ovvia.
     bin/trash-scaduti.py    elementi del cestino oltre la retention
     bin/prova.sh            collaudo funzionale su dati finti in sandbox
     bin/prova-js.sh         esegue le funzioni pure di extension.js con gjs
+    bin/prova-shell.sh      carica l'estensione in una GNOME Shell annidata
     bin/verifica-estensione.sh controlli statici, obbligatori prima di installare
     bin/install-extension.sh installa l'estensione GNOME
     bin/pack-extension.sh   crea lo zip distribuibile in dist/
@@ -235,9 +236,23 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
     ./bin/prova.sh              83 prove funzionali, sandbox con HOME dirottata
     ./bin/prova-js.sh           25 prove sulle funzioni pure di extension.js
+    ./bin/prova-shell.sh        carica l'estensione in una shell annidata (~1 min)
     ./bin/verifica-estensione.sh  controlli statici + le prove JS (gira dentro
                                   install e pack, che si fermano se qualcosa
                                   non torna)
+
+**E va caricato in una shell vera.** `prova-shell.sh` avvia una GNOME Shell
+annidata **headless** su un monitor virtuale — non tocca la sessione in corso —
+e ci attiva l'estensione: enable(), la costruzione del pannello, il timer, il
+sottoprocesso. Verifica stato attivo, nessuna eccezione, nessuno stack che
+nomini il nostro file. Provata con una mutazione: un `TypeError` dentro
+`enable()`, che nessun controllo statico vede, fa scattare tutti e tre i
+controlli.
+**Non cambia impostazioni**: dconf è condiviso con la sessione vera, e una
+prova che modifica le preferenze dell'utente è una prova che fa danni. E il
+«dati riscritti» resta un indizio, non un esito: l'estensione della sessione
+vera gira in parallelo e riscrive lo stesso file, quindi quel dato può essere
+suo.
 
 **Il JavaScript va eseguito, non solo controllato.** Fino al 2026-09-24 nessuna
 prova ne eseguiva una riga: si verificavano sintassi, metodi, chiavi GSettings,
