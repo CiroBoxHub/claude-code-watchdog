@@ -275,6 +275,7 @@ potarlo per quello lo distruggerebbe il giorno dopo averlo cestinato.
 
     ./bin/prova.sh                 # 83 prove funzionali, sandbox con HOME dirottata
     ./bin/prova-js.sh              # 25 prove sulle funzioni pure di extension.js
+    ./bin/prova-shell.sh           # carica l'estensione in una GNOME Shell annidata
     ./bin/verifica-estensione.sh   # controlli statici, e le prove JS
 
 I controlli statici girano dentro `install-extension.sh` e `pack-extension.sh`,
