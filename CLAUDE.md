@@ -186,10 +186,10 @@ una copia che diverge.
 
 ## Quanto costa, misurato
 
-    raccolta metriche    0,14 s ogni   60 s   0,23% di una CPU
+    raccolta metriche    0,18 s ogni   60 s   0,31% di una CPU  (mediana di 9)
     lettura quota        2,57 s ogni 1800 s   0,14%  (picco 323 MB)
                                               ----
-                                              0,37%
+                                              0,45%
 
 **La cadenza qui è 60 secondi, non i 600 di serie**: i conti vanno fatti su
 quella, se no si sottostima di dieci volte.
@@ -208,8 +208,20 @@ Due volte la raccolta è stata dimezzata togliendo lavoro rifatto da zero:
   quando libera davvero quello spazio: una memoria su un numero che il
   pulsante fa scendere annuncerebbe spazio già liberato.
 
+- **0,41 → 0,18 s**: `stale_mb` passa da `os.walk` a `find` (0,58 → 0,155 s su
+  40.000 file: in Python ogni file paga una `stat` dall'interprete), e le
+  trascrizioni si leggono **in modo incrementale**. Sono file in sola
+  aggiunta: si tiene l'offset raggiunto e si somma solo la coda nuova. La
+  conversazione in corso arriva a decine di MB e cresce a ogni messaggio,
+  quindi rileggerla intera era il costo che dominava tutto il resto.
+  **Il controllo sulla testa non è un di più**: `fix-cwd.py` e
+  `project-relocate.py` riscrivono le trascrizioni, e riprendere da metà di un
+  file riscritto conta due volte gli stessi messaggi — misurato, 13 invece di
+  11. Si confrontano i primi 4 KB: in un file scritto in coda non cambiano mai.
+
 Se un domani risale, si profila con lo stesso metodo: importare il modulo e
-cronometrare le singole funzioni, non indovinare.
+cronometrare le singole funzioni, con più giri e la mediana — su una misura
+sola il rumore vale quanto il segnale.
 
 ## Come si lavora qui
 
@@ -244,7 +256,7 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              86 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh              91 prove funzionali, sandbox con HOME dirottata
     ./bin/prova-js.sh           25 prove sulle funzioni pure di extension.js
     ./bin/prova-shell.sh        carica l'estensione in una shell annidata (~1 min)
     ./bin/verifica-estensione.sh  controlli statici + le prove JS (gira dentro

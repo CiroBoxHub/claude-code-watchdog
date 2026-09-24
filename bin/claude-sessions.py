@@ -14,26 +14,56 @@ SOLA LETTURA sui dati di Claude: non ne tocca nessuno. Scrive soltanto
 la propria cache dei metadati sotto ~/.cache, che e' rigenerabile —
 cancellarla costa una lettura in piu', non un dato.
 """
-import json, os, sys, argparse
+import hashlib, json, os, sys, argparse
 from datetime import datetime, timezone
 from pathlib import Path
 
 HOME = Path.home()
 PROJECTS = HOME / ".claude" / "projects"
 
-def scan_file(path: Path) -> dict | None:
+def testa(path: Path, quanti: int = 4096) -> str:
+    """Impronta dei primi byte, per accorgersi che un file è stato riscritto.
+
+    Una trascrizione si scrive in coda: la testa non cambia mai. Se cambia,
+    qualcuno l'ha riscritta — `fix-cwd.py` e `project-relocate.py` lo fanno — e
+    riprendere dalla metà darebbe conteggi vecchi mescolati a quelli nuovi.
+    """
+    try:
+        with path.open("rb") as fh:
+            return hashlib.sha256(fh.read(quanti)).hexdigest()[:16]
+    except OSError:
+        return ""
+
+
+def scan_file(path: Path, da: dict | None = None) -> dict | None:
     """Estrae i metadati di una trascrizione.
 
-    Si parsa ogni riga con json.loads: sull'intera cartella costa meno di un
-    secondo, e un'estrazione a regex qui sbaglia — nei record `assistant` il
-    campo annidato "type":"message" precede quello esterno "type":"assistant".
+    Si parsa ogni riga con json.loads: un'estrazione a regex qui sbaglia — nei
+    record `assistant` il campo annidato "type":"message" precede quello
+    esterno "type":"assistant".
+
+    Con `da` si riparte da dove si era arrivati, sommando solo la coda nuova:
+    la conversazione in corso arriva a decine di MB e cresce a ogni messaggio,
+    quindi rileggerla intera a ogni giro è il costo che domina tutto il resto.
+    Chi chiama garantisce che la testa del file non sia cambiata.
     """
     n_user = n_asst = 0
     first_ts = last_ts = None
     cwd = None
     ai_title = custom_title = None
+    inizio = 0
+    if da:
+        n_user = da.get("n_user", 0)
+        n_asst = da.get("n_asst", 0)
+        first_ts = da.get("first")
+        last_ts = da.get("last")
+        cwd = da.get("cwd")
+        custom_title = da.get("title")
+        inizio = da.get("offset", 0)
     try:
         with path.open("rb") as fh:
+            if inizio:
+                fh.seek(inizio)
             for raw in fh:
                 try:
                     d = json.loads(raw)
@@ -81,6 +111,9 @@ def scan_file(path: Path) -> dict | None:
         "first": first_ts,
         "last": last_ts,
         "bytes": st.st_size,
+        # Fin dove si è letto: il prossimo giro riparte da qui invece di
+        # rileggere tutto.
+        "offset": st.st_size,
         "mtime": st.st_mtime,
         "folder": path.parent.name,
     }
@@ -96,7 +129,7 @@ CACHE = (Path(os.environ.get("XDG_CACHE_HOME") or (HOME / ".cache"))
 # Da alzare quando scan_file cambia cosa restituisce: una cache scritta dalla
 # versione precedente contiene campi vecchi, e riusarla darebbe numeri
 # sbagliati senza che niente segnali l'errore.
-CACHE_VERSIONE = 1
+CACHE_VERSIONE = 2
 
 # Quanto si aspetta prima di dire che una trascrizione senza risposte è uno
 # scarto. Due minuti: la lettura della quota ne impiega due o tre secondi, una
@@ -173,15 +206,24 @@ def collect(usa_cache: bool = True) -> list[dict]:
         # mano o da una versione che ha scordato di alzare CACHE_VERSIONE
         # farebbe saltare l'intero inventario — compreso `--stubs`, da cui
         # dipendono reclaim.py e clean.sh. Mancando, si riparsa.
+        s = None
         if dati and voce.get("impronta") == impronta:
             s = dict(dati)
             s["file"] = f
-        else:
+        elif (dati and voce.get("testa") and dati.get("offset")
+              and st.st_size > dati["offset"]
+              and voce["testa"] == testa(f)):
+            # Il file e' cresciuto e la testa e' la stessa: e' stato scritto in
+            # coda, si somma solo la parte nuova. Se la testa fosse cambiata
+            # sarebbe una riscrittura, e ripartire da meta' mescolerebbe
+            # conteggi vecchi e nuovi.
+            s = scan_file(f, da=dati)
+        if s is None:
             s = scan_file(f)
-            if s:
-                voce = {"impronta": impronta,
-                        "dati": {k: (str(v) if isinstance(v, Path) else v)
-                                 for k, v in s.items()}}
+        if s:
+            voce = {"impronta": impronta, "testa": testa(f),
+                    "dati": {k: (str(v) if isinstance(v, Path) else v)
+                             for k, v in s.items()}}
         if s:
             out.append(s)
             if voce:
