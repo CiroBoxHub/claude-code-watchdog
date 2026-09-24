@@ -186,10 +186,10 @@ una copia che diverge.
 
 ## Quanto costa, misurato
 
-    raccolta metriche    0,18 s ogni   60 s   0,31% di una CPU  (mediana di 9)
+    raccolta metriche    0,12 s ogni   60 s   0,20% di una CPU  (mediana di 9)
     lettura quota        2,57 s ogni 1800 s   0,14%  (picco 323 MB)
                                               ----
-                                              0,45%
+                                              0,34%
 
 **La cadenza qui è 60 secondi, non i 600 di serie**: i conti vanno fatti su
 quella, se no si sottostima di dieci volte.
@@ -218,6 +218,14 @@ Due volte la raccolta è stata dimezzata togliendo lavoro rifatto da zero:
   `project-relocate.py` riscrivono le trascrizioni, e riprendere da metà di un
   file riscritto conta due volte gli stessi messaggi — misurato, 13 invece di
   11. Si confrontano i primi 4 KB: in un file scritto in coda non cambiano mai.
+
+- **0,18 → 0,12 s**: `collect-metrics.py` **importa** `claude-sessions.py`
+  invece di lanciarlo. Il sottoprocesso costa 0,085 s contro 0,004 — quasi
+  tutto avvio dell'interprete — ed era metà del conto. La classificazione sta
+  in `inventario()`, una funzione sola usata da entrambi: duplicarla
+  vorrebbe dire vederla divergere. Il sottoprocesso resta come ripiego se il
+  caricamento fallisce, e una prova controlla che le due strade diano gli
+  stessi numeri — quale venga usata dipende da come è stato installato.
 
 Se un domani risale, si profila con lo stesso metodo: importare il modulo e
 cronometrare le singole funzioni, con più giri e la mediana — su una misura
@@ -256,7 +264,7 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              91 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh              92 prove funzionali, sandbox con HOME dirottata
     ./bin/prova-js.sh           25 prove sulle funzioni pure di extension.js
     ./bin/prova-shell.sh        carica l'estensione in una shell annidata (~1 min)
     ./bin/verifica-estensione.sh  controlli statici + le prove JS (gira dentro

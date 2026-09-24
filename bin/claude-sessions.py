@@ -281,6 +281,34 @@ def _ser(s: dict) -> dict:
     return {k: (str(v) if isinstance(v, Path) else v) for k, v in s.items()}
 
 
+def inventario(sessions: list[dict] | None = None) -> tuple[list, list, list]:
+    """(conversazioni vere, duplicati, scarti).
+
+    Sta qui e non dentro main() perché la usa anche collect-metrics.py, che la
+    chiama importando questo file invece di lanciarlo: il sottoprocesso costa
+    0,085 s contro 0,004, e a una raccolta al minuto è la metà del conto.
+    Duplicarla in due posti vorrebbe dire vederla divergere.
+
+    Una sessione senza nemmeno una risposta dell'assistente non è una
+    conversazione: sono gli scarti lasciati da invocazioni non interattive
+    (statusline che chiama /usage, hook, script SDK). Si contano a parte,
+    altrimenti seppelliscono il lavoro vero.
+
+    Ma una trascrizione senza risposte scritta ADESSO non è uno scarto: è
+    un'invocazione in corso — la nostra lettura della quota, che accende una
+    CLI e la spegne un secondo dopo, oppure una sessione interattiva vera che
+    ha già scritto la domanda e non ha ancora ricevuto risposta. Per qualunque
+    controllo automatico le due sono identiche, quindi si aspetta.
+    """
+    if sessions is None:
+        sessions = collect()
+    adesso = datetime.now(timezone.utc).timestamp()
+    stubs = [s for s in sessions
+             if s["n_asst"] == 0 and adesso - s["mtime"] > ATTESA_SCARTO_S]
+    real, dups = split_duplicates([s for s in sessions if s["n_asst"] > 0])
+    return real, dups, stubs
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--format", choices=("table", "json"), default="table")
@@ -309,10 +337,7 @@ def main() -> int:
     # oppure una sessione interattiva vera che ha già scritto la domanda e non
     # ha ancora ricevuto risposta. Per qualunque controllo automatico le due
     # sono identiche, quindi si aspetta.
-    adesso = datetime.now(timezone.utc).timestamp()
-    stubs = [s for s in sessions
-             if s["n_asst"] == 0 and adesso - s["mtime"] > ATTESA_SCARTO_S]
-    real, dups = split_duplicates([s for s in sessions if s["n_asst"] > 0])
+    real, dups, stubs = inventario(sessions)
 
     if args.stubs:
         for s in stubs:

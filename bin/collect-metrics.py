@@ -379,19 +379,55 @@ def problemi_progetto(cwd: str, cartelle_condivise: set[str]) -> list[dict]:
     return out
 
 
+def _sessioni_grezze():
+    """(reali, duplicati, scarti) da claude-sessions.py.
+
+    Importato, non lanciato: il sottoprocesso costa 0,085 s contro 0,004, e a
+    una raccolta al minuto è metà del conto. Il nome ha un trattino, quindi
+    non si può scrivere `import claude-sessions`: si carica per percorso.
+    Se il caricamento fallisse — copia incompleta dentro l'estensione — si
+    ripiega sul sottoprocesso, che dà lo stesso risultato più lentamente.
+    """
+    global _CS
+    if _CS is None:
+        import importlib.util as _u
+        spec = _u.spec_from_file_location("claude_sessions",
+                                          SCRIPT_DIR / "claude-sessions.py")
+        mod = _u.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _CS = mod
+    return _CS.inventario()
+
+
+_CS = None
+
+
 def sessions() -> dict:
     """Delega a claude-sessions.py: la logica di lettura sta in un posto solo."""
+    d = None
     try:
-        # Accanto a questo file, non sotto ROOT: nella copia dentro
-        # l'estensione gli script stanno tutti nella stessa cartella.
-        r = subprocess.run([sys.executable, str(SCRIPT_DIR / "claude-sessions.py"),
-                            "--format", "json"],
-                           capture_output=True, text=True, timeout=60)
-        d = json.loads(r.stdout)
+        reali_l, dups_l, stubs_l = _sessioni_grezze()
+        # I Path non sono serializzabili: il resto del codice lavora sul JSON.
+        d = {"reali": [{k: (str(v) if isinstance(v, Path) else v)
+                        for k, v in s.items()} for s in reali_l],
+             "duplicati": dups_l, "fantasma": stubs_l}
     except Exception as e:
-        print(f"claude-sessions.py non eseguibile: {e}", file=sys.stderr)
-        return {"conversazioni": 0, "messaggi": 0, "fantasma": 0, "duplicati": 0,
-                "progetti": [], "mbTotali": 0}
+        print(f"claude-sessions non importabile ({e}): uso il sottoprocesso",
+              file=sys.stderr)
+
+    if d is None:
+        try:
+            # Accanto a questo file, non sotto ROOT: nella copia dentro
+            # l'estensione gli script stanno tutti nella stessa cartella.
+            r = subprocess.run([sys.executable, str(SCRIPT_DIR / "claude-sessions.py"),
+                                "--format", "json"],
+                               capture_output=True, text=True, timeout=60)
+            d = json.loads(r.stdout)
+        except Exception as e:
+            print(f"claude-sessions.py non eseguibile: {e}", file=sys.stderr)
+            return {"conversazioni": 0, "messaggi": 0, "fantasma": 0,
+                    "duplicati": 0, "progetti": [], "mbTotali": 0}
+
     reali = d.get("reali", [])
     by_proj = {}
     for s in reali:

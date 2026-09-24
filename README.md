@@ -48,7 +48,7 @@ dentro invocano soltanto `du`, `gio`, `gsettings` e `claude`.
     git clone https://github.com/CiroBoxHub/claude-code-watchdog
     cd claude-code-watchdog
 
-    ./bin/prova.sh                 # 91 prove funzionali in sandbox
+    ./bin/prova.sh                 # 92 prove funzionali in sandbox
     ./bin/install-extension.sh     # installa l'estensione
     gnome-extensions enable claude-code-watchdog@cirobox.local
 
@@ -273,7 +273,7 @@ potarlo per quello lo distruggerebbe il giorno dopo averlo cestinato.
 
 ## Sviluppo
 
-    ./bin/prova.sh                 # 91 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh                 # 92 prove funzionali, sandbox con HOME dirottata
     ./bin/prova-js.sh              # 25 prove sulle funzioni pure di extension.js
     ./bin/prova-shell.sh           # carica l'estensione in una GNOME Shell annidata
     ./bin/verifica-estensione.sh   # controlli statici, e le prove JS
