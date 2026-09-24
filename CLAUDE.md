@@ -186,10 +186,10 @@ una copia che diverge.
 
 ## Quanto costa, misurato
 
-    raccolta metriche    0,12 s ogni   60 s   0,20% di una CPU  (mediana di 9)
+    raccolta metriche    0,10 s ogni   60 s   0,17% di una CPU  (mediana di 9)
     lettura quota        2,57 s ogni 1800 s   0,14%  (picco 323 MB)
                                               ----
-                                              0,34%
+                                              0,31%
 
 **La cadenza qui è 60 secondi, non i 600 di serie**: i conti vanno fatti su
 quella, se no si sottostima di dieci volte.
@@ -226,6 +226,12 @@ Due volte la raccolta è stata dimezzata togliendo lavoro rifatto da zero:
   vorrebbe dire vederla divergere. Il sottoprocesso resta come ripiego se il
   caricamento fallisce, e una prova controlla che le due strade diano gli
   stessi numeri — quale venga usata dipende da come è stato installato.
+
+- **0,12 → 0,10 s**: la scomposizione di `~/.claude` si fa con **un** `du` sui
+  figli invece di sette sull'intero albero (uno per il totale, sei per le
+  parti). In KB e non in MB: arrotondare ogni parte e poi sommare gonfiava il
+  totale di 24 MB su 407. Due prove controllano che le parti sommino al totale
+  e che il totale concordi con `du` entro un MB.
 
 Se un domani risale, si profila con lo stesso metodo: importare il modulo e
 cronometrare le singole funzioni, con più giri e la mediana — su una misura
@@ -264,7 +270,7 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              92 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh              94 prove funzionali, sandbox con HOME dirottata
     ./bin/prova-js.sh           25 prove sulle funzioni pure di extension.js
     ./bin/prova-shell.sh        carica l'estensione in una shell annidata (~1 min)
     ./bin/verifica-estensione.sh  controlli statici + le prove JS (gira dentro

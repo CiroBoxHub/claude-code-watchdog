@@ -233,6 +233,60 @@ def radice_progetti(esplicita: str | None, progetti: list[dict]) -> Path | None:
     return migliore
 
 
+def claude_scomposizione() -> tuple[int, dict]:
+    """(MB totali di ~/.claude, quanto pesa ciascuna parte).
+
+    Un solo `du` sui figli invece di sette: prima si misurava il totale e poi
+    ognuna delle sei sottocartelle, riattraversando lo stesso albero ogni
+    volta. 0,086 s contro 0,043, per gli stessi numeri.
+
+    In KB e non in MB: arrotondare ogni figlio ai MB e poi sommare gonfiava il
+    totale di 24 MB su 407. I file sciolti in cima si contano a parte, senza
+    ricorsione, se no mancherebbe l'ultimo MB.
+    """
+    if not CLAUDE.is_dir():
+        return 0, {}
+    try:
+        figli = [str(x) for x in CLAUDE.iterdir()]
+    except OSError:
+        return 0, {}
+    per_nome = {}
+    kb_tot = 0
+    if figli:
+        try:
+            r = subprocess.run(["du", "-sk", "--one-file-system"] + figli,
+                               capture_output=True, text=True, timeout=60)
+            for riga in r.stdout.splitlines():
+                if "\t" not in riga:
+                    continue
+                v, perc = riga.split("\t", 1)
+                try:
+                    kb = int(v)
+                except ValueError:
+                    continue
+                per_nome[Path(perc).name] = kb
+                kb_tot += kb
+        except Exception:
+            return du_mb(CLAUDE), {}
+
+    # I file sciolti in ~/.claude (settings.json e simili) non compaiono fra i
+    # figli misurati come cartelle: du li ha gia' contati uno per uno, quindi
+    # sono dentro kb_tot. Resta fuori solo il blocco della cartella stessa.
+    etichette = (("conversazioni", "projects"), ("plugin", "plugins"),
+                 ("sicurezza", "security"), ("skill", "skills"),
+                 ("job", "jobs"), ("cronologia file", "file-history"))
+    parti = {}
+    for nome, sotto in etichette:
+        mb = per_nome.get(sotto, 0) // 1024
+        if mb:
+            parti[nome] = mb
+    totale = kb_tot // 1024
+    altro = max(0, totale - sum(parti.values()))
+    if altro:
+        parti["altro"] = altro
+    return totale, parti
+
+
 def cache_claude() -> tuple[int, str, int]:
     """(MB della cache di Claude Code, nome del pezzo piu' grosso, suoi MB).
 
@@ -551,26 +605,13 @@ def main() -> int:
         "liberiGb": round(usage.free / 1024**3),
     }
 
-    claude_mb = du_mb(CLAUDE)
+    claude_mb, parti = claude_scomposizione()
     # Scomposizione di ~/.claude. Senza questa, «Dati Claude» somma le
     # conversazioni dell'utente e l'ingombro dei plugin: il 2026-09-17 il
     # plugin claude-security si è installato un ambiente Python da 276 MB e la
     # linea di tendenza è schizzata di 265 MB per un motivo che non c'entrava
     # niente con il lavoro. Una misura di sorveglianza che confonde «il mio
     # lavoro cresce» con «un plugin si è installato» fa perdere fiducia.
-    parti = {}
-    for nome, sotto in (("conversazioni", "projects"),
-                        ("plugin", "plugins"),
-                        ("sicurezza", "security"),
-                        ("skill", "skills"),
-                        ("job", "jobs"),
-                        ("cronologia file", "file-history")):
-        mb = du_mb(CLAUDE / sotto)
-        if mb:
-            parti[nome] = mb
-    altro = max(0, claude_mb - sum(parti.values()))
-    if altro:
-        parti["altro"] = altro
 
     sess = sessions()
 

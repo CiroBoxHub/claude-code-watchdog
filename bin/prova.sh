@@ -298,6 +298,29 @@ b = (len(d['reali']), len(d['duplicati']), len(d['fantasma']),
      sum(x['n_msg'] for x in d['reali']))
 print('uguali' if a==b else f'DIVERSI {a} {b}')")" "uguali"
 
+# La scomposizione di ~/.claude si fa con un `du` solo sui figli invece di
+# sette sull'intero albero. Il rischio e' che i numeri non tornino piu':
+# arrotondare ogni parte e poi sommare gonfiava il totale di 24 MB su 407.
+prepara
+mkdir -p "$HOME/.claude/projects" "$HOME/.claude/plugins" "$HOME/.claude/security"
+head -c 3000000 /dev/zero > "$HOME/.claude/projects/grosso"
+head -c 2000000 /dev/zero > "$HOME/.claude/plugins/medio"
+head -c 1000000 /dev/zero > "$HOME/.claude/security/piccolo"
+uguale "scomposizione: le parti sommano al totale" \
+  "$(python3 -c "
+import importlib.util as u
+s=u.spec_from_file_location('cm','$WD_ROOT/bin/collect-metrics.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+tot, parti = m.claude_scomposizione()
+print('uguali' if sum(parti.values()) == tot else f'DIVERSI {sum(parti.values())} vs {tot}')")" "uguali"
+uguale "scomposizione: concorda con du entro 1 MB" \
+  "$(python3 -c "
+import importlib.util as u, subprocess, os
+s=u.spec_from_file_location('cm','$WD_ROOT/bin/collect-metrics.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+tot, _ = m.claude_scomposizione()
+rif = int(subprocess.run(['du','-sm','--one-file-system',os.path.expanduser('$HOME/.claude')],
+                          capture_output=True, text=True).stdout.split()[0])
+print('vicini' if abs(tot - rif) <= 1 else f'LONTANI {tot} vs {rif}')")" "vicini"
+
 # ------------------------------------------------- collect-metrics.py ---
 prepara
 "$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1
