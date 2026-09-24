@@ -280,6 +280,24 @@ EOF
 uguale "incrementale: un file riscritto e cresciuto si rilegge da capo" "$(conta)" "11"
 unset XDG_CACHE_HOME
 
+# collect-metrics importa claude-sessions invece di lanciarlo (0,004 s contro
+# 0,085), ma tiene il sottoprocesso come ripiego. Due strade per lo stesso
+# numero sono due strade che possono divergere: qui si controlla che non lo
+# facciano, perche' quale venga usata dipende da come e' stato installato.
+prepara
+uguale "sessioni: import e sottoprocesso danno lo stesso inventario" \
+  "$(python3 -c "
+import importlib.util as u, json, subprocess, sys
+s=u.spec_from_file_location('cs','$WD_ROOT/bin/claude-sessions.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+reali,dup,stub = m.inventario()
+a = (len(reali), len(dup), len(stub), sum(x['n_msg'] for x in reali))
+r = subprocess.run([sys.executable,'$WD_ROOT/bin/claude-sessions.py','--format','json'],
+                   capture_output=True, text=True)
+d = json.loads(r.stdout)
+b = (len(d['reali']), len(d['duplicati']), len(d['fantasma']),
+     sum(x['n_msg'] for x in d['reali']))
+print('uguali' if a==b else f'DIVERSI {a} {b}')")" "uguali"
+
 # ------------------------------------------------- collect-metrics.py ---
 prepara
 "$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1
