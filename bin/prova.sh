@@ -191,6 +191,32 @@ touch -d "30 days ago" "$HOME/.cache/claude/staging/versione-nuova"
 uguale "cache: la pulizia non tocca il download in corso" \
   "$([[ -f "$HOME/.cache/claude/staging/versione-nuova" ]] && echo intatto || echo sparito)" "intatto"
 
+# Le due strade di stale_mb devono dare lo stesso numero: `find` è quella
+# usata, la scansione Python è il ripiego se find manca. Se divergessero, il
+# pannello annuncerebbe una cifra e il ripiego un'altra, a seconda della
+# macchina.
+prepara
+mkdir -p "$SANDBOX/scad/dentro"
+head -c 4000000 /dev/zero > "$SANDBOX/scad/vecchio"
+head -c 2000000 /dev/zero > "$SANDBOX/scad/dentro/pure-vecchio"
+echo nuovo > "$SANDBOX/scad/recente"
+touch -d "100 days ago" "$SANDBOX/scad/vecchio" "$SANDBOX/scad/dentro/pure-vecchio"
+ln -sfn "$SANDBOX/scad/vecchio" "$SANDBOX/scad/collegamento"
+uguale "stale_mb: find e il ripiego Python concordano" \
+  "$(python3 -c "
+import importlib.util as u
+from pathlib import Path
+s=u.spec_from_file_location('cm','$WD_ROOT/bin/collect-metrics.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+d=Path('$SANDBOX/scad')
+a=m.stale_mb(d,60); b=m._stale_mb_python(d,60)
+print(f'{a} {b}' if a==b else f'DIVERSI {a} {b}')")" "5 5"
+uguale "stale_mb: non conta i file recenti" \
+  "$(python3 -c "
+import importlib.util as u
+from pathlib import Path
+s=u.spec_from_file_location('cm','$WD_ROOT/bin/collect-metrics.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+print(m.stale_mb(Path('$SANDBOX/scad'),200))")" "0"
+
 # Il conto di ~/.cache stantia si tiene da parte perche' costa 40.000 file.
 # Una memoria su un numero che il pulsante fa scendere e' pericolosa: puo'
 # annunciare spazio gia' liberato.
@@ -215,6 +241,43 @@ print(d['giorni'])")" "100"
 "$WD_ROOT/bin/reclaim.py" --apply usercache >/dev/null 2>&1
 uguale "memoria cache: la pulizia la invalida" \
   "$([[ -f "$mem" ]] && echo resta || echo buttata)" "buttata"
+unset XDG_CACHE_HOME
+
+# Lettura incrementale: le trascrizioni si scrivono in coda, e quella viva
+# arriva a decine di MB. Riprendere dal punto raggiunto e' il risparmio piu'
+# grosso, ma sbagliarlo da' numeri plausibili e falsi.
+prepara
+export XDG_CACHE_HOME="$HOME/.cache"
+d="$HOME/.claude/projects/-inc"; mkdir -p "$d"
+f="$d/cafe0000-0000-0000-0000-000000000001.jsonl"
+for i in 1 2 3 4 5; do
+  printf '{"type":"user","cwd":"/tmp/p","timestamp":"2026-09-01T10:00:0%sZ","message":{"role":"user","content":"x"}}\n' "$i"
+  printf '{"type":"assistant","cwd":"/tmp/p","timestamp":"2026-09-01T10:00:0%sZ","message":{"role":"assistant"}}\n' "$i"
+done > "$f"
+conta() { "$WD_ROOT/bin/claude-sessions.py" --format json 2>/dev/null \
+  | python3 -c "
+import json,sys
+r=[s for s in json.load(sys.stdin)['reali'] if s['id'].startswith('cafe')]
+print(r[0]['n_msg'] if r else 'assente')"; }
+uguale "incrementale: prima lettura" "$(conta)" "10"
+printf '{"type":"user","cwd":"/tmp/p","timestamp":"2026-09-01T10:00:09Z","message":{"role":"user","content":"ancora"}}\n' >> "$f"
+uguale "incrementale: somma solo la coda nuova" "$(conta)" "11"
+
+# Riscrittura che FA CRESCERE il file: la cwd nuova e' piu' lunga, come quando
+# fix-cwd.py corregge un percorso. E' il caso insidioso — piu' corto cadrebbe
+# gia' nel ramo della rilettura completa e non proverebbe niente. La crescita
+# deve coprire piu' di un record intero, se no la coda nuova non contiene
+# nessuna riga e il conteggio resta giusto per caso: verificato con una
+# mutazione, la prima versione di questa prova passava anche senza il
+# controllo sulla testa.
+python3 - "$f" <<'EOF'
+import sys
+p = sys.argv[1]
+righe = open(p).read().splitlines()
+open(p, 'w').write("\n".join(
+    r.replace('/tmp/p', '/tmp/percorso-molto-piu-lungo-di-prima') for r in righe) + "\n")
+EOF
+uguale "incrementale: un file riscritto e cresciuto si rilegge da capo" "$(conta)" "11"
 unset XDG_CACHE_HOME
 
 # ------------------------------------------------- collect-metrics.py ---
