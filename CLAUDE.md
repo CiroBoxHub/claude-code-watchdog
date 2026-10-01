@@ -184,6 +184,18 @@ scritta una a mano. **Lo script non legge gsettings**: lo schema non è
 installato a livello di sistema, e una seconda copia della regola di scelta è
 una copia che diverge.
 
+**Un inciampo nella lettura della quota non è un guasto.** Il 2026-09-30 alle
+16:02:07, un minuto dopo l'accesso, `collect-usage.py` è uscito con esito
+diverso da zero: in 23 ore non si è più ripetuto, e non era il `PATH` — la
+shell ha `~/.local/bin`. Al login la rete o il CLI possono non essere ancora
+pronti. Il triangolo di guasto però restava acceso fino alla lettura buona
+successiva, mezz'ora dopo. Ora si ritenta una volta dopo `RIPROVA_QUOTA_S`
+(45 s) e si segnala solo se fallisce anche il secondo tentativo.
+**Non è coperto da nessuna prova automatica**: nella shell annidata il
+percorso della quota non parte mai, nemmeno togliendo il dato o invecchiandolo
+— misurato con uno script-spia che non è mai stato invocato. Chi tocca
+`_leggiQuota` lo verifica al login vero, nel journal.
+
 ## Quanto costa, misurato
 
     raccolta metriche    0,10 s ogni   60 s   0,17% di una CPU  (mediana di 9)

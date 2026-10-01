@@ -12,6 +12,13 @@
 #
 # NON cambia impostazioni: dconf è condiviso con la sessione vera, e una prova
 # che modifica le preferenze dell'utente è una prova che fa danni.
+#
+# LIMITE NOTO, misurato il 2026-10-01: nella shell annidata la lettura della
+# quota non parte mai — `collect-usage.py` non viene invocato nemmeno
+# forzando le condizioni (dato mancante, dato vecchio, usage-enabled a true
+# verificato in entrambe le sessioni). Quindi questa prova NON copre il
+# percorso della quota, e chi tocca `_leggiQuota` deve verificarlo al login
+# vero, guardando il journal.
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 

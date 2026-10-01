@@ -75,6 +75,10 @@ const LUCCHETTO_MS = 120000;
 
 const TOOLTIP_MS = 450;       // attesa prima che il suggerimento compaia
 const MAX_CAMPIONI = 60;      // quanti punti disegna il grafico
+/* Quanto si aspetta prima di ritentare una lettura della quota fallita.
+   Non è regolabile: non è una preferenza, è il tempo che serve alla rete per
+   essere pronta dopo l'accesso. */
+const RIPROVA_QUOTA_S = 45;
 const ESITO_MS = 6000;        // per quanto resta a video l'esito di un'azione
 
 function readText(path) {
@@ -650,6 +654,8 @@ class Indicatore extends PanelMenu.Button {
         this._timeoutEsito = 0;
         this._timeoutQuota = 0;
         this._orologio = 0;
+        this._timeoutRiprova = 0;
+        this._quotaRitentata = false;
         this._righeProgetto = [];
         this._righeAltre = [];
         this._morto = false;
@@ -1294,7 +1300,28 @@ class Indicatore extends PanelMenu.Button {
                 this._quotaInCorso = false;
                 if (this._morto)
                     return;
-                this._esaminaEsito(src, res, 'Lettura della quota');
+                const errore = this._erroreDi(src, res);
+                // Un solo inciampo non è un guasto. Al login la rete o il CLI
+                // di Claude possono non essere ancora pronti: il 2026-09-30
+                // alle 16:02:07, un minuto dopo l'accesso, la lettura è
+                // fallita una volta sola e in 23 ore non si è più ripetuta —
+                // ma il triangolo sarebbe rimasto acceso fino alla lettura
+                // buona successiva, mezz'ora dopo. Si ritenta una volta.
+                if (errore && !this._quotaRitentata) {
+                    this._quotaRitentata = true;
+                    this._timeoutRiprova = GLib.timeout_add_seconds(
+                        GLib.PRIORITY_LOW, RIPROVA_QUOTA_S, () => {
+                            this._timeoutRiprova = 0;
+                            this._leggiQuota();
+                            return GLib.SOURCE_REMOVE;
+                        });
+                    return;
+                }
+                this._quotaRitentata = false;
+                if (errore)
+                    this._segnalaGuasto('Lettura della quota', errore);
+                else
+                    this._guasto = null;
                 // Basta rileggere: la quota sta in usage.json, non serve
                 // rigenerare tutte le metriche con un altro sottoprocesso.
                 this._leggi();
@@ -1329,15 +1356,22 @@ class Indicatore extends PanelMenu.Button {
     /* Legge l'esito di un sottoprocesso e, se è andato male, lo dice a video.
        Un guasto silenzioso lascia il cruscotto con dati vecchi e nessun
        indizio: l'unico segnale era l'età che cresceva. */
-    _esaminaEsito(src, res, cosa) {
-        let errore = null;
+    /* L'errore di un sottoprocesso, o null se è andata. Separato da
+       _esaminaEsito perché la quota lo guarda prima di decidere se è un guasto
+       o solo un inciampo da ritentare. */
+    _erroreDi(src, res) {
         try {
             const [, , stderr] = src.communicate_utf8_finish(res);
             if (!src.get_successful())
-                errore = (stderr || '').trim().split('\n').pop() || 'esito diverso da zero';
+                return (stderr || '').trim().split('\n').pop() || 'esito diverso da zero';
+            return null;
         } catch (e) {
-            errore = e.message;
+            return e.message;
         }
+    }
+
+    _esaminaEsito(src, res, cosa) {
+        const errore = this._erroreDi(src, res);
         if (errore)
             this._segnalaGuasto(cosa, errore);
         else
@@ -2063,7 +2097,8 @@ class Indicatore extends PanelMenu.Button {
         // se non lo si toglie a mano resta lì dopo la disattivazione.
         this.suggerimento?.destroy();
         this.suggerimento = null;
-        for (const t of ['_timeout', '_timeoutEsito', '_timeoutQuota', '_orologio']) {
+        for (const t of ['_timeout', '_timeoutEsito', '_timeoutQuota', '_orologio',
+                         '_timeoutRiprova']) {
             if (this[t]) {
                 GLib.source_remove(this[t]);
                 this[t] = 0;
