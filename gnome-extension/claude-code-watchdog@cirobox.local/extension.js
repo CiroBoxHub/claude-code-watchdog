@@ -1472,12 +1472,18 @@ class Indicatore extends PanelMenu.Button {
 
     _apriPulizia() {
         const voci = this._dati?.recuperabile?.voci ?? [];
-        const progetto = this._dati?.progetto;
         this._boxPulizia.destroy_all_children();
 
-        if (!progetto || !voci.length) {
+        // Nessun controllo su `progetto`: e' lo stesso inciampo di clean.sh,
+        // rimasto qui. `collect-metrics.py` pubblica `progetto: null` quando
+        // gira dalla cartella dell'estensione invece che da <progetto>/bin —
+        // cioe' sempre, perche' il pannello lancia la copia installata. La
+        // condizione scattava a ogni apertura e l'elenco non compariva mai:
+        // «Progetto watchdog non trovato» con tre voci da liberare. Il
+        // checkout non serve, `reclaim.py` viaggia dentro l'estensione.
+        if (!voci.length) {
             this._boxPulizia.add_child(new St.Label({
-                text: voci.length ? 'Progetto watchdog non trovato' : 'Niente da liberare',
+                text: 'Niente da liberare',
                 style_class: 'fw-confirm-note'}));
             this._boxPulizia.show();
             return;

@@ -106,6 +106,30 @@ scarti di Claude), non chiede privilegi, ed è in dry-run senza `--apply`.
 Serve **Python 3.10** o superiore: le annotazioni `Path | None` si valutano a
 runtime.
 
+Lo stesso inciampo era rimasto in `_apriPulizia`, e lì bloccava tutto prima:
+`collect-metrics.py` pubblica `progetto: null` quando gira dalla cartella
+dell'estensione invece che da `<progetto>/bin` — cioè **sempre**, perché il
+pannello lancia la copia installata, e `_radici()` lo fa per scelta. La
+condizione `!progetto || !voci.length` scattava a ogni apertura: «Progetto
+watchdog non trovato» con tre voci pronte da cestinare. Segnalato dall'uso il
+2026-10-01. Il checkout non serve a niente qui, `reclaim.py` viaggia dentro
+l'estensione: decide `voci.length` e basta.
+
+Il campo **oscilla**, e questo spiega perché il difetto sembrava capriccioso:
+`install-extension.sh` chiude facendo una raccolta da `$WD_ROOT/bin/`, che la
+radice la trova. Subito dopo l'installazione `progetto` c'è e il pulsante
+funziona; al primo giro del timer del pannello la raccolta riparte dalla copia
+installata, riscrive `null`, e da quel momento il pulsante non apre più niente.
+Verificato alternando i due:
+
+    copia installata → progetto: None
+    da <progetto>/bin → progetto: '/opt/extension/claude-code-watchdog'
+
+**Morale che vale oltre questo caso**: quando si toglie la dipendenza dal
+checkout da una funzione, va cercata in tutte. `progetto` resta pubblicato in
+`metrics.json` ed è giusto così — serve a chi lavora dal progetto — ma non può
+essere la condizione che abilita un pulsante dell'estensione installata.
+
 **«Dentro la radice» vuol dire a qualunque profondità, e lo decide Python.**
 Il 2026-09-23 un progetto creato col «+» è comparso fra quelli «fuori dai
 progetti»: dentro ci era nata una sottocartella e una sessione ci aveva
