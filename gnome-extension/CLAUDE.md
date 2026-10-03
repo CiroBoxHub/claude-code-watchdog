@@ -9,7 +9,9 @@ sorvegliare Fedora — e ne faceva un'altra: l'80% di quello che mostra sono dat
 di Claude Code, e niente lì dentro è specifico di Fedora.
 **L'UUID determina il percorso GSettings**, quindi rinominare costa la
 migrazione delle impostazioni (fatta con `dconf dump` e `dconf load`): se
-servisse rifarlo, quello è il passaggio da non dimenticare. Le regole generali del progetto
+servisse rifarlo, quello è il passaggio da non dimenticare. **E il nome va cercato
+anche nel codice**: il titolo del popup e il nome del pulsante nel pannello
+sono rimasti «Fedora Watchdog» fino al 2026-10-03, segnalato dall'utente. Le regole generali del progetto
 e le cose da sapere su questa macchina stanno in `../CLAUDE.md`.
 
 ## Regola per l'estensione GNOME

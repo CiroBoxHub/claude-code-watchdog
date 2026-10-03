@@ -246,6 +246,66 @@ EOF
 uguale "orfane: una cache della versione precedente non le nasconde" "$(orfane)" "aaaaaaaa aaaaaaaa "
 unset XDG_CACHE_HOME
 
+# Richieste e contesto per sessione: la base dei consigli sulla quota. Un
+# messaggio dell'assistente occupa piu' righe con lo stesso id (una per blocco
+# di contenuto): si conta una volta. «Grande» e' oltre 150k token di contesto,
+# la stessa soglia che usa /usage.
+prepara
+export XDG_CACHE_HOME="$HOME/.cache"
+f="$HOME/.claude/projects/-tmp-progetto/cccccccc-0000-0000-0000-0000000000c1.jsonl"
+risposta() { # risposta ID CONTESTO_LETTO
+  printf '{"type":"assistant","cwd":"/tmp/progetto","timestamp":"2026-09-01T10:00:00Z","message":{"id":"%s","role":"assistant","usage":{"input_tokens":5,"cache_read_input_tokens":%s,"cache_creation_input_tokens":0,"output_tokens":10}}}\n' "$1" "$2"
+}
+{
+  printf '{"type":"user","cwd":"/tmp/progetto","timestamp":"2026-09-01T10:00:00Z","message":{"role":"user","content":"%s"}}\n' "$(head -c 5000 /dev/zero | tr '\0' x)"
+  risposta m1 200000; risposta m1 200000; risposta m2 10000; risposta m3 160000
+} > "$f"
+contesto() { "$WD_ROOT/bin/claude-sessions.py" --format json 2>/dev/null | python3 -c "
+import json,sys
+s=[x for x in json.load(sys.stdin)['reali'] if x['id'].startswith('cccccccc')][0]
+print(s['n_req'], s['n_grande'])"; }
+uguale "contesto: un messaggio su piu' righe conta una volta" "$(contesto)" "3 2"
+# La lettura incrementale riparte a meta' di un messaggio: la riga che arriva
+# dopo ha lo stesso id dell'ultima letta e non e' una richiesta nuova.
+risposta m3 160000 >> "$f"
+uguale "contesto: un messaggio spezzato fra due letture conta una volta" "$(contesto)" "3 2"
+risposta m4 1000 >> "$f"
+uguale "contesto: la richiesta nuova in coda si conta" "$(contesto)" "4 2"
+unset XDG_CACHE_HOME
+
+# I consigli sulla quota: regole su numeri gia' contati, provate in tabella.
+uguale "consigli: la regola su tutti i casi noti" "$(python3 - <<EOF
+import importlib.util as u
+from datetime import datetime, timezone, timedelta
+s = u.spec_from_file_location('cm', '$WD_ROOT/bin/collect-metrics.py')
+m = u.module_from_spec(s); s.loader.exec_module(m)
+adesso = datetime(2026, 10, 3, 12, tzinfo=timezone.utc)
+def iso(giorni): return (adesso - timedelta(days=giorni)).isoformat()
+def sess(nome, req, grandi, dal, fino=0.1):
+    return {"id": nome, "cwd": f"/lavoro/{nome}", "title": None, "n_req": req,
+            "n_grande": grandi, "first": iso(dal), "last": iso(fino)}
+soglie = {"pct": 50, "giorni": 7, "minimo": 20, "finestra": 7}
+casi = [
+    ("pesante",    [sess("p", 100, 60, 1)],               ["p:contesto"]),
+    ("leggera",    [sess("q", 100, 49, 1)],               []),
+    ("poche",      [sess("r", 10, 10, 1)],                []),
+    ("lunga",      [sess("l", 100, 0, 10)],               ["l:durata"]),
+    ("entrambe",   [sess("e", 100, 90, 10)],              ["e:contesto+durata"]),
+    ("ferma",      [sess("f", 100, 90, 20, fino=10)],     []),
+    ("tre",        [sess("a", 100, 60, 1), sess("b", 100, 90, 1),
+                    sess("c", 100, 70, 1), sess("d", 100, 80, 1)],
+                   ["b:contesto", "d:contesto", "c:contesto"]),
+]
+male = []
+for nome, sessioni, atteso in casi:
+    avuto = [f"{c['progetto']}:{'+'.join(c['motivi'])}"
+             for c in m.consigli_quota(sessioni, None, adesso, soglie)]
+    if avuto != atteso:
+        male.append(f"{nome}: {avuto} invece di {atteso}")
+print("; ".join(male) or "tutti")
+EOF
+)" "tutti"
+
 prepara_orfane
 "$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1
 uguale "collect-metrics: pubblica la voce delle sessioni orfane" \

@@ -35,6 +35,27 @@ def testa(path: Path, quanti: int = 4096) -> str:
         return ""
 
 
+# Oltre questa soglia il contesto di una richiesta e' «grande»: la stessa che usa
+# /usage nella sezione «What's contributing to your limits usage?», cosi' i
+# consigli del pannello parlano la stessa lingua dei numeri di Claude Code.
+CONTESTO_GRANDE = 150_000
+
+
+def contesto(u: dict) -> int:
+    """Token di contesto di una richiesta: quelli nuovi, letti e scritti in cache.
+
+    Tutti e tre entrano nella finestra: la cache costa meno, ma il contesto
+    che la richiesta si porta dietro e' la somma.
+    """
+    tot = 0
+    for k in ("input_tokens", "cache_read_input_tokens",
+              "cache_creation_input_tokens"):
+        v = u.get(k)
+        if isinstance(v, int):
+            tot += v
+    return tot
+
+
 def scan_file(path: Path, da: dict | None = None) -> dict | None:
     """Estrae i metadati di una trascrizione.
 
@@ -52,6 +73,8 @@ def scan_file(path: Path, da: dict | None = None) -> dict | None:
     cwd = None
     entrypoint = None
     ai_title = custom_title = None
+    n_req = n_grande = 0
+    ultimo_mid = None
     inizio = 0
     if da:
         n_user = da.get("n_user", 0)
@@ -60,6 +83,9 @@ def scan_file(path: Path, da: dict | None = None) -> dict | None:
         last_ts = da.get("last")
         cwd = da.get("cwd")
         entrypoint = da.get("entrypoint")
+        n_req = da.get("n_req", 0)
+        n_grande = da.get("n_grande", 0)
+        ultimo_mid = da.get("ultimo_mid")
         custom_title = da.get("title")
         inizio = da.get("offset", 0)
     try:
@@ -84,6 +110,17 @@ def scan_file(path: Path, da: dict | None = None) -> dict | None:
                     n_user += 1
                 elif t == "assistant":
                     n_asst += 1
+                    # Una richiesta all'API e' un messaggio, ma il messaggio
+                    # occupa una riga per blocco di contenuto, tutte con lo
+                    # stesso id e una dopo l'altra. Si conta al primo.
+                    m = d.get("message")
+                    u = m.get("usage") if isinstance(m, dict) else None
+                    mid = m.get("id") if isinstance(m, dict) else None
+                    if isinstance(u, dict) and mid and mid != ultimo_mid:
+                        ultimo_mid = mid
+                        n_req += 1
+                        if contesto(u) > CONTESTO_GRANDE:
+                            n_grande += 1
                 else:
                     continue
                 ts = d.get("timestamp")
@@ -115,6 +152,11 @@ def scan_file(path: Path, da: dict | None = None) -> dict | None:
         "n_user": n_user,
         "n_asst": n_asst,
         "n_msg": n_user + n_asst,
+        "n_req": n_req,
+        "n_grande": n_grande,
+        # Serve alla lettura incrementale: se riparte a meta' di un messaggio,
+        # la riga che trova ha lo stesso id e non e' una richiesta nuova.
+        "ultimo_mid": ultimo_mid,
         "first": first_ts,
         "last": last_ts,
         "bytes": st.st_size,
@@ -136,7 +178,7 @@ CACHE = (Path(os.environ.get("XDG_CACHE_HOME") or (HOME / ".cache"))
 # Da alzare quando scan_file cambia cosa restituisce: una cache scritta dalla
 # versione precedente contiene campi vecchi, e riusarla darebbe numeri
 # sbagliati senza che niente segnali l'errore.
-CACHE_VERSIONE = 3
+CACHE_VERSIONE = 4
 
 # Quanto si aspetta prima di dire che una trascrizione senza risposte è uno
 # scarto. Due minuti: la lettura della quota ne impiega due o tre secondi, una

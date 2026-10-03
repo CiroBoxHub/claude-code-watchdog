@@ -9,7 +9,7 @@ Deve restare veloce: lo lancia l'estensione a intervalli. Niente scansioni
 dell'intera home, niente comandi che richiedono privilegi.
 """
 import json, os, shutil, subprocess, sys, time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 def _radici() -> tuple[Path | None, Path]:
@@ -456,7 +456,78 @@ def _sessioni_grezze():
 _CS = None
 
 
-def sessions() -> dict:
+def _quando(ts: str | None) -> datetime | None:
+    """Un timestamp delle trascrizioni come datetime. La Z finale Python 3.10
+    non la accetta in fromisoformat."""
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def consigli_quota(sessioni: list[dict], radice: Path | None,
+                   adesso: datetime, soglie: dict) -> list[dict]:
+    """Al massimo tre consigli su cosa sta consumando la quota, per sessione.
+
+    /usage dice quanto pesa il contesto lungo («51% oltre 150k»), non dove.
+    Qui si dice dove: il 2026-10-03 quasi tutto veniva da una sola sessione,
+    aperta da 24 giorni, che si portava dietro piu' di 150k token a ogni
+    richiesta. I conti sono per sessione e non per richiesta: una sessione
+    conta se e' stata usata nella finestra, e i suoi numeri sono di tutta la
+    sua vita.
+
+    Due motivi, che si sommano in un consiglio solo se valgono insieme:
+    - contesto: almeno `pct`% delle richieste oltre 150k token;
+    - durata: aperta da almeno `giorni` giorni.
+    Sotto `minimo` richieste non si dice niente: una percentuale su dieci
+    richieste non vuol dire nulla.
+    """
+    candidati = []
+    for x in sessioni:
+        req = x.get("n_req") or 0
+        if req < soglie["minimo"]:
+            continue
+        primo, ultimo = _quando(x.get("first")), _quando(x.get("last"))
+        if not ultimo or adesso - ultimo > timedelta(days=soglie["finestra"]):
+            continue
+        grandi = x.get("n_grande") or 0
+        pct = round(grandi * 100 / req)
+        giorni = (ultimo - primo).days if primo else 0
+        motivi = []
+        if pct >= soglie["pct"]:
+            motivi.append("contesto")
+        if giorni >= soglie["giorni"]:
+            motivi.append("durata")
+        if not motivi:
+            continue
+
+        cwd = x.get("cwd")
+        progetto = nome_progetto(cwd, radice) if cwd else "?"
+        chi = f"«{progetto}»"
+        if x.get("title"):
+            chi += f" · {x['title']}"
+        if motivi == ["contesto", "durata"]:
+            testo = (f"{chi}: {pct}% delle richieste con il contesto oltre 150k, "
+                     f"e la sessione è aperta da {giorni} giorni. Una sessione "
+                     f"nuova la alleggerisce molto.")
+        elif motivi == ["contesto"]:
+            testo = (f"{chi}: {pct}% delle richieste con il contesto oltre 150k. "
+                     f"Un /compact, o una sessione nuova, la alleggerisce.")
+        else:
+            testo = (f"{chi}: la stessa sessione è aperta da {giorni} giorni. "
+                     f"Per un lavoro nuovo conviene aprirne una nuova: il "
+                     f"contesto accumulato pesa su ogni richiesta.")
+        candidati.append((grandi, req, {"progetto": progetto,
+                                        "sessione": x.get("id"),
+                                        "motivi": motivi, "testo": testo}))
+    # Prima chi ha piu' richieste pesanti: e' li' che va la quota.
+    candidati.sort(key=lambda c: (-c[0], -c[1]))
+    return [c[2] for c in candidati[:3]]
+
+
+def sessions(soglie_consigli: dict | None = None) -> dict:
     """Delega a claude-sessions.py: la logica di lettura sta in un posto solo."""
     d = None
     try:
@@ -591,6 +662,9 @@ def sessions() -> dict:
         "duplicati": len(d.get("duplicati", [])),
         "mbTotali": round(sum(s["bytes"] for s in reali) / 1048576, 1),
         "progetti": top,
+        "consigli": (consigli_quota(reali, radice, datetime.now(timezone.utc),
+                                    soglie_consigli)
+                     if soglie_consigli else []),
         "elenco": elenco,
         "radiceProgetti": str(radice) if radice else None,
     }
@@ -620,7 +694,10 @@ def main() -> int:
     # niente con il lavoro. Una misura di sorveglianza che confonde «il mio
     # lavoro cresce» con «un plugin si è installato» fa perdere fiducia.
 
-    sess = sessions()
+    sess = sessions({"pct": num("QUOTA_CONSIGLIO_CONTESTO_PCT", 50),
+                     "giorni": num("QUOTA_CONSIGLIO_SESSIONE_GIORNI", 7),
+                     "minimo": num("QUOTA_CONSIGLIO_MIN_RICHIESTE", 20),
+                     "finestra": num("QUOTA_CONSIGLIO_FINESTRA_GIORNI", 7)})
 
     # Spazio recuperabile: solo le voci che un utente non-root può liberare,
     # perché il cruscotto non deve promettere quello che non può mantenere.
@@ -758,6 +835,7 @@ def main() -> int:
                    "cacheMb": num("ALERT_CLAUDE_CACHE_MB", 200)},
         "recuperabile": {"totaleMb": sum(r["mb"] for r in rec), "voci": rec},
         "quota": quota,
+        "consigliQuota": sess.get("consigli", []),
         "allarmi": allarmi,
     }
 

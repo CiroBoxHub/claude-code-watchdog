@@ -1,4 +1,4 @@
-/* Impostazioni e guida di Fedora Watchdog.
+/* Impostazioni e guida di Claude Code Watchdog.
  *
  * Gira nel processo di gnome-extensions-app, separato dalla shell: qui GTK e
  * Adwaita esistono, dentro la shell no.
@@ -127,6 +127,17 @@ export default class WatchdogPreferences extends ExtensionPreferences {
         spiega(quota, 'L’età del dato è scritta',
                'Sotto la percentuale c’è quando è stata letta. Una quota di ' +
                'mezz’ora fa non viene spacciata per attuale.');
+        spiega(quota, 'I consigli, con l\u2019icona «i»',
+               '/usage dice quanto pesa il contesto lungo, non dove. Sotto le ' +
+               'due barre compare una riga con l\u2019icona «i» quando una ' +
+               'sessione usata nell\u2019ultima settimana consuma più del ' +
+               'dovuto: metà delle richieste con il contesto oltre 150k token, ' +
+               'oppure aperta da una settimana o più. Passando il mouse o ' +
+               'cliccando si legge quale progetto e cosa fare. Al massimo tre, ' +
+               'i più pesanti per primi; se va tutto bene la riga non c\u2019è. ' +
+               'Si calcolano dalle sessioni di questo PC, quindi non contano ' +
+               'altri dispositivi. Le soglie stanno in config/watchdog.conf, ' +
+               'alle voci QUOTA_CONSIGLIO_*.');
 
         const prog = new Adw.PreferencesGroup({
             title: 'I progetti',
@@ -172,6 +183,14 @@ export default class WatchdogPreferences extends ExtensionPreferences {
                'capitato di lanciare Claude — finisce nella sezione sotto, ' +
                'dove l\u2019unica azione è togliere le sessioni: non sono ' +
                'progetti e non ha senso trattarli come tali.');
+        spiega(prog, 'Sessioni automatiche orfane',
+               'Alcuni programmi lanciano Claude da soli in una cartella ' +
+               'temporanea, e ogni volta ne nasce una riga «fuori dai progetti». ' +
+               'Quando quella cartella non esiste più, «Libera spazio» le ' +
+               'offre tutte insieme come «Sessioni automatiche orfane». Prende ' +
+               'solo le sessioni avviate da un programma: le tue conversazioni ' +
+               'restano anche se la loro cartella è sparita, perché a volte ' +
+               'sono l\u2019unica copia di un lavoro perso. Vanno nel cestino.');
         spiega(prog, 'Correggi',
                'Compare solo sulle righe la cui cartella è sparita. Chiede dove ' +
                'è finita e **verifica prima di agire**: le conversazioni citano ' +

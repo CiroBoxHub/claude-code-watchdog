@@ -1,4 +1,4 @@
-/* Fedora Watchdog — sistema visivo.
+/* Claude Code Watchdog — sistema visivo.
  *
  * Quadro strumenti, non cruscotto a schede. Niente riquadri: le misure sono
  * righe, separate da spazio e da filetti sottili. Un solo elemento forte per
@@ -321,6 +321,27 @@
     padding: 5px 8px;
     border-radius: 6px;
     background-color: rgba(183, 123, 26, 0.20);
+}
+
+/* Riga dei consigli sotto la quota: discreta come una nota, con l'icona «i»
+   che dice che c'è altro da leggere. Il testo prende il colore del tema. */
+.fw-consigli {
+    padding: 3px 6px 5px 6px;
+    border-radius: 7px;
+}
+
+.fw-consigli:hover {
+    background-color: rgba(127, 127, 127, 0.14);
+}
+
+.fw-consigli-icon {
+    icon-size: 14px;
+    padding-right: 7px;
+}
+
+.fw-consigli-label {
+    font-size: 0.85em;
+    opacity: 0.78;
 }
 
 .fw-empty {

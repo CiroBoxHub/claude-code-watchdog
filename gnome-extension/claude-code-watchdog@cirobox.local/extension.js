@@ -56,6 +56,7 @@ const ICONE = {
     recuperabile:       'fw-reclaim',
     'quota-sessione':   'fw-session',
     'quota-settimana':  'fw-week',
+    consigli:           'fw-info',
 };
 
 /* Per ogni terminale il suo file .desktop: serve a sapere se ha già una
@@ -647,7 +648,7 @@ class RigaProgetto extends St.BoxLayout {
 const Indicatore = GObject.registerClass(
 class Indicatore extends PanelMenu.Button {
     _init(estensione) {
-        super._init(0.5, 'Fedora Watchdog');
+        super._init(0.5, 'Claude Code Watchdog');
         this._ext = estensione;
         this._settings = estensione.getSettings();
         this._timeout = 0;
@@ -835,7 +836,7 @@ class Indicatore extends PanelMenu.Button {
                                     style_class: 'fw-content', x_expand: true});
 
         const testa = new St.BoxLayout({style_class: 'fw-header', x_expand: true});
-        testa.add_child(new St.Label({text: 'Fedora Watchdog',
+        testa.add_child(new St.Label({text: 'Claude Code Watchdog',
                                       style_class: 'fw-header-title', x_expand: true,
                                       y_align: Clutter.ActorAlign.CENTER}));
         this._etichettaAggiornato = new St.Label({text: '—', style_class: 'fw-header-age',
@@ -881,6 +882,32 @@ class Indicatore extends PanelMenu.Button {
                                       {forma: 'barra', tinta: TINTE.quota});
         c.add_child(this._mSessione);
         c.add_child(this._mSettimana);
+
+        // Consigli sulla quota: li calcola collect-metrics.py dalle
+        // trascrizioni, qui si mostrano. Una riga sola con l'icona, il testo
+        // per esteso nel suggerimento — al passaggio del mouse o al clic,
+        // perché un'icona «i» la si clicca.
+        this._testoConsigli = '';
+        this._iconaConsigli = this._icona(ICONE.consigli, 'fw-consigli-icon');
+        this._etichettaConsigli = new St.Label({style_class: 'fw-consigli-label',
+                                                y_align: Clutter.ActorAlign.CENTER});
+        const rigaConsigli = new St.BoxLayout({x_expand: true});
+        rigaConsigli.add_child(this._iconaConsigli);
+        rigaConsigli.add_child(this._etichettaConsigli);
+        this._btnConsigli = new St.Button({style_class: 'fw-consigli', x_expand: true,
+                                           can_focus: true, track_hover: true,
+                                           visible: false, child: rigaConsigli});
+        const mostraConsigli = () => this.suggerimento?.programma(
+            this._iconaConsigli, this._testoConsigli, this.attoreMenu);
+        this._btnConsigli.connect('notify::hover', () => {
+            if (this._btnConsigli.hover)
+                mostraConsigli();
+            else
+                this.suggerimento?.annulla();
+        });
+        this._btnConsigli.connect('clicked', mostraConsigli);
+        this._btnConsigli.connect('destroy', () => this.suggerimento?.annulla());
+        c.add_child(this._btnConsigli);
 
         // --- recuperabile ---
         this._filetto(c);
@@ -1088,6 +1115,14 @@ class Indicatore extends PanelMenu.Button {
             rendi(this._mSessione, 'session');
             rendi(this._mSettimana, 'weekly');
         }
+
+        const consigli = d.consigliQuota ?? [];
+        this._btnConsigli.visible = mostraQuota && consigli.length > 0;
+        this._etichettaConsigli.text = consigli.length === 1
+            ? '1 consiglio per la quota' : `${consigli.length} consigli per la quota`;
+        this._testoConsigli = [...consigli.map(x => `• ${x.testo}`),
+                               'Calcolati dalle sessioni di questo PC: non '
+                               + 'contano altri dispositivi né il sito di Claude.'].join('\n\n');
 
         const recTot = rec.totaleMb ?? 0;
         const voci = (rec.voci ?? []).map(v => v.dettaglio ? `${v.nome} (${v.dettaglio})` : v.nome);
@@ -2118,7 +2153,7 @@ class Indicatore extends PanelMenu.Button {
     }
 });
 
-export default class FedoraWatchdogExtension extends Extension {
+export default class ClaudeCodeWatchdogExtension extends Extension {
     enable() {
         try {
             this._indicatore = new Indicatore(this);

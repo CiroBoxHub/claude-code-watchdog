@@ -223,6 +223,21 @@ vecchie — non si indovina. Si cestina per trascrizione, e la cartella di
 pannello sia da `reclaim.py`; otto casi in `prova.sh`, ognuno verificato con
 una mutazione. **`clean.sh` non ha questo target**: il pulsante usa `reclaim.py`.
 
+**I consigli sulla quota si calcolano, non si copiano da `/usage`.** `/usage`
+chiude con «What's contributing to your limits usage?», ma è solo testo
+inglese per l'utente, non dato strutturato: estrarlo si romperebbe al primo
+cambio di formato, e comunque dice *quanto* pesa il contesto lungo, non
+*dove*. Il 2026-10-03 il «51% oltre 150k» veniva quasi tutto da una sola
+sessione di `agg_dell_fedora`, aperta da 23 giorni. `claude-sessions.py` conta
+per sessione `n_req` e `n_grande` (contesto oltre `CONTESTO_GRANDE` = 150k,
+la soglia di `/usage`) dal campo `usage` di ogni risposta; `consigli_quota()`
+in `collect-metrics.py` ne ricava al massimo tre, con le soglie
+`QUOTA_CONSIGLIO_*` in `watchdog.conf`, e li pubblica in `consigliQuota`. Un
+messaggio occupa **più righe con lo stesso id**, una per blocco: si conta al
+primo, e `ultimo_mid` passa nella cache perché la lettura incrementale può
+ripartire a metà di un messaggio. Le percentuali di quota restano quelle di
+`/usage`, verificate identiche il 2026-10-03.
+
 **Un inciampo nella lettura della quota non è un guasto.** Il 2026-09-30 alle
 16:02:07, un minuto dopo l'accesso, `collect-usage.py` è uscito con esito
 diverso da zero: in 23 ore non si è più ripetuto, e non era il `PATH` — la
@@ -321,7 +336,7 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              106 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh              110 prove funzionali, sandbox con HOME dirottata
     ./bin/prova-js.sh           25 prove sulle funzioni pure di extension.js
     ./bin/prova-shell.sh        carica l'estensione in una shell annidata (~1 min)
     ./bin/verifica-estensione.sh  controlli statici + le prove JS (gira dentro
