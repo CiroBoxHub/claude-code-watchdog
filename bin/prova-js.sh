@@ -160,6 +160,8 @@ const casi = [
     ["PostToolUseFailure", 5, 3, "errore"], ["PostToolUseFailure", 5, 2, "lavora"],
     ["Stop", 60, 0, "finito"], ["Stop", 700, 0, "dorme"],
     ["SessionStart", 5, 0, "dorme"],
+    ["PreCompact", 5, 0, "compatta"], ["PreCompactAuto", 30 * 60, 0, "compatta"],
+    ["PreCompactAuto", 5, 3, "compatta"], ["PreCompact", 2 * 3600, 0, "dorme"],
 ];
 const sbagliati = casi.filter(([e, eta, f, atteso]) => st(e, eta, f) !== atteso)
     .map(([e, eta, f, atteso]) => e + "/" + eta + "s/" + f + ": " + st(e, eta, f) + " invece di " + atteso);
@@ -203,10 +205,23 @@ uguale("watchface: aspetta vince su tutto",
        piuUrgente(["dorme", "lavora", "errore", "aspetta", "finito"]), "aspetta");
 uguale("watchface: errore vince su lavora", piuUrgente(["lavora", "errore"]), "errore");
 uguale("watchface: lavora vince su finito", piuUrgente(["finito", "lavora"]), "lavora");
+uguale("watchface: il compact sta fra lavora e finito",
+       [piuUrgente(["compatta", "lavora"]), piuUrgente(["finito", "compatta"])].join(","),
+       "lavora,compatta");
 uguale("watchface: elenco vuoto", piuUrgente([]), "null");
 
 uguale("watchface: il limone per gli errori", iconaStato("errore"), "fw-limone");
 uguale("watchface: la faccina negli altri stati", iconaStato("aspetta"), "fw-faccina-aspetta");
+uguale("watchface: il limone con gli occhi in su per il compact", iconaStato("compatta"), "fw-limone-su");
+// Ogni stato ha la sua icona a colori e la simbolica della barra, e un testo:
+// un file mancante si vede solo nella shell, come un quadrato vuoto.
+const cartellaIcone = fileWf.replace(/watchface\.js$/, "icons/");
+const senzaIcona = ORDINE_STATI.flatMap(s => [iconaStato(s), iconaStato(s) + "-symbolic"])
+    .filter(n => !imports.gi.GLib.file_test(cartellaIcone + n + ".svg",
+                                            imports.gi.GLib.FileTest.EXISTS));
+uguale("watchface: ogni stato ha le sue icone", senzaIcona.join(", ") || "tutte", "tutte");
+uguale("watchface: ogni stato ha il suo testo",
+       ORDINE_STATI.filter(s => !TESTI[s]).join(", ") || "tutti", "tutti");
 uguale("watchface: senza stato dorme", iconaStato(null), "fw-faccina-dorme");
 uguale("watchface: il permesso si dice", testoStato({stato: "aspetta", evento: "PermissionRequest"}),
        "chiede un permesso");

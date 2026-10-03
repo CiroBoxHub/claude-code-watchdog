@@ -592,6 +592,12 @@
     color: #CE5A50;
 }
 
+/* Il /compact: il blu degli accenti di GNOME, 3,9:1 sul bianco e 5,3:1 sul
+   nero. Vale anche per il limone della mascotte, che nella barra è simbolico. */
+.fw-wf-tinta-compatta {
+    color: #3584E4;
+}
+
 .fw-wf {
     spacing: 2px;
     padding-bottom: 2px;
@@ -737,9 +743,14 @@
 }
 
 /* Sempre visibile e senza avvisi: la faccia segue Claude anche quando
-   lavora o dorme, con il viola della quota e un grigio. */
+   lavora, compatta o dorme, con il viola della quota, il blu del /compact
+   (il limone resta giallo) e un grigio. */
 .fw-fumetto-lavora .fw-fumetto-faccia {
     border-color: #8676B8;
+}
+
+.fw-fumetto-compatta .fw-fumetto-faccia {
+    border-color: #3584E4;
 }
 
 .fw-fumetto-dorme .fw-fumetto-faccia {
@@ -784,7 +795,7 @@
    rende leggibile su qualunque sfondo. */
 .fw-fumetto-faccia {
     background-color: #FAFAFA;
-    border: 2.5px solid #2F9284;
+    border: 3.5px solid #2F9284;
     border-radius: 999px;
     padding: 6px;
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);

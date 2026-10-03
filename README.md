@@ -6,7 +6,7 @@
   <img alt="GNOME 48 · 49 · 50" src="https://img.shields.io/badge/GNOME-48%20%C2%B7%2049%20%C2%B7%2050-4A86CF?logo=gnome&logoColor=white">
   <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white">
   <img alt="Licenza GPL-2.0-or-later" src="https://img.shields.io/badge/licenza-GPL--2.0--or--later-2F9284">
-  <img alt="149 prove" src="https://img.shields.io/badge/prove-149%20%2B%2041%20JS-8676B8">
+  <img alt="170 prove" src="https://img.shields.io/badge/prove-170%20%2B%2060%20JS-8676B8">
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@
 
 ## ✨ Cosa fa
 
-- 🙂 **Watchface** — una faccina nella barra che segue Claude Code: dorme, lavora, **ti aspetta** (un permesso, una risposta) o ha finito. Con le notifiche quando serve davvero.
+- 🙂 **Watchface** — una faccina nella barra che segue Claude Code: dorme, lavora, **ti aspetta** (un permesso, una risposta), fa un /compact o ha finito. Con le notifiche quando serve davvero.
 - 📊 **Quota** — sessione e settimana con l'ora esatta dell'azzeramento, e **consigli** su cosa la sta consumando: per progetto, non solo in percentuale.
 - 💾 **Spazio** — disco, conversazioni con la loro tendenza, cache di Claude, versioni vecchie: tutto quello che cresce senza che te ne accorga.
 - 📁 **Progetti** — uno per riga: apri la cartella, riprendi la conversazione nel terminale, ricollega un progetto spostato, creane uno nuovo con un clic.
@@ -46,6 +46,7 @@
 | <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-faccina-aspetta.svg" width="44"> | **aspetta te** | un permesso o una risposta: il punto ambra |
 | <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-faccina-finito.svg" width="44"> | **ha finito** | il turno è chiuso, tocca a te |
 | <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-limone.svg" width="44"> | **si è inceppato** | un errore ha fermato la sessione, o tre strumenti di fila sono falliti |
+| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-limone-su.svg" width="44"> | **riordina la memoria** | un /compact, chiesto da te o automatico a contesto pieno: lavoro, ma non una risposta, quindi niente avvisi |
 | <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-robot.svg" width="44"> | **aiutanti** | nel popup, quando Claude ha mandato dei subagenti |
 
 ## 🚀 Installazione rapida
@@ -113,7 +114,7 @@ dentro invocano soltanto `du`, `gio`, `gsettings` e `claude`.
     git clone https://github.com/CiroBoxHub/claude-code-watchdog
     cd claude-code-watchdog
 
-    ./bin/prova.sh                 # 136 prove funzionali in sandbox
+    ./bin/prova.sh                 # 170 prove funzionali in sandbox
     ./bin/install-extension.sh     # installa l'estensione
     gnome-extensions enable claude-code-watchdog@cirobox.local
 
@@ -128,6 +129,8 @@ dell'estensione, pagina *Watchface*, pulsante **Installa**. Oppure da terminale:
 
 Prima di toccare `~/.claude/settings.json` ne fa un backup. Claude Code legge
 gli hook all'avvio: le sessioni già aperte non li vedono, quelle nuove sì.
+Dopo un aggiornamento che aggiunge un evento (la 4 ha aggiunto `PreCompact`,
+per il /compact) la pagina dice «Installati in parte»: basta **Reinstalla**.
 
 Gli script da terminale non vanno installati: si usano dove sono.
 
@@ -167,8 +170,12 @@ Cosa sta facendo Claude Code, senza tornare al terminale. La faccina nella
 barra **dorme** quando non ci sono sessioni, **lavora**, **aspetta te** — un
 permesso o una risposta, con un punto ambra — oppure **ha finito**. Il
 **limone** arriva quando qualcosa si inceppa (sessione fermata da un errore,
-tre strumenti falliti di fila), il **robottino** nel popup quando Claude manda
-degli aiutanti. Con più sessioni vince la più urgente.
+tre strumenti falliti di fila), il limone con gli **occhi all’insù** durante un `/compact` —
+quando Claude riassume la conversazione per liberare il contesto, perché glielo
+chiedi tu o da solo a contesto pieno — e il **robottino** nel popup quando
+Claude manda degli aiutanti. Con più sessioni vince la più urgente.
+Finito un `/compact` chiesto da te la faccina sorride, perché tocca di nuovo a
+te; dopo quello automatico Claude torna al lavoro che stava facendo.
 
 In cima al popup, *Claude adesso* elenca le sessioni aperte: **un clic su una
 riga porta davanti il terminale** in cui gira quella sessione, e lo stesso fa
@@ -176,7 +183,8 @@ un clic sulla notifica. Le notifiche arrivano quando Claude ti aspetta, si
 inceppa o finisce un lavoro di almeno mezzo minuto — non se stai già guardando
 il terminale. Dalle impostazioni si sceglie la grandezza della mascotte
 (piccola, media, grande) e si spegne la mascotte nella barra; senza mascotte
-resta l'icona classica, che si colora d'ambra o di rosso negli stati urgenti.
+resta l'icona classica, che si colora d'ambra o di rosso negli stati urgenti,
+e di blu durante un `/compact`.
 Contano solo le sessioni aperte da una persona: quelle avviate da un programma
 (`claude -p`, l'SDK) non compaiono.
 
@@ -192,8 +200,10 @@ numero sul disco della faccina. L'avviso evidenziato dà il colore a tutto;
 un clic su un'altra riga lo cambia, un clic sulla faccina porta al terminale.
 Ogni riga se ne va quando la sua sessione riparte, e senza righe la mascotte
 si ritira — oppure, se la vuoi **sempre visibile**, resta sopra le finestre e
-la sua faccia segue Claude come quella della barra. Si trascina dove vuoi, e sopra le finestre a schermo intero non
-compare.
+la sua faccia segue Claude come quella della barra. Mentre Claude ti aspetta,
+si inceppa o lavora il disco della faccina respira piano (non se le
+animazioni di GNOME sono spente). Si trascina dove vuoi, e sopra le finestre
+a schermo intero non compare.
 
 **Come funziona.** Claude Code avvisa `watchface-hook` a ogni evento. È uno
 script Bash da circa 3 ms che scrive una riga per sessione in
@@ -426,8 +436,8 @@ potarlo per quello lo distruggerebbe il giorno dopo averlo cestinato.
 
 ## Sviluppo
 
-    ./bin/prova.sh                 # 163 prove funzionali, sandbox con HOME dirottata
-    ./bin/prova-js.sh              # 56 prove sulle funzioni pure dei moduli JS
+    ./bin/prova.sh                 # 170 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova-js.sh              # 60 prove sulle funzioni pure dei moduli JS
     ./bin/prova-shell.sh           # carica l'estensione in una GNOME Shell annidata
     ./bin/verifica-estensione.sh   # controlli statici, e le prove JS
     ./bin/fotografa-pannello.sh    # foto di barra, popup e preferenze, chiaro e scuro

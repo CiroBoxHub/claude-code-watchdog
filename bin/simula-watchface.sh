@@ -53,6 +53,10 @@ riga simula-a SessionStart 0 0 sito-vetrina
 riga simula-c SessionStart 0 0 blog-cucina
 riga simula-b Stop 0 2 app-ricette
 passo "6. app-ricette ha finito                     → sorriso, verde"
+riga simula-b PreCompact 0 0 app-ricette
+passo "7. app-ricette fa /compact                   → limone, occhi in su, bordo blu"
+riga simula-b Stop 0 0 app-ricette
+passo "8. il compact è finito                       → sorriso (avviso solo dopo 30 s)"
 riga simula-b SessionStart 0 0 app-ricette
-passo "7. tutto fermo                               → dorme, grigio"
+passo "9. tutto fermo                               → dorme, grigio"
 echo "Fine. Tolgo le sessioni finte."

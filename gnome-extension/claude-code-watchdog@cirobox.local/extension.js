@@ -852,15 +852,19 @@ class Indicatore extends PanelMenu.Button {
             if (mascotte) {
                 this._iconaStato.gicon = Gio.icon_new_for_string(GLib.build_filenamev(
                     [this._ext.path, 'icons', `${iconaStato(stato)}-symbolic.svg`]));
-                this._iconaStato.style_class = 'system-status-icon fw-wf-icona';
+                // Il limone del /compact nella barra è simbolico: il blu lo
+                // distingue da quello degli errori, come il bordo della mascotte.
+                this._iconaStato.style_class = 'system-status-icon fw-wf-icona' +
+                    (stato === 'compatta' ? ' fw-wf-tinta-compatta' : '');
                 this._iconaStato.icon_size = misureMascotte(taglia).barra;
             } else {
-                // Senza mascotte lo stato urgente tinge l'icona di sempre: è
-                // grafica, quindi bastano i 3:1 che ambra e mattone reggono
-                // su barra chiara e scura.
+                // Senza mascotte lo stato urgente tinge l'icona di sempre, e
+                // il /compact la fa blu: è grafica, quindi bastano i 3:1 che
+                // ambra, mattone e blu reggono su barra chiara e scura.
                 this._iconaStato.style_class = 'system-status-icon' +
                     (stato === 'aspetta' ? ' fw-wf-tinta-aspetta'
-                        : stato === 'errore' ? ' fw-wf-tinta-errore' : '');
+                        : stato === 'errore' ? ' fw-wf-tinta-errore'
+                            : stato === 'compatta' ? ' fw-wf-tinta-compatta' : '');
             }
         }
         this._disegnaSessioniClaude();

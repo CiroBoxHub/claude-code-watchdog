@@ -908,6 +908,36 @@ uguale "watchface-hook: dopo Stop un aiutante che finisce non riapre il turno" \
   "$(campo s3 1)|$(campo s3 4)" "Stop|19"
 hook StopFailure s3; hook Notification s3
 uguale "watchface-hook: la Notification non copre un errore" "$(campo s3 1)" "StopFailure"
+# Il /compact: PreCompact all'inizio, SessionStart(compact) alla fine, e il
+# trigger c'e' solo nel primo (eventi registrati il 2026-10-04).
+hookc() { # hookc EVENTO SESSIONE CAMPI-JSON-IN-PIU
+  printf '{"session_id":"%s","cwd":"/lavoro/prog","hook_event_name":"%s",%s}' \
+    "$2" "$1" "$3" | "$WD_ROOT/bin/watchface-hook" "$1"
+}
+hook Stop c1; hookc PreCompact c1 '"trigger":"manual"'
+hookc PreCompact c2 '"trigger":"auto"'
+uguale "watchface-hook: PreCompact ricorda se e' a mano o automatico" \
+  "$(campo c1 1)|$(campo c2 1)" "PreCompact|PreCompactAuto"
+hookc SessionStart c1 '"source":"compact"'
+uguale "watchface-hook: finito il compact a mano tocca a te" "$(campo c1 1)" "Stop"
+hookc SessionStart c2 '"source":"compact"'
+uguale "watchface-hook: finito il compact automatico Claude riprende il turno" \
+  "$(campo c2 1)" "PostToolUse"
+hookc SubagentStart c3 '"agent_id":"a1"'; hookc PreCompact c3 '"trigger":"auto"'
+hookc SubagentStart c3 '"agent_id":"a2"'
+uguale "watchface-hook: un aiutante durante il compact si conta e non lo copre" \
+  "$(campo c3 1)|$(campo c3 4)" "PreCompactAuto|2"
+hookc SessionStart c3 '"source":"compact"'
+uguale "watchface-hook: il compact non azzera gli aiutanti" "$(campo c3 4)" "2"
+for i in 1 2 3; do hook PostToolUseFailure c4; done
+hookc PreCompact c4 '"trigger":"auto"'; hookc SessionStart c4 '"source":"compact"'
+hook PostToolUseFailure c5; hookc PreCompact c5 '"trigger":"manual"'
+hookc SessionStart c5 '"source":"compact"'
+uguale "watchface-hook: i fallimenti restano dopo un compact automatico, non dopo uno a mano" \
+  "$(campo c4 3)|$(campo c5 3)" "3|0"
+hook Stop c6; prima=$(cat "$WF/c6"); hookc SessionStart c6 '"source":"compact"'
+uguale "watchface-hook: la fine di un compact mai visto iniziare non tocca niente" \
+  "$(cat "$WF/c6")" "$prima"
 uguale "watchface-hook: nessun temporaneo lasciato in giro" \
   "$(ls "$WF" | grep -c '\.[0-9]')" "0"
 hook SessionEnd s1
@@ -934,7 +964,7 @@ chmod 600 "$S"
 WH="$WD_ROOT/bin/watchface-hooks.py"
 stato() { "$WH" stato --json 2>/dev/null | python3 -c "import json,sys;d=json.load(sys.stdin);print($1)"; }
 "$WH" installa >/dev/null 2>&1
-uguale "watchface-hooks: installa i dodici eventi" "$(stato 'len(d["installati"])')" "12"
+uguale "watchface-hooks: installa i tredici eventi" "$(stato 'len(d["installati"])')" "13"
 uguale "watchface-hooks: lascia gli hook degli altri" \
   "$(stato '[(a["programma"], len(a["eventi"])) for a in d["altri"]]')" "[('coucou-hook', 3)]"
 uguale "watchface-hooks: lascia le altre impostazioni" \
@@ -988,7 +1018,7 @@ uguale "watchface-hooks: le forme che non conosce restano com'erano" \
   "{'strano': True} {'matcher': 'Bash', 'senza_hooks': 1}"
 # E non e' un modo di dire «non ho fatto niente»: gli altri undici ci sono.
 uguale "watchface-hooks: una forma sconosciuta non blocca gli altri eventi" \
-  "$(stato 'len(d["installati"])')" "11"
+  "$(stato 'len(d["installati"])')" "12"
 echo '{"hooks": []}' > "$S"
 uguale "watchface-hooks: «hooks» che non e' un oggetto: rifiuta senza toccare" \
   "$("$WH" installa >/dev/null 2>&1; echo $?)|$(cat "$S")" '1|{"hooks": []}'
@@ -1000,7 +1030,7 @@ echo '{"theme": "dark"}' > "$HOME/dotfiles/settings.json"
 ln -sf "$HOME/dotfiles/settings.json" "$HOME/.claude/settings.json"
 "$WD_ROOT/bin/watchface-hooks.py" installa >/dev/null 2>&1
 uguale "watchface-hooks: scrive attraverso un collegamento senza sostituirlo" \
-  "$([[ -L $HOME/.claude/settings.json ]] && echo link || echo file)|$(grep -c watchface-hook "$HOME/dotfiles/settings.json")" "link|12"
+  "$([[ -L $HOME/.claude/settings.json ]] && echo link || echo file)|$(grep -c watchface-hook "$HOME/dotfiles/settings.json")" "link|13"
 
 # Ripristinare il backup piu' vecchio quando sono gia' dieci: prima lo si
 # cancellava potando, e poi non c'era piu' niente da copiare.

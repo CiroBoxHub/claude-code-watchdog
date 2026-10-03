@@ -338,9 +338,17 @@ export default class WatchdogPreferences extends ExtensionPreferences {
              'la sessione si è fermata per un errore, oppure tre strumenti di fila ' +
              'sono falliti. Il robottino compare quando Claude ha mandato degli ' +
              'aiutanti, con il loro numero.');
+        voce(wf, 'Il limone con gli occhi all’insù',
+             'Compare durante un /compact, quando Claude riassume la conversazione ' +
+             'per liberare spazio: lo chiedi tu, oppure lo fa da solo quando il ' +
+             'contesto è pieno. È lavoro, ma non una risposta: niente avvisi, e ' +
+             'il bordo della mascotte e il limone nella barra diventano blu. Finito il /compact chiesto da ' +
+             'te, la faccina sorride, perché tocca di nuovo a te; dopo quello ' +
+             'automatico Claude riprende il lavoro. Se dopo un aggiornamento non lo ' +
+             'vedi mai, reinstalla gli hook dalla pagina «Watchface».');
         voce(wf, 'Più sessioni insieme',
              'La faccina mostra la più urgente: prima chi aspetta te, poi gli ' +
-             'errori, poi chi lavora. In cima al popup, sotto «Claude adesso», ' +
+             'errori, poi chi lavora, poi chi fa un /compact. In cima al popup, sotto «Claude adesso», ' +
              'c’è una riga per ogni sessione aperta.');
         voce(wf, 'Dalla riga al terminale',
              'Un clic su una sessione, nel popup, nella notifica o nella mascotte ' +
@@ -357,7 +365,8 @@ export default class WatchdogPreferences extends ExtensionPreferences {
              'La nuvoletta elenca gli avvisi di tutte le sessioni, col numero sul ' +
              'disco della faccina; quello evidenziato dà il colore a tutto, e un ' +
              'clic su un’altra riga lo cambia. Un clic sulla faccina porta al ' +
-             'terminale di quella evidenziata.');
+             'terminale di quella evidenziata. Mentre Claude ti aspetta, si ' +
+             'inceppa o lavora, il disco respira piano.');
         voce(wf, 'Quando se ne va',
              'Ogni riga si toglie da sola quando la sua sessione riparte. «Ha ' +
              'finito» dopo i secondi che scegli (0: resta finché non la chiudi); ' +

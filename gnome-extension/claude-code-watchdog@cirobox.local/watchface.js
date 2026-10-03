@@ -23,7 +23,8 @@ export {leggiRigaWatchface, statoSessione, approvazioneVista, piuUrgente, iconaS
         misureMascotte, genitoreDaStat, catenaPid, canaleAvviso, ORDINE_STATI, Watchface};
 
 /* Dal più urgente al più tranquillo: con più sessioni vince il primo. */
-const ORDINE_STATI = ['aspetta', 'errore', 'lavora', 'finito', 'dorme'];
+/* «compatta» dopo «lavora»: è lavoro anche lui, solo non una risposta. */
+const ORDINE_STATI = ['aspetta', 'errore', 'lavora', 'compatta', 'finito', 'dorme'];
 
 /* «evento \t epoca \t fallimenti \t aiutanti \t cwd \t pid», come la scrive
    watchface-hook (il pid manca nelle righe delle versioni precedenti). Una
@@ -92,6 +93,10 @@ function statoSessione(s, adesso) {
     // vuole comunque una risposta, ed è quella che conta.
     if (s.evento === 'PermissionRequest' || s.evento === 'Notification')
         return eta < ORA ? 'aspetta' : 'dorme';
+    // Il /compact: Claude riassume la conversazione, a mano o da solo.
+    // Prima dei fallimenti, perché è quello che sta facendo adesso.
+    if (s.evento === 'PreCompact' || s.evento === 'PreCompactAuto')
+        return eta < ORA ? 'compatta' : 'dorme';
     if (s.fallimenti >= 3)
         return eta < ORA ? 'errore' : 'dorme';
     if (s.evento === 'Stop')
@@ -172,6 +177,7 @@ const TESTI = {
     aspetta: 'aspetta te',
     errore: 'si è inceppato',
     lavora: 'sta lavorando',
+    compatta: 'riordina la memoria',
     finito: 'ha finito',
     dorme: 'aperta',
 };
@@ -367,9 +373,12 @@ class Watchface {
     _avvisa(sessioni, adesso) {
         const prima = this._statiPrima;
         this._statiPrima = new Map(sessioni.map(s => [s.id, s.stato]));
+        // Il compact è lavoro: un compact automatico non spezza il turno, e
+        // quello a mano, se dura, finisce con «ha finito» come un turno.
+        const occupato = st => st === 'lavora' || st === 'compatta';
         for (const s of sessioni) {
             const vecchio = prima?.get(s.id);
-            if (s.stato === 'lavora' && vecchio !== 'lavora')
+            if (occupato(s.stato) && !occupato(vecchio))
                 this._lavoraDa.set(s.id, adesso);
             if (!prima || vecchio === s.stato)
                 continue;
@@ -382,7 +391,7 @@ class Watchface {
                              s.evento === 'StopFailure'
                                  ? 'si è fermata per un errore'
                                  : `${s.fallimenti} errori di fila`);
-            } else if (s.stato === 'finito' && vecchio === 'lavora') {
+            } else if (s.stato === 'finito' && occupato(vecchio)) {
                 const da = this._lavoraDa.get(s.id);
                 const durata = da === undefined ? 0 : adesso - da;
                 if (durata >= TURNO_LUNGO_S) {
@@ -453,10 +462,14 @@ function canaleAvviso(come, terminaleDavanti) {
     return come === 'mascotte' ? 'mascotte' : 'notifica';
 }
 
-/* L'icona di uno stato: il limone per gli errori, la faccina per il resto. */
+/* L'icona di uno stato: il limone per gli errori, lo stesso con gli occhi
+   all'insù per il /compact — lavoro, ma non una conversazione — la faccina
+   per il resto. */
 function iconaStato(stato) {
     if (stato === 'errore')
         return 'fw-limone';
+    if (stato === 'compatta')
+        return 'fw-limone-su';
     return `fw-faccina-${stato ?? 'dorme'}`;
 }
 

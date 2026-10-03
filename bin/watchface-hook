@@ -78,12 +78,38 @@ prima=Nessuno fallimenti=0 aiutanti=0
 # lavoro. Gli aiutanti pero' si contano lo stesso.
 chiuso=0
 [[ $prima == Stop || $prima == StopFailure ]] && chiuso=1
+# Il /compact, a mano o automatico quando il contesto è pieno: PreCompact
+# all'inizio, SessionStart con source «compact» alla fine, e nient'altro —
+# niente UserPromptSubmit, niente Stop (eventi registrati il 2026-10-04 con
+# Claude Code 2.1.289). Il «trigger» c'è solo nel PreCompact, quindi resta
+# nel nome dell'evento: alla fine serve sapere se Claude torna a te (a mano)
+# o riprende il turno che stava facendo (automatico). PostCompact non serve:
+# le versioni vecchie non lo mandano, SessionStart(compact) sì.
+compatta=0
+[[ $prima == PreCompact || $prima == PreCompactAuto ]] && compatta=1
+riparte=0
+[[ $evento == SessionStart && $dati =~ \"source\"[[:space:]]*:[[:space:]]*\"compact\" ]] && riparte=1
 nuovo=$evento
 case $evento in
     Notification) (( chiuso )) && exit 0 ;;
-    SubagentStart|SubagentStop) (( chiuso )) && nuovo=$prima ;;
+    SubagentStart|SubagentStop) (( chiuso || compatta )) && nuovo=$prima ;;
+    PreCompact)
+        [[ $dati =~ \"trigger\"[[:space:]]*:[[:space:]]*\"auto\" ]] && nuovo=PreCompactAuto ;;
     PostToolUseFailure) (( fallimenti++ )) ;;
-    PostToolUse|UserPromptSubmit|SessionStart|Stop) fallimenti=0 ;;
+    PostToolUse|UserPromptSubmit|Stop) fallimenti=0 ;;
+    SessionStart)
+        if (( riparte )); then
+            # Fine del compact. Senza un PreCompact prima non si sa cosa
+            # stesse facendo: si lascia la riga com'è.
+            (( compatta )) || exit 0
+            if [[ $prima == PreCompact ]]; then
+                nuovo=Stop fallimenti=0
+            else
+                nuovo=PostToolUse
+            fi
+        else
+            fallimenti=0
+        fi ;;
 esac
 # Gli aiutanti si contano per id, non con un contatore: Claude Code manda
 # SubagentStop anche per agenti interni mai partiti (agent_type vuoto), che
@@ -114,7 +140,9 @@ case $evento in
         fi
         aiutanti=${#elenco[@]}
         ;;
-    SessionStart) : > "$elenco_f"; aiutanti=0 ;;
+    # Una sessione nuova o ripresa riparte senza aiutanti; dopo un compact
+    # quelli in background sono ancora al lavoro.
+    SessionStart) (( riparte )) || { : > "$elenco_f"; aiutanti=0; } ;;
 esac
 
 # Su un temporaneo e poi rinomina: chi legge vede la riga vecchia o la nuova,

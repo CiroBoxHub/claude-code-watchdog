@@ -299,7 +299,25 @@ legge una volta al secondo i figli del processo di Claude: il comando
 approvato è un figlio nuovo (`bash -c …`), visto nascere nello stesso secondo
 dell'approvazione. Regola in `approvazioneVista()`: due letture di fila, e il
 nostro hook non conta. Vale per i comandi che avviano un processo; un Write o
-un Edit approvato finisce comunque in un attimo.
+un Edit approvato finisce comunque in un attimo. Provato dall'utente dal vivo
+lo stesso giorno: la faccina torna subito a «lavora».
+**Il /compact è il limone con gli occhi all'insù** (stato `compatta`, idea
+dell'utente: «povero limone solo per gli errori»). Il limone resta giallo: il
+blu è del bordo del disco della mascotte (e della tinta nella barra), come
+ha chiarito l'utente. Il disco della mascotte respira (opacità 255↔165,
+`_pulsa()` in `fumetto.js`) in aspetta, errore e lavora; mai con le
+animazioni di GNOME spente. Eventi registrati il 2026-10-04 con Claude Code
+2.1.289: `PreCompact` (con `trigger` manual o auto), poi `SessionStart` con
+`source: "compact"`, poi `PostCompact`; **nessun UserPromptSubmit e nessuno
+Stop**, per questo la faccina restava sullo stato di prima. La fine si legge
+da `SessionStart(compact)`, che c'è anche nelle versioni senza PostCompact. Il
+trigger arriva solo all'inizio e resta nel nome dell'evento (`PreCompact`,
+`PreCompactAuto`): finito quello a mano si scrive `Stop` (tocca a te),
+finito quello automatico `PostToolUse` (Claude riprende il turno). Prima
+quel SessionStart azzerava gli aiutanti, che dopo un compact automatico sono
+ancora al lavoro. Per gli altri lavori «non conversazione» gli hook non danno
+segnali distinguibili. Chi aggiorna deve reinstallare gli hook (la pagina
+dice «Installati in parte»).
 **La mascotte fluttuante** (`fumetto.js`) usa la stessa decisione delle
 notifiche (`_avviso()` in `watchface.js`): le due non possono divergere. È
 **una sola, con l'elenco degli avvisi** (scelta dell'utente: «è il
@@ -441,8 +459,8 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              163 prove funzionali, sandbox con HOME dirottata
-    ./bin/prova-js.sh           56 prove sulle funzioni pure dei moduli JS
+    ./bin/prova.sh              170 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova-js.sh           60 prove sulle funzioni pure dei moduli JS
     ./bin/prova-shell.sh        carica l'estensione in una shell annidata (~1 min)
     ./bin/verifica-estensione.sh  controlli statici + le prove JS (gira dentro
                                   install e pack, che si fermano se qualcosa

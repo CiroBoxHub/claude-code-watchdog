@@ -100,6 +100,10 @@ function togliAvviso(avvisi, via, id) {
 
 /* Righe visibili nella nuvoletta; le altre si contano in fondo. */
 const MAX_RIGHE = 4;
+
+/* Gli stati in cui il disco della faccina respira: vedi `_pulsa()`. */
+const PULSANO = ['aspetta', 'errore', 'lavora'];
+
 /* Sotto questo spostamento, in pixel, è un clic e non un trascinamento. */
 const SOGLIA_TRASCINA = 6;
 
@@ -363,6 +367,7 @@ class Fumetto {
         this._carta.add_style_class_name(`fw-fumetto-${stato}`);
         this._faccia.gicon = Gio.icon_new_for_string(GLib.build_filenamev(
             [this._percorso, 'icons', `${iconaStato(stato)}.svg`]));
+        this._pulsa(PULSANO.includes(stato));
         this._conto.text = String(this._avvisi.length);
         this._conto.visible = this._avvisi.length > 1;
         // In alto a destra sul disco, appena sporgente.
@@ -384,8 +389,24 @@ class Fumetto {
         }
     }
 
+    /* Il disco respira piano finché Claude aspetta te, si inceppa o lavora:
+       si vede con la coda dell'occhio senza chiedere attenzione. Niente
+       respiro se le animazioni di GNOME sono spente. */
+    _pulsa(si) {
+        if (!this._faccia || si === !!this._pulsando)
+            return;
+        this._pulsando = si;
+        this._faccia.remove_all_transitions();
+        this._faccia.opacity = 255;
+        if (si && St.Settings.get().enable_animations) {
+            this._faccia.ease({opacity: 165, duration: 1100, repeatCount: -1, autoReverse: true,
+                               mode: Clutter.AnimationMode.EASE_IN_OUT_SINE});
+        }
+    }
+
     _ritira(animata) {
         this._lasciaPresa();
+        this._pulsa(false);
         this._firma = null;
         const carta = this._carta;
         if (!carta?.visible)

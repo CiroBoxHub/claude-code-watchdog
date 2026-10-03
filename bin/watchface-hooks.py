@@ -29,11 +29,12 @@ HOOK = Path(__file__).resolve().parent / "watchface-hook"
 MARCA = "/watchface-hook'"
 
 # Gli eventi che servono a dire cosa sta facendo Claude: gli stessi che
-# coucou ascoltava, perche' sono quelli che cambiano lo stato visibile.
+# coucou ascoltava, perche' sono quelli che cambiano lo stato visibile, piu'
+# PreCompact per il limone del /compact (dalla versione 4).
 EVENTI = ["SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse",
           "PostToolUse", "PostToolUseFailure", "PermissionRequest",
           "Notification", "Stop", "StopFailure", "SubagentStart",
-          "SubagentStop"]
+          "SubagentStop", "PreCompact"]
 
 
 class Illeggibile(Exception):
