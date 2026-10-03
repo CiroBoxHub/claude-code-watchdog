@@ -694,6 +694,15 @@ class Indicatore extends PanelMenu.Button {
         this._watchface?.avvia();
         this._leggi();
         this._riprogramma();
+        // Una raccolta subito, non allo scadere del primo intervallo: su un PC
+        // che installa lo zip il pannello restava a «nessun dato» per dieci
+        // minuti. Qui non si vedeva perché install-extension.sh chiude con una
+        // raccolta. Cinque secondi dopo, per non pesare sul login.
+        this._timeoutAvvio = GLib.timeout_add_seconds(GLib.PRIORITY_LOW, 5, () => {
+            this._timeoutAvvio = 0;
+            this._raccogli();
+            return GLib.SOURCE_REMOVE;
+        });
         this._riprogrammaQuota();
 
         this._idSettings = this._settings.connect('changed', (_s, chiave) => {
@@ -2256,7 +2265,7 @@ class Indicatore extends PanelMenu.Button {
         this.suggerimento?.destroy();
         this.suggerimento = null;
         for (const t of ['_timeout', '_timeoutEsito', '_timeoutQuota', '_orologio',
-                         '_timeoutRiprova']) {
+                         '_timeoutRiprova', '_timeoutAvvio']) {
             if (this[t]) {
                 GLib.source_remove(this[t]);
                 this[t] = 0;
