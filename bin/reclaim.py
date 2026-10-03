@@ -76,7 +76,7 @@ SEGNALATI = (Path(os.environ.get("XDG_DATA_HOME") or (HOME / ".local/share"))
 CACHE_CLAUDE = [HOME / ".cache/claude", HOME / ".cache/claude-cli-nodejs"]
 
 TARGET = ["trash", "usercache", "claude-cache", "claude-stubs",
-          "claude-versions", *CARTELLE]
+          "claude-orfane", "claude-versions", *CARTELLE]
 
 
 def conf() -> dict:
@@ -336,6 +336,19 @@ def elenca(target: str) -> list[Path]:
             print(f"claude-sessions.py non eseguibile: {e}", file=sys.stderr)
             return []
 
+    if target == "claude-orfane":
+        # La regola sta in claude-sessions.py, accanto a quella degli scarti:
+        # qui si prende l'elenco e basta, cosi' il pannello e il pulsante non
+        # possono contare due cose diverse.
+        try:
+            r = subprocess.run([sys.executable, str(_script("claude-sessions.py")),
+                                "--orfane"],
+                               capture_output=True, text=True, timeout=120)
+            return [Path(l) for l in r.stdout.splitlines() if l.strip()]
+        except Exception as e:
+            print(f"claude-sessions.py non eseguibile: {e}", file=sys.stderr)
+            return []
+
     if target == "claude-versions":
         return versioni_vecchie()
 
@@ -421,6 +434,21 @@ def applica(target: str, percorsi: list[Path]) -> int:
         # una segnalazione puo' essere qualunque cosa: l'unico modo per non
         # dover indovinare quanto era importante e' non cancellarla.
         return b if cestina(percorsi) else 0
+
+    if target == "claude-orfane":
+        # Nel cestino, per trascrizione e mai per cartella: una cartella di
+        # projects/ puo' ospitare sessioni di cwd diversi. La cartella si
+        # toglie solo se e' rimasta vuota — rmdir, che su una piena fallisce —
+        # compresa la `memory/` vuota che Claude Code crea per ogni progetto.
+        if not cestina(percorsi):
+            return 0
+        for cartella in {p.parent for p in percorsi}:
+            pota_vuote(cartella)
+            try:
+                cartella.rmdir()
+            except OSError:
+                pass
+        return b
 
     if target == "claude-stubs":
         # Nel cestino e non cancellati: il criterio «nessuna risposta

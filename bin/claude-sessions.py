@@ -50,6 +50,7 @@ def scan_file(path: Path, da: dict | None = None) -> dict | None:
     n_user = n_asst = 0
     first_ts = last_ts = None
     cwd = None
+    entrypoint = None
     ai_title = custom_title = None
     inizio = 0
     if da:
@@ -58,6 +59,7 @@ def scan_file(path: Path, da: dict | None = None) -> dict | None:
         first_ts = da.get("first")
         last_ts = da.get("last")
         cwd = da.get("cwd")
+        entrypoint = da.get("entrypoint")
         custom_title = da.get("title")
         inizio = da.get("offset", 0)
     try:
@@ -91,6 +93,10 @@ def scan_file(path: Path, da: dict | None = None) -> dict | None:
                     last_ts = ts
                 if cwd is None and d.get("cwd"):
                     cwd = d["cwd"]
+                # Chi ha avviato la sessione: `cli` e' una persona al
+                # terminale, `sdk-*` un programma. Serve a orfane_automatiche().
+                if entrypoint is None and d.get("entrypoint"):
+                    entrypoint = d["entrypoint"]
     except OSError as e:
         print(f"  (illeggibile: {path.name}: {e})", file=sys.stderr)
         return None
@@ -105,6 +111,7 @@ def scan_file(path: Path, da: dict | None = None) -> dict | None:
         # un titolo messo a mano dall'utente vale più di quello generato
         "title": custom_title or ai_title,
         "cwd": cwd,
+        "entrypoint": entrypoint,
         "n_user": n_user,
         "n_asst": n_asst,
         "n_msg": n_user + n_asst,
@@ -129,7 +136,7 @@ CACHE = (Path(os.environ.get("XDG_CACHE_HOME") or (HOME / ".cache"))
 # Da alzare quando scan_file cambia cosa restituisce: una cache scritta dalla
 # versione precedente contiene campi vecchi, e riusarla darebbe numeri
 # sbagliati senza che niente segnali l'errore.
-CACHE_VERSIONE = 2
+CACHE_VERSIONE = 3
 
 # Quanto si aspetta prima di dire che una trascrizione senza risposte è uno
 # scarto. Due minuti: la lettura della quota ne impiega due o tre secondi, una
@@ -309,6 +316,31 @@ def inventario(sessions: list[dict] | None = None) -> tuple[list, list, list]:
     return real, dups, stubs
 
 
+def orfane_automatiche(sessions: list[dict]) -> list[dict]:
+    """Conversazioni avviate da un programma in una cartella che non c'e' piu'.
+
+    Il caso che l'ha fatta nascere, il 2026-10-03: skillspector lancia Claude
+    in una cartella temporanea per ogni analisi e ne aveva lasciate 62, ognuna
+    con la sua cartella in projects/ e la sua riga «fuori dai progetti».
+
+    Servono tutte e due le condizioni. «Cartella sparita» da sola pescherebbe
+    i backup voluti: le conversazioni interattive dei progetti persi con /tmp
+    il 2026-09-02 si sono salvate solo perche' stavano li'. «Avviata da un
+    programma» da sola pescherebbe le automazioni di progetti vivi. Senza
+    entrypoint — trascrizioni di versioni vecchie — non si indovina.
+
+    Le scritte da poco si aspettano, come per gli scarti: possono essere
+    un'invocazione in corso. E quelle senza risposta sono gia' scarti: stanno
+    in quell'elenco, non in due.
+    """
+    adesso = datetime.now(timezone.utc).timestamp()
+    return [s for s in sessions
+            if (s.get("entrypoint") or "").startswith("sdk-")
+            and s["cwd"] and not Path(s["cwd"]).is_dir()
+            and s["n_asst"] > 0
+            and adesso - s["mtime"] > ATTESA_SCARTO_S]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--format", choices=("table", "json"), default="table")
@@ -319,6 +351,9 @@ def main() -> int:
     ap.add_argument("--stubs", action="store_true",
                     help="elenca i percorsi delle sole sessioni-fantasma, "
                          "uno per riga (per darli in pasto alla pulizia)")
+    ap.add_argument("--orfane", action="store_true",
+                    help="elenca i percorsi delle sessioni avviate da un "
+                         "programma in cartelle che non esistono piu'")
     args = ap.parse_args()
 
     sessions = collect()
@@ -341,6 +376,11 @@ def main() -> int:
 
     if args.stubs:
         for s in stubs:
+            print(s["file"])
+        return 0
+
+    if args.orfane:
+        for s in orfane_automatiche(sessions):
             print(s["file"])
         return 0
 

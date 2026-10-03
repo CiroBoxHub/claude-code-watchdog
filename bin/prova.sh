@@ -173,6 +173,104 @@ touch -d "10 minutes ago" "$d/99999999-0000-0000-0000-000000000099.jsonl"
 uguale "scarti: dopo l'attesa lo diventa" \
   "$("$WD_ROOT/bin/claude-sessions.py" --stubs 2>/dev/null | grep -c 99999999)" "1"
 
+# Sessioni automatiche orfane: lanciate da un programma (entrypoint sdk-*) in
+# una cartella che non c'e' piu'. Il caso nato il 2026-10-03: skillspector
+# lancia Claude in /tmp/skillspector_cli_* e ne ha lasciate 62. «Cartella
+# sparita» da sola NON basta: le conversazioni interattive di progetti persi
+# con /tmp sono backup voluti (vedi CLAUDE.md). Tabella dei casi:
+#   A sdk-cli, cartella sparita, con risposta      → orfana
+#   B sdk-py,  cartella sparita, con risposta      → orfana
+#   C cli,     cartella sparita (backup da /tmp)   → no
+#   D sdk-cli, cartella che esiste                 → no
+#   E sdk-cli, cartella sparita, senza risposta    → no (e' uno scarto)
+#   F sdk-cli, cartella sparita, scritta adesso    → no (in corso)
+#   G senza entrypoint, cartella sparita           → no (non si indovina)
+#   H claude-desktop, cartella sparita             → no
+prepara_orfane() {
+  prepara
+  local p="$HOME/.claude/projects" via="$SANDBOX/sparita"
+  mkdir -p "$p/-orf-a/memory" "$p/-orf-misto" "$p/-orf-d" "$p/-orf-efgh"
+  riga() { # riga TIPO ENTRYPOINT CWD
+    if [[ -n "$2" ]]; then
+      printf '{"type":"%s","entrypoint":"%s","cwd":"%s","timestamp":"2026-09-01T10:00:00Z","message":{"role":"%s"}}\n' "$1" "$2" "$3" "$1"
+    else
+      printf '{"type":"%s","cwd":"%s","timestamp":"2026-09-01T10:00:00Z","message":{"role":"%s"}}\n' "$1" "$3" "$1"
+    fi
+  }
+  conv() { riga user "$1" "$2"; riga assistant "$1" "$2"; }
+  conv sdk-cli "$via/a"                 > "$p/-orf-a/aaaaaaaa-0000-0000-0000-00000000000a.jsonl"
+  conv sdk-py  "$via/b"                 > "$p/-orf-misto/aaaaaaaa-0000-0000-0000-00000000000b.jsonl"
+  conv cli     "$via/c"                 > "$p/-orf-misto/cccccccc-0000-0000-0000-00000000000c.jsonl"
+  conv sdk-cli "$SANDBOX/lavoro/progetto" > "$p/-orf-d/dddddddd-0000-0000-0000-00000000000d.jsonl"
+  riga user sdk-cli "$via/e"            > "$p/-orf-efgh/eeeeeeee-0000-0000-0000-00000000000e.jsonl"
+  conv sdk-cli "$via/f"                 > "$p/-orf-efgh/ffffffff-0000-0000-0000-00000000000f.jsonl"
+  conv ""      "$via/g"                 > "$p/-orf-efgh/99999999-0000-0000-0000-000000000009.jsonl"
+  conv claude-desktop "$via/h"          > "$p/-orf-efgh/88888888-0000-0000-0000-000000000008.jsonl"
+  find "$p" -name '*.jsonl' ! -name 'ffffffff-*' -exec touch -d "10 minutes ago" {} +
+}
+orfane() { "$WD_ROOT/bin/claude-sessions.py" --orfane 2>/dev/null \
+           | sed 's#.*/##; s#-.*##' | sort | tr '\n' ' '; }
+
+prepara_orfane
+uguale "orfane: solo le automatiche con la cartella sparita" "$(orfane)" "aaaaaaaa aaaaaaaa "
+uguale "orfane: sono proprio A e B" \
+  "$("$WD_ROOT/bin/claude-sessions.py" --orfane 2>/dev/null | grep -oE '0000000000[ab]\.jsonl' | sort | tr '\n' ' ')" \
+  "0000000000a.jsonl 0000000000b.jsonl "
+
+# La cache non deve far perdere l'entrypoint: ne' al secondo giro, ne' quando
+# il file cresce e si legge solo la coda, ne' con una cache scritta da una
+# versione che l'entrypoint non lo salvava.
+export XDG_CACHE_HOME="$HOME/.cache"
+# Oltre i 4 KB della testa: sotto, ogni aggiunta cambia la testa e il file si
+# rilegge intero, e la lettura incrementale non verrebbe mai provata.
+f="$HOME/.claude/projects/-orf-a/aaaaaaaa-0000-0000-0000-00000000000a.jsonl"
+printf '{"type":"user","entrypoint":"sdk-cli","cwd":"%s","timestamp":"2026-09-01T10:00:00Z","message":{"role":"user","content":"%s"}}\n' \
+  "$SANDBOX/sparita/a" "$(head -c 5000 /dev/zero | tr '\0' x)" > "$f.tmp"
+cat "$f" >> "$f.tmp" && mv "$f.tmp" "$f"
+touch -d "10 minutes ago" "$f"
+orfane >/dev/null
+uguale "orfane: il secondo giro dalla cache da' lo stesso elenco" "$(orfane)" "aaaaaaaa aaaaaaaa "
+# La riga in coda e' senza entrypoint: cosi' deve arrivare dalla cache, e non
+# dalla parte appena letta.
+riga assistant "" "$SANDBOX/sparita/a" >> "$HOME/.claude/projects/-orf-a/aaaaaaaa-0000-0000-0000-00000000000a.jsonl"
+touch -d "10 minutes ago" "$HOME/.claude/projects/-orf-a/aaaaaaaa-0000-0000-0000-00000000000a.jsonl"
+uguale "orfane: una trascrizione cresciuta resta orfana" "$(orfane)" "aaaaaaaa aaaaaaaa "
+python3 - "$XDG_CACHE_HOME/claude-code-watchdog/sessioni.json" <<'EOF'
+import json, sys
+f = sys.argv[1]; d = json.load(open(f))
+for v in d["voci"].values():
+    v["dati"].pop("entrypoint", None)
+d["versione"] = 2
+json.dump(d, open(f, "w"))
+EOF
+uguale "orfane: una cache della versione precedente non le nasconde" "$(orfane)" "aaaaaaaa aaaaaaaa "
+unset XDG_CACHE_HOME
+
+prepara_orfane
+"$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1
+uguale "collect-metrics: pubblica la voce delle sessioni orfane" \
+  "$(python3 -c "
+import json
+d=json.load(open('$HOME/.local/share/claude-code-watchdog/metrics.json'))
+print([v['dettaglio'] for v in d['recuperabile']['voci'] if v['target']=='claude-orfane'])")" \
+  "['2 sessioni automatiche in cartelle sparite']"
+uguale "reclaim: claude-orfane elenca due trascrizioni" \
+  "$("$WD_ROOT/bin/reclaim.py" --json claude-orfane 2>/dev/null \
+     | python3 -c 'import json,sys;print(json.load(sys.stdin)["voci"][0]["file"])')" "2"
+uguale "reclaim: claude-orfane senza --apply non tocca niente" \
+  "$(find "$HOME/.claude/projects"/-orf-* -name '*.jsonl' | wc -l)" "8"
+"$WD_ROOT/bin/reclaim.py" --apply claude-orfane >/dev/null 2>&1
+uguale "reclaim: claude-orfane non tocca le sessioni escluse" \
+  "$(find "$HOME/.claude/projects"/-orf-* -name '*.jsonl' ! -name 'aaaaaaaa-*' | wc -l)" "6"
+uguale "reclaim: claude-orfane le manda nel cestino" \
+  "$(ls "$HOME/.local/share/Trash/files" | grep -c '^aaaaaaaa-')" "2"
+# La cartella di A resta vuota (memory/ vuota compresa) e se ne va; quella di
+# B ospita anche C, un backup interattivo, e deve restare.
+uguale "reclaim: claude-orfane toglie la cartella rimasta vuota" \
+  "$([[ -e "$HOME/.claude/projects/-orf-a" ]] && echo c-e || echo tolta)" "tolta"
+uguale "reclaim: claude-orfane lascia la cartella che ha altre sessioni" \
+  "$(ls "$HOME/.claude/projects/-orf-misto")" "cccccccc-0000-0000-0000-00000000000c.jsonl"
+
 # Lo staging di Claude Code non è cache: è la versione che sta scaricando,
 # ~220 MB che compaiono in pochi secondi. Contarla faceva sbattere la barra al
 # massimo a ogni aggiornamento, e il target di pulizia avrebbe potuto

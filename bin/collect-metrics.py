@@ -577,7 +577,14 @@ def sessions() -> dict:
             "ultimo": (x.get("last") or "")[:10],
             "esiste": bool(cwd) and Path(cwd).is_dir(),
         })
+    # Sui duplicati compresi: reclaim le prende da collect(), che li vede
+    # tutti, e il numero annunciato deve essere quello cestinato. Senza il
+    # modulo importato (ripiego sul sottoprocesso) la voce manca e basta.
+    orfane = (_CS.orfane_automatiche(reali + d.get("duplicati", []))
+              if _CS else [])
     return {
+        "orfane": len(orfane),
+        "orfaneMb": round(sum(s["bytes"] for s in orfane) / 1048576, 1),
         "conversazioni": len(reali),
         "messaggi": sum(s["n_msg"] for s in reali),
         "fantasma": len(d.get("fantasma", [])),
@@ -673,6 +680,15 @@ def main() -> int:
     if sess["fantasma"]:
         rec.append({"nome": "Sessioni-fantasma", "mb": 0, "target": "claude-stubs",
                     "dettaglio": f"{sess['fantasma']} trascrizioni vuote"})
+
+    # Stesso discorso per le orfane: pesano poco, ma una per cartella
+    # riempiono la sezione «fuori dai progetti» (62 da skillspector, il
+    # 2026-10-03). Il conteggio viene dalla stessa funzione che usa reclaim.
+    if sess.get("orfane"):
+        n, mb = sess["orfane"], sess["orfaneMb"]
+        rec.append({"nome": "Sessioni automatiche orfane", "mb": int(mb),
+                    "target": "claude-orfane",
+                    "dettaglio": f"{n} sessioni automatiche in cartelle sparite"})
 
     # La quota si raccoglie a parte (costa un giro di rete): qui si riprende
     # l'ultimo valore letto, con la sua età, così il cruscotto può dire se è

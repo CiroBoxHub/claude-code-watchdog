@@ -208,6 +208,21 @@ scritta una a mano. **Lo script non legge gsettings**: lo schema non è
 installato a livello di sistema, e una seconda copia della regola di scelta è
 una copia che diverge.
 
+**Le sessioni automatiche orfane si tolgono in blocco, i backup no.**
+Il 2026-10-03 il pannello mostrava 62 righe «fuori dai progetti», una per
+cartella: le aveva lasciate `skillspector`, che lancia Claude via SDK in una
+`/tmp/skillspector_cli_*` diversa per ogni analisi. Il target `claude-orfane`
+le prende tutte insieme, ma **la regola vuole due condizioni**:
+`entrypoint` che comincia per `sdk-` (avviata da un programma) **e** cartella
+di lavoro sparita. «Cartella sparita» da sola pescherebbe i backup interattivi
+dei progetti persi con `/tmp` (vedi sotto); «avviata da un programma» da sola,
+le automazioni di progetti vivi. Senza `entrypoint` — trascrizioni di versioni
+vecchie — non si indovina. Si cestina per trascrizione, e la cartella di
+`projects/` si toglie con `rmdir` solo se è rimasta vuota. La regola sta in
+`orfane_automatiche()` di `claude-sessions.py`, usata sia dal conteggio del
+pannello sia da `reclaim.py`; otto casi in `prova.sh`, ognuno verificato con
+una mutazione. **`clean.sh` non ha questo target**: il pulsante usa `reclaim.py`.
+
 **Un inciampo nella lettura della quota non è un guasto.** Il 2026-09-30 alle
 16:02:07, un minuto dopo l'accesso, `collect-usage.py` è uscito con esito
 diverso da zero: in 23 ore non si è più ripetuto, e non era il `PATH` — la
@@ -306,7 +321,7 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              94 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh              106 prove funzionali, sandbox con HOME dirottata
     ./bin/prova-js.sh           25 prove sulle funzioni pure di extension.js
     ./bin/prova-shell.sh        carica l'estensione in una shell annidata (~1 min)
     ./bin/verifica-estensione.sh  controlli statici + le prove JS (gira dentro
