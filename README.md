@@ -434,6 +434,7 @@ potarlo per quello lo distruggerebbe il giorno dopo averlo cestinato.
     ./bin/fotografa-pannello.sh --demo grafica/screenshot   # le foto del README, con dati inventati
     ./bin/fotografa-icone.sh       # foto delle icone come le disegna la shell
     ./bin/fotografa-preferenze.sh  # foto di ogni pagina delle impostazioni, chiaro e scuro
+    ./bin/simula-watchface.sh      # fa passare Watchface per tutti gli stati, con sessioni finte
     ./grafica/mascotte.py          # rigenera le icone (serve Inkscape)
 
 Le `fotografa-*` girano in una GNOME Shell annidata con una **home finta**:

@@ -43,6 +43,7 @@ il dry-run, mostra l'elenco, chiedi. Anche quando la risposta sembra ovvia.
     bin/fotografa-pannello.sh foto di barra, popup e preferenze (shell annidata)
     bin/fotografa-icone.sh  foto delle icone come le disegna la shell
     bin/fotografa-preferenze.sh foto di ogni pagina delle preferenze, chiaro e scuro
+    bin/simula-watchface.sh fa passare Watchface per tutti gli stati, sessioni finte
     bin/dati-demo.py        home finta con progetti inventati, per le foto pubbliche
     grafica/mascotte.py     disegna la mascotte e consegna le icone in icons/
     bin/install-extension.sh installa l'estensione GNOME
@@ -302,7 +303,9 @@ principale. **La faccina sta su un disco chiaro**: capelli e barba sono quasi
 neri, e su un desktop scuro sparivano — visto nella shell di prova. Il
 trascinamento e il clic **non hanno una prova automatica**: il puntatore
 virtuale nella shell annidata ha cliccato altrove (ha aperto le impostazioni
-rapide); vanno provati a mano dopo il login.
+rapide). Si provano a mano dopo il login, con `bin/simula-watchface.sh` che fa
+passare tutti gli stati su tre sessioni finte: provati così dall'utente il
+2026-10-03, trascinamento, clic sulle righe e clic che porta al terminale.
 **Le preferenze si fotografano con `bin/fotografa-preferenze.sh`**: nella
 shell annidata il clic simulato non raggiunge la finestra, e si vedeva solo la
 prima pagina — così un menu a tendina che nascondeva il valore scelto è
