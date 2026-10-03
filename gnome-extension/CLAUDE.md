@@ -392,6 +392,32 @@ La cartella in uso si *mostra*, calcolandola a runtime: `prefs.js` la legge da
 quello che verrebbe usato) e la espone nella riga «In uso adesso», anche quando
 è quella rilevata in automatico. Guide e suggerimenti restano generici.
 
+## Le preferenze
+
+Ridisegnate il 2026-10-03 su richiesta dell'utente. Regole per chi aggiunge una
+voce:
+
+- **Cinque pagine** (Guida, Pannello, Watchface, Quota, Progetti). Una voce
+  nuova va in una di queste: una pagina con una riga sola era rumore.
+- **Ogni riga ha una tessera** (`_tessera(icona, colore)`) del colore della
+  sua area: verde macchina, viola quota, ambra Watchface, blu progetti, rosso
+  sicurezza, grigio il resto. Le icone di `icons/` hanno il prefisso `fw-`, le
+  altre sono nomi standard di Adwaita — da verificare che esistano anche
+  altrove, non solo qui.
+- **Sottotitoli di una riga.** La spiegazione lunga va nella guida, e il
+  gruppo la raggiunge col «?» (`_gruppo(..., sezioneGuida)`).
+- **Mai un menu a tendina per una scelta esclusiva**: col sottotitolo lungo
+  il valore scelto spariva, e l'utente non vedeva cosa era selezionato. Pochi
+  valori → bottoni affiancati (`_bottoniScelta`); alternative da spiegare →
+  pallini (`_pallini`).
+- **La ricerca è accesa** (`window.search_enabled = true`: GNOME la spegne).
+  Le voci della guida mettono il titolo anche nella riga, perché la ricerca
+  lo trovi.
+- **I segnali sulle impostazioni si staccano alla chiusura** (`this._segnali`):
+  la finestra muore prima del processo.
+- **Si controlla con `bin/fotografa-preferenze.sh`**, tutte le pagine in chiaro e
+  scuro: nella shell annidata il clic non arriva alla finestra.
+
 ## Il terminale di «Riprendi»
 
 Ptyxis può avere un **comando personalizzato** nel profilo: su questa macchina

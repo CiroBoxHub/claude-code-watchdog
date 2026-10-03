@@ -8,7 +8,11 @@
 # Scrive una riga per sessione in $XDG_RUNTIME_DIR, che sta in memoria: il
 # pannello la legge quando cambia, senza interrogare niente a intervalli.
 #
-#   evento <TAB> epoca <TAB> fallimenti di fila <TAB> aiutanti <TAB> cwd
+#   evento <TAB> epoca <TAB> fallimenti di fila <TAB> aiutanti <TAB> cwd <TAB> pid
+#
+# Il pid è quello del processo `claude` (CLAUDE_PID, che Claude Code passa ai
+# suoi hook): da lì il pannello risale al terminale e ne porta davanti la
+# finestra. Vuoto se la variabile non c'è.
 #
 # Tre regole, perche' gira a ogni passo di Claude:
 # - NIENTE OUTPUT. Per PermissionRequest lo stdout di un hook e' una risposta:
@@ -22,6 +26,16 @@ exec >/dev/null 2>&1
 
 evento=$1
 [[ $evento =~ ^[A-Za-z]{1,40}$ ]] || exit 0
+# Solo le sessioni di una persona. Quelle avviate da un programma — `claude -p`
+# o l'SDK, che Claude Code marca con CLAUDE_CODE_ENTRYPOINT=sdk-… (verificato
+# il 2026-10-03: «cli» nel terminale, «sdk-cli» con -p) — nessuno le guarda:
+# skillspector ne apre una per analisi, la lettura della quota una a ogni
+# «Aggiorna». WATCHFACE_IGNORA la mette collect-usage.py, per le versioni di
+# Claude Code senza la variabile. Il payload si scarta comunque (EPIPE).
+if [[ -n ${WATCHFACE_IGNORA:-} || ${CLAUDE_CODE_ENTRYPOINT:-} == sdk-* ]]; then
+    cat >/dev/null
+    exit 0
+fi
 
 # La testa basta: session_id e cwd sono fra i primi campi. Un Write da
 # qualche MB porta il contenuto nel payload; si legge la testa e il resto si
@@ -49,7 +63,7 @@ f=$dir/$sid
 exec 9>"$f.lock" && flock -w 2 9 || exit 0
 
 if [[ $evento == SessionEnd ]]; then
-    rm -f -- "$f" "$f.lock"
+    rm -f -- "$f" "$f.aiutanti" "$f.lock"
     exit 0
 fi
 
@@ -71,14 +85,46 @@ case $evento in
     PostToolUseFailure) (( fallimenti++ )) ;;
     PostToolUse|UserPromptSubmit|SessionStart|Stop) fallimenti=0 ;;
 esac
+# Gli aiutanti si contano per id, non con un contatore: Claude Code manda
+# SubagentStop anche per agenti interni mai partiti (agent_type vuoto), che
+# toglievano il robot a un aiutante vero; e un aiutante che aspetta un lavoro
+# in background manda Stop, poi Start di nuovo quando si risveglia (eventi
+# registrati il 2026-10-03). Senza agent_id — versioni vecchie — si torna a
+# contare: ogni Start aggiunge un «anonimo», ogni Stop ne toglie uno.
+elenco_f=$f.aiutanti
 case $evento in
-    SubagentStart) (( aiutanti++ )) ;;
-    SubagentStop) (( aiutanti > 0 )) && (( aiutanti-- )) ;;
-    SessionStart) aiutanti=0 ;;
+    SubagentStart|SubagentStop)
+        aid=anonimo
+        [[ $dati =~ \"agent_id\"[[:space:]]*:[[:space:]]*\"([A-Za-z0-9_-]{1,64})\" ]] && aid=${BASH_REMATCH[1]}
+        elenco=()
+        [[ -f $elenco_f ]] && mapfile -t elenco < "$elenco_f"
+        trovato=-1
+        for i in "${!elenco[@]}"; do
+            [[ ${elenco[i]} == "$aid" ]] && { trovato=$i; break; }
+        done
+        if [[ $evento == SubagentStart ]]; then
+            (( trovato < 0 )) || [[ $aid == anonimo ]] && elenco+=("$aid")
+        elif (( trovato >= 0 )); then
+            unset 'elenco[trovato]'
+        fi
+        if (( ${#elenco[@]} )); then
+            printf '%s\n' "${elenco[@]}" > "$elenco_f"
+        else
+            : > "$elenco_f"
+        fi
+        aiutanti=${#elenco[@]}
+        ;;
+    SessionStart) : > "$elenco_f"; aiutanti=0 ;;
 esac
 
 # Su un temporaneo e poi rinomina: chi legge vede la riga vecchia o la nuova,
 # mai un file troncato a meta'.
-printf '%s\t%s\t%s\t%s\t%s\n' "$nuovo" "${EPOCHSECONDS:-0}" \
-    "$fallimenti" "$aiutanti" "$cwd" > "$f.$$" && mv -f -- "$f.$$" "$f"
+# L'ora con un builtin anche dove EPOCHSECONDS non c'è (bash prima della 5.0):
+# un'epoca 0 farebbe sembrare la sessione vecchia di decenni, e il pannello
+# la cancellerebbe appena letta.
+printf -v ora '%(%s)T' -1
+pid=${CLAUDE_PID:-}
+[[ $pid =~ ^[0-9]{1,10}$ ]] || pid=
+printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$nuovo" "$ora" \
+    "$fallimenti" "$aiutanti" "$cwd" "$pid" > "$f.$$" && mv -f -- "$f.$$" "$f"
 exit 0

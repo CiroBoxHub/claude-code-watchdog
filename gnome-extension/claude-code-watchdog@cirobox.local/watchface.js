@@ -20,14 +20,16 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 
 export {leggiRigaWatchface, statoSessione, piuUrgente, iconaStato, testoStato,
-        ORDINE_STATI, Watchface};
+        misureMascotte, genitoreDaStat, catenaPid, canaleAvviso, ORDINE_STATI, Watchface};
 
 /* Dal più urgente al più tranquillo: con più sessioni vince il primo. */
 const ORDINE_STATI = ['aspetta', 'errore', 'lavora', 'finito', 'dorme'];
 
-/* «evento \t epoca \t fallimenti \t aiutanti \t cwd», come la scrive
-   watchface-hook. Una riga vuota o storta torna null: il file può essere
-   letto nell'istante in cui l'hook lo sta riscrivendo. */
+/* «evento \t epoca \t fallimenti \t aiutanti \t cwd \t pid», come la scrive
+   watchface-hook (il pid manca nelle righe delle versioni precedenti). Una
+   riga vuota o storta torna null: il file può essere letto nell'istante in
+   cui l'hook lo sta riscrivendo. L'hook toglie le tabulazioni dalla cartella,
+   quindi i campi non si confondono. */
 function leggiRigaWatchface(testo) {
     const riga = (testo ?? '').split('\n')[0];
     const campi = riga.split('\t');
@@ -37,14 +39,34 @@ function leggiRigaWatchface(testo) {
     // La cartella arriva com'era nel JSON di Claude Code, con le sequenze di
     // escape: si decodifica come una stringa JSON, e se non lo è si tiene
     // così com'è invece di perdere la riga.
-    let cwd = campi.slice(4).join('\t');
+    let cwd = campi[4];
     try {
         cwd = JSON.parse(`"${cwd}"`);
     } catch (e) {
         // resta grezza
     }
     return {evento: campi[0], epoca: numero(campi[1]),
-            fallimenti: numero(campi[2]), aiutanti: numero(campi[3]), cwd};
+            fallimenti: numero(campi[2]), aiutanti: numero(campi[3]), cwd,
+            pid: numero(campi[5] ?? '')};
+}
+
+/* Il genitore di un processo da /proc/<pid>/stat. Il nome del programma sta
+   fra parentesi e può contenere spazi e parentesi: si conta dall'ultima. */
+function genitoreDaStat(testo) {
+    const fine = (testo ?? '').lastIndexOf(')');
+    if (fine < 0)
+        return 0;
+    const campi = testo.slice(fine + 2).split(' ');
+    return /^\d+$/.test(campi[1] ?? '') ? parseInt(campi[1], 10) : 0;
+}
+
+/* Il processo e i suoi antenati, dal più vicino, fino a init escluso. Un tetto
+   ai passi: un ciclo nei dati letti non deve bloccare la shell. */
+function catenaPid(pid, genitore, massimo = 40) {
+    const catena = [];
+    for (let p = pid; p > 1 && catena.length < massimo && !catena.includes(p); p = genitore(p))
+        catena.push(p);
+    return catena;
 }
 
 /* Lo stato di una sessione dal suo ultimo evento e da quanto è vecchio.
@@ -103,13 +125,15 @@ const TESTI = {
 };
 
 class Watchface {
-    /* `suCambio` si chiama quando cambia qualcosa da disegnare. Le notifiche
-       le decide `notifiche()`, letto ogni volta: l'utente può spegnerle senza
-       riavviare niente. */
-    constructor({percorsoEstensione, suCambio, notifiche, terminali}) {
+    /* `suCambio` si chiama quando cambia qualcosa da disegnare. Come avvisare
+       lo dice `avvisi()` — «notifiche», «mascotte» o «nessuno» — letto ogni
+       volta: l'utente può cambiarlo senza riavviare niente. */
+    constructor({percorsoEstensione, suCambio, avvisi, terminali, suApri, suAvviso}) {
         this._percorso = percorsoEstensione;
         this._suCambio = suCambio;
-        this._notifiche = notifiche;
+        this._suApri = suApri;
+        this._suAvviso = suAvviso;
+        this._avvisi = avvisi;
         this._terminali = terminali ?? [];
         this._sessioni = [];
         this._statiPrima = null;     // null: la prima lettura non notifica
@@ -181,7 +205,7 @@ class Watchface {
             while ((info = elenco.next_file(null))) {
                 const id = info.get_name();
                 // Gli id hanno solo lettere, cifre e trattini: un punto vuol
-                // dire lock o temporaneo dell'hook.
+                // dire lock, elenco degli aiutanti o temporaneo dell'hook.
                 if (id.includes('.'))
                     continue;
                 let testo = '';
@@ -198,7 +222,7 @@ class Watchface {
                 if (adesso - s.epoca > VISIBILE_S) {
                     // Finita senza SessionEnd: il file si toglie, se no lo si
                     // rilegge a ogni evento di ogni altra sessione.
-                    for (const nome of [id, `${id}.lock`])
+                    for (const nome of [id, `${id}.aiutanti`, `${id}.lock`])
                         GLib.unlink(GLib.build_filenamev([CARTELLA, nome]));
                     continue;
                 }
@@ -244,19 +268,21 @@ class Watchface {
             if (!prima || vecchio === s.stato)
                 continue;
             if (s.stato === 'aspetta') {
-                this._notifica(s, 'Claude aspetta te',
-                               s.evento === 'PermissionRequest'
-                                   ? `${s.progetto}: chiede un permesso`
-                                   : `${s.progetto}: aspetta una risposta`);
+                this._avviso(s, 'Claude aspetta te',
+                             s.evento === 'PermissionRequest'
+                                 ? 'chiede un permesso' : 'aspetta una risposta');
             } else if (s.stato === 'errore') {
-                this._notifica(s, 'Claude si è inceppato',
-                               s.evento === 'StopFailure'
-                                   ? `${s.progetto}: la sessione si è fermata per un errore`
-                                   : `${s.progetto}: ${s.fallimenti} errori di fila`);
+                this._avviso(s, 'Claude si è inceppato',
+                             s.evento === 'StopFailure'
+                                 ? 'si è fermata per un errore'
+                                 : `${s.fallimenti} errori di fila`);
             } else if (s.stato === 'finito' && vecchio === 'lavora') {
                 const da = this._lavoraDa.get(s.id);
-                if (da !== undefined && adesso - da >= TURNO_LUNGO_S)
-                    this._notifica(s, 'Claude ha finito', s.progetto);
+                const durata = da === undefined ? 0 : adesso - da;
+                if (durata >= TURNO_LUNGO_S) {
+                    this._avviso(s, 'Claude ha finito', durata < 90
+                        ? 'ha finito' : `ha finito, dopo ${Math.round(durata / 60)} min`);
+                }
             }
         }
         for (const id of [...this._lavoraDa.keys()]) {
@@ -274,9 +300,23 @@ class Watchface {
         return this._terminali.includes(app?.get_id());
     }
 
-    _notifica(s, titolo, testo) {
-        if (!this._notifiche?.() || this._terminaleInPrimoPiano())
+    /* Qualcosa da dire su una sessione: con la notifica o con la mascotte
+       fluttuante, una sola delle due — erano un doppione, e l'utente sceglie.
+       Stessa regola per entrambe: se stai guardando il terminale, niente. */
+    _avviso(s, titolo, breve) {
+        const canale = canaleAvviso(this._avvisi?.(), this._terminaleInPrimoPiano());
+        if (canale === 'notifica')
+            this._notifica(s, titolo, `${s.progetto}: ${breve}`);
+        if (canale !== 'mascotte')
             return;
+        try {
+            this._suAvviso?.(s, breve);
+        } catch (e) {
+            logError(e, 'claude-code-watchdog: mascotte fluttuante non riuscita');
+        }
+    }
+
+    _notifica(s, titolo, testo) {
         try {
             const icona = Gio.icon_new_for_string(GLib.build_filenamev(
                 [this._percorso, 'icons', `${iconaStato(s.stato)}.svg`]));
@@ -289,6 +329,8 @@ class Watchface {
             }
             const n = new MessageTray.Notification({source: this._fonte, title: titolo,
                                                     body: testo, gicon: icona});
+            // Un clic sulla notifica porta al terminale di quella sessione.
+            n.connect('activated', () => this._suApri?.(s));
             this._fonte.addNotification(n);
         } catch (e) {
             logError(e, 'claude-code-watchdog: notifica di Watchface non riuscita');
@@ -296,11 +338,34 @@ class Watchface {
     }
 }
 
+/* Da dove passa un avviso: «notifica», «mascotte» o null. Uno solo dei due —
+   erano un doppione — e nessuno se stai già guardando il terminale. Un valore
+   sconosciuto vale come quello di serie, le notifiche. */
+function canaleAvviso(come, terminaleDavanti) {
+    if (terminaleDavanti || come === 'nessuno')
+        return null;
+    return come === 'mascotte' ? 'mascotte' : 'notifica';
+}
+
 /* L'icona di uno stato: il limone per gli errori, la faccina per il resto. */
 function iconaStato(stato) {
     if (stato === 'errore')
         return 'fw-limone';
     return `fw-faccina-${stato ?? 'dorme'}`;
+}
+
+/* Pixel della faccina nella barra, nel popup, del robottino e della mascotte
+   fluttuante, per ogni grandezza scelta nelle preferenze. La barra di GNOME è
+   alta circa 32 px: oltre 24 la faccina tocca i bordi. A 16 è un puntino con
+   la barba. */
+const MISURE_MASCOTTE = {
+    piccola: {barra: 18, popup: 26, robot: 18, fumetto: 80},
+    media: {barra: 22, popup: 34, robot: 22, fumetto: 96},
+    grande: {barra: 24, popup: 42, robot: 26, fumetto: 120},
+};
+
+function misureMascotte(taglia) {
+    return MISURE_MASCOTTE[taglia] ?? MISURE_MASCOTTE.media;
 }
 
 function testoStato(s) {

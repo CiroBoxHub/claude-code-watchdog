@@ -42,6 +42,7 @@ il dry-run, mostra l'elenco, chiedi. Anche quando la risposta sembra ovvia.
     bin/watchface-hooks.py  mette, toglie e ripristina gli hook in settings.json
     bin/fotografa-pannello.sh foto di barra, popup e preferenze (shell annidata)
     bin/fotografa-icone.sh  foto delle icone come le disegna la shell
+    bin/fotografa-preferenze.sh foto di ogni pagina delle preferenze, chiaro e scuro
     bin/dati-demo.py        home finta con progetti inventati, per le foto pubbliche
     grafica/mascotte.py     disegna la mascotte e consegna le icone in icons/
     bin/install-extension.sh installa l'estensione GNOME
@@ -261,6 +262,62 @@ con uno strumento in esecuzione o un permesso in attesa); `watchface-hooks.py`
 raggruppava gli hook degli altri per interprete, e «Rimuovi» su un
 `python3 …` li avrebbe tolti tutti — ora si identificano per percorso dello
 script, e gli hook senza comando non si toccano mai.
+**Gli aiutanti si contano per id, non con un contatore.** Registrando gli
+eventi veri: Claude Code manda `SubagentStop` anche per agenti interni mai
+partiti (`agent_type` vuoto), che toglievano il robot a un aiutante vero; e
+un aiutante che aspetta un lavoro in background manda `SubagentStop`, poi di
+nuovo `SubagentStart` quando si risveglia. L'elenco degli id sta in
+`<sessione>.aiutanti`, accanto alla riga di stato. **La lettura della quota è
+anch'essa una sessione di Claude**: compariva come «box» a ogni «Aggiorna».
+`collect-usage.py` la lancia con `WATCHFACE_IGNORA=1` e l'hook la salta.
+In generale l'hook salta ogni sessione con `CLAUDE_CODE_ENTRYPOINT=sdk-…`
+(misurato: `cli` nel terminale, `sdk-cli` con `-p`), la stessa regola delle
+orfane automatiche. **Il clic su una riga porta al terminale** risalendo da
+`CLAUDE_PID` (sesto campo della riga) agli antenati fino al primo che
+possiede una finestra; ci si ferma alla shell, che è antenata dei terminali
+aperti da «Riprendi». Ptyxis non espone l'id della scheda al processo figlio
+(ha `focus-tab-by-uuid`, ma l'uuid non arriva nell'ambiente): con più schede
+nella stessa finestra si arriva alla finestra, non alla scheda.
+**La mascotte fluttuante** (`fumetto.js`) usa la stessa decisione delle
+notifiche (`_avviso()` in `watchface.js`): le due non possono divergere. È
+**una sola, con l'elenco degli avvisi** (scelta dell'utente: «è il
+monitoratore»): un avviso per sessione, i più urgenti in cima, uno
+evidenziato che dà il colore a tutto. Le regole dell'elenco sono funzioni pure
+(`aggiungiAvviso`, `potaAvvisi`, `togliAvviso`) con una tabella di casi in
+`prova-js.sh`, ognuno verificato con una mutazione. **Notifiche e mascotte
+sono alternative** (`watchface-alerts`: notifiche, mascotte, nessuno): insieme
+dicevano la stessa cosa due volte, segnalato dall'utente. La regola è
+`canaleAvviso()`. La chiave vecchia `watchface-notifications`, uscita nella
+versione 3, resta nello schema solo per la migrazione: chi l'aveva spenta
+riceve «nessuno». **Sempre visibile** (`watchface-floating-always`, richiesta
+dell'utente): la mascotte resta senza nuvoletta e la sua faccia è quella dello
+stato più urgente, come nella barra; ridisegna solo quando cambia la firma di
+ciò che si vede, perché gli eventi arrivano a raffica. Sta in
+`addChrome(..., {trackFullscreen: true})` (GNOME 50 accetta solo
+`trackFullscreen` e `affectsStruts`): la shell la nasconde sopra lo schermo
+intero, e siccome ne governa la visibilità, il nostro mostra/nascondi sta su un
+attore interno. Il posto ricordato è l'angolo in basso a destra della faccina;
+se non cade su nessun monitor (dock staccato) torna nell'angolo del
+principale. **La faccina sta su un disco chiaro**: capelli e barba sono quasi
+neri, e su un desktop scuro sparivano — visto nella shell di prova. Il
+trascinamento e il clic **non hanno una prova automatica**: il puntatore
+virtuale nella shell annidata ha cliccato altrove (ha aperto le impostazioni
+rapide); vanno provati a mano dopo il login.
+**Le preferenze si fotografano con `bin/fotografa-preferenze.sh`**: nella
+shell annidata il clic simulato non raggiunge la finestra, e si vedeva solo la
+prima pagina — così un menu a tendina che nascondeva il valore scelto è
+arrivato fino all'utente. Lo script apre la finestra in un processo suo, con
+una base minima al posto di `ExtensionPreferences`, sceglie le pagine da solo e
+le disegna in PNG con GTK. Il ridisegno del 2026-10-03 (cinque pagine,
+ricerca, tessere colorate, «?» verso la guida) è stato controllato così, e
+le foto hanno trovato due difetti prima dell'utente: una tessera che si
+espandeva e spostava le righe, e i «valori rapidi» schiacciati.
+**Una prova che controlla «resta com'era» passa anche se il programma muore
+prima di scrivere.** Così `installa` andava in crash su un evento
+che non è un elenco, con la prova verde: lo ha visto abrt nel journal, non
+noi. Ora la prova controlla anche che gli altri undici hook ci siano.
+`pack-extension.sh` ora include **tutti** i `*.js`: con l'elenco a mano,
+`fumetto.js` sarebbe rimasto fuori dallo zip.
 
 **Un inciampo nella lettura della quota non è un guasto.** Il 2026-09-30 alle
 16:02:07, un minuto dopo l'accesso, `collect-usage.py` è uscito con esito
@@ -360,8 +417,8 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              136 prove funzionali, sandbox con HOME dirottata
-    ./bin/prova-js.sh           41 prove sulle funzioni pure dei moduli JS
+    ./bin/prova.sh              160 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova-js.sh           53 prove sulle funzioni pure dei moduli JS
     ./bin/prova-shell.sh        carica l'estensione in una shell annidata (~1 min)
     ./bin/verifica-estensione.sh  controlli statici + le prove JS (gira dentro
                                   install e pack, che si fermano se qualcosa

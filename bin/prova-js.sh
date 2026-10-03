@@ -45,19 +45,35 @@ eval(codice);
 // Watchface: le funzioni pure e le due tabelle che usano, dallo stesso modo.
 const testoWf = new TextDecoder().decode(imports.gi.GLib.file_get_contents(fileWf)[1]);
 let codiceWf = "";
-for (const nome of ["ORDINE_STATI", "TESTI"]) {
+for (const nome of ["ORDINE_STATI", "TESTI", "MISURE_MASCOTTE"]) {
     const m = new RegExp("^const " + nome + " = [\\s\\S]*?;$", "m").exec(testoWf);
     if (!m)
         throw new Error("costante non trovata in watchface.js: " + nome);
     codiceWf += m[0].replace(/^const /, "var ") + "\n";
 }
-for (const nome of ["leggiRigaWatchface", "statoSessione", "piuUrgente", "iconaStato", "testoStato"]) {
+for (const nome of ["leggiRigaWatchface", "statoSessione", "piuUrgente", "iconaStato", "testoStato",
+                     "misureMascotte", "genitoreDaStat", "catenaPid", "canaleAvviso"]) {
     const m = new RegExp("^function " + nome + "\\([^)]*\\) \\{[\\s\\S]*?^\\}", "m").exec(testoWf);
     if (!m)
         throw new Error("funzione non trovata in watchface.js: " + nome);
     codiceWf += m[0] + "\n";
 }
 eval(codiceWf);
+
+// La mascotte fluttuante: la funzione che decide dove va, con la sua costante.
+const fileFu = fileWf.replace(/watchface\.js$/, "fumetto.js");
+const testoFu = new TextDecoder().decode(imports.gi.GLib.file_get_contents(fileFu)[1]);
+let codiceFu = "";
+const fnFu = n => new RegExp("^function " + n + "\\([^)]*\\) \\{[\\s\\S]*?^\\}", "m");
+for (const re of [/^const MARGINE = [\s\S]*?;$/m, fnFu("posizioneFumetto"), fnFu("ordinati"),
+                  fnFu("evidenziato"), fnFu("aggiungiAvviso"), fnFu("potaAvvisi"),
+                  fnFu("togliAvviso")]) {
+    const m = re.exec(testoFu);
+    if (!m)
+        throw new Error("non trovato in fumetto.js: " + re);
+    codiceFu += m[0].replace(/^const /, "var ") + "\n";
+}
+eval(codiceFu);
 
 let passate = 0, fallite = 0;
 function uguale(cosa, ottenuto, atteso) {
@@ -162,6 +178,86 @@ uguale("watchface: senza stato dorme", iconaStato(null), "fw-faccina-dorme");
 uguale("watchface: il permesso si dice", testoStato({stato: "aspetta", evento: "PermissionRequest"}),
        "chiede un permesso");
 uguale("watchface: gli altri stati hanno il loro testo", testoStato({stato: "lavora"}), "sta lavorando");
+uguale("watchface: legge il pid di claude, e la cartella resta la cartella",
+       ((r) => r.pid + "|" + r.cwd)(leggiRigaWatchface("Stop\t1\t0\t0\t/x\t4321")), "4321|/x");
+uguale("watchface: una riga senza pid (versione vecchia) vale zero",
+       leggiRigaWatchface("Stop\t1\t0\t0\t/x").pid + "|" + leggiRigaWatchface("Stop\t1\t0\t0\t/x").cwd, "0|/x");
+uguale("watchface: il genitore si legge dopo la parentesi finale",
+       genitoreDaStat("123 (strano) nome) S 77 123 123 0"), "77");
+uguale("watchface: uno stat illeggibile non ha genitore", genitoreDaStat("spazzatura"), "0");
+const albero = {50: 40, 40: 30, 30: 1};
+uguale("watchface: la catena risale fino a init escluso",
+       catenaPid(50, p => albero[p] ?? 0).join(","), "50,40,30");
+uguale("watchface: un ciclo nei dati non blocca",
+       catenaPid(7, p => (p === 7 ? 8 : 7)).join(","), "7,8");
+uguale("watchface: un processo finito non ha catena oltre se stesso",
+       catenaPid(99, () => 0).join(","), "99");
+// Due monitor come a casa: il portatile a sinistra, il principale a destra.
+const AREE = [{x: 0, y: 0, width: 1000, height: 800}, {x: 1000, y: 0, width: 1920, height: 1080}];
+const casiFu = [
+    ["mai spostata: angolo del principale", [-1, -1, 100, 200, AREE, 1], [2796, 856]],
+    ["posto ricordato sul primo monitor", [500, 400, 100, 200, AREE, 1], [400, 200]],
+    ["monitor staccato: torna nell angolo", [5000, 400, 100, 200, AREE, 1], [2796, 856]],
+    ["in cima allo schermo non esce sopra", [990, 100, 300, 200, AREE, 1], [690, 0]],
+    ["a sinistra non esce dal bordo", [50, 700, 300, 200, AREE, 1], [0, 500]],
+    ["primario sconosciuto: il primo", [-1, -1, 100, 100, AREE, 7], [876, 676]],
+];
+const sbagliatiFu = casiFu.filter(([, a, atteso]) =>
+    JSON.stringify(posizioneFumetto(...a)) !== JSON.stringify(atteso))
+    .map(([n, a]) => n + " -> " + JSON.stringify(posizioneFumetto(...a)));
+uguale("fumetto: la posizione su tutti i casi noti", sbagliatiFu.join("; ") || "tutti", "tutti");
+// L elenco della nuvoletta. Ogni caso: elenco di partenza, evidenziato,
+// operazione, e cosa ci si aspetta (righe in ordine | evidenziata).
+const av = (id, stato, quando, scade = 0) => ({id, stato, quando, scade});
+const ses = (id, stato) => ({id, stato});
+const descr = r => r.avvisi.map(a => a.id + ":" + a.stato).join(",") + "|" + r.id;
+const casiAv = [
+    ["il primo avviso si evidenzia",
+     aggiungiAvviso([], av("a", "finito", 1), null), "a:finito|a"],
+    ["ha finito non copre ti aspetta",
+     aggiungiAvviso([av("a", "aspetta", 1)], av("b", "finito", 2), "a"), "a:aspetta,b:finito|a"],
+    ["si e inceppato copre ha finito",
+     aggiungiAvviso([av("a", "finito", 1)], av("b", "errore", 2), "a"), "b:errore,a:finito|b"],
+    ["a parita vince il piu recente, anche in cima",
+     aggiungiAvviso([av("a", "aspetta", 1)], av("b", "aspetta", 2), "a"), "b:aspetta,a:aspetta|b"],
+    ["la stessa sessione ha una riga sola",
+     aggiungiAvviso([av("a", "aspetta", 1), av("b", "finito", 1)], av("a", "errore", 2), "a"),
+     "a:errore,b:finito|a"],
+    ["la sessione che riparte se ne va, l evidenza passa alla prima",
+     potaAvvisi([av("a", "aspetta", 1), av("b", "finito", 1)],
+                [ses("a", "lavora"), ses("b", "finito")], 5, "a"), "b:finito|b"],
+    ["la sessione chiusa se ne va",
+     potaAvvisi([av("a", "aspetta", 1), av("b", "errore", 1)], [ses("b", "errore")], 5, "b"),
+     "b:errore|b"],
+    ["ha finito scade, ti aspetta no",
+     potaAvvisi([av("a", "aspetta", 1), av("b", "finito", 1, 9)],
+                [ses("a", "aspetta"), ses("b", "finito")], 9, "b"), "a:aspetta|a"],
+    ["prima della scadenza resta",
+     potaAvvisi([av("b", "finito", 1, 9)], [ses("b", "finito")], 8, "b"), "b:finito|b"],
+    ["l evidenza resta dove l hai messa, anche non in cima",
+     potaAvvisi([av("a", "aspetta", 1), av("b", "finito", 1)],
+                [ses("a", "aspetta"), ses("b", "finito")], 5, "b"), "a:aspetta,b:finito|b"],
+    ["togliere quella non evidenziata lascia l evidenza",
+     togliAvviso([av("a", "aspetta", 1), av("b", "finito", 1)], "b", "a"), "a:aspetta|a"],
+    ["togliere l ultima svuota",
+     togliAvviso([av("a", "aspetta", 1)], "a", "a"), "|null"],
+];
+const sbagliatiAv = casiAv.filter(([, r, atteso]) => descr(r) !== atteso)
+    .map(([n, r]) => n + " -> " + descr(r));
+uguale("fumetto: l elenco degli avvisi su tutti i casi noti", sbagliatiAv.join("; ") || "tutti", "tutti");
+uguale("watchface: un avviso passa da un canale solo, e mai col terminale davanti",
+       [["notifiche", false], ["mascotte", false], ["nessuno", false],
+        ["mascotte", true], ["notifiche", true], [undefined, false]]
+           .map(([c, t]) => canaleAvviso(c, t)).join(","),
+       "notifica,mascotte,,,,notifica");
+uguale("watchface: una grandezza sconosciuta vale media",
+       JSON.stringify(misureMascotte("enorme")), JSON.stringify(misureMascotte("media")));
+uguale("watchface: le grandezze crescono e nella barra stanno sotto i 24 px",
+       ["piccola", "media", "grande"].map(t => misureMascotte(t))
+           .every((m, i, a) => m.barra <= 24 && (i === 0 || (m.barra > a[i - 1].barra &&
+                                                              m.popup > a[i - 1].popup &&
+                                                              m.fumetto > a[i - 1].fumetto))),
+       true);
 
 print("");
 if (fallite > 0) {

@@ -42,8 +42,11 @@ rm -f "$DIST/$UUID.shell-extension.zip"
 EXTRA=()
 for f in "$SRC"/*.py; do EXTRA+=(--extra-source="$(basename "$f")"); done
 [[ -d "$SRC/icons" ]] && EXTRA+=(--extra-source=icons)
-[[ -f "$SRC/prefs.js" ]] && EXTRA+=(--extra-source=prefs.js)
-[[ -f "$SRC/watchface.js" ]] && EXTRA+=(--extra-source=watchface.js)
+# Tutti i moduli JS, non un elenco: un modulo nuovo dimenticato qui resta fuori
+# dallo zip, e l'estensione installata su un altro PC non parte.
+for f in "$SRC"/*.js; do
+  [[ $(basename "$f") == extension.js ]] || EXTRA+=(--extra-source="$(basename "$f")")
+done
 [[ -f "$SRC/watchdog.conf" ]] && EXTRA+=(--extra-source=watchdog.conf)
 [[ -f "$SRC/watchface-hook" ]] && EXTRA+=(--extra-source=watchface-hook)
 

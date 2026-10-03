@@ -141,14 +141,60 @@
       <summary>Mostra la quota nel popup</summary>
     </key>
 
-      <key name="watchface-mascot" type="b">
+    <key name="watchface-mascot" type="b">
       <default>true</default>
-      <summary>Mostra la mascotte</summary>
-      <description>La faccina nel pannello e nel popup cambia con quello che sta facendo Claude Code. Spenta, resta l'icona di sempre e lo stato urgente la colora.</description>
+      <summary>Faccina nella barra</summary>
+      <description>La faccina nella barra cambia con quello che sta facendo Claude Code. Spenta, resta l'icona di sempre e lo stato urgente la colora.</description>
+    </key>
+    <key name="watchface-mascot-popup" type="b">
+      <default>true</default>
+      <summary>Faccine nel popup</summary>
+      <description>In «Claude adesso», una faccina e il robottino per ogni sessione. Spente, restano nome e stato.</description>
+    </key>
+    <key name="watchface-size" type="s">
+      <choices>
+        <choice value="piccola"/>
+        <choice value="media"/>
+        <choice value="grande"/>
+      </choices>
+      <default>'media'</default>
+      <summary>Grandezza della mascotte</summary>
+      <description>Quanto è grande la faccina nella barra e nel popup.</description>
+    </key>
+    <key name="watchface-floating-always" type="b">
+      <default>false</default>
+      <summary>Mascotte fluttuante sempre visibile</summary>
+      <description>La mascotte resta sullo schermo e la sua faccia segue Claude come quella della barra; la nuvoletta compare quando ci sono avvisi.</description>
+    </key>
+    <key name="watchface-floating-seconds" type="i">
+      <range min="0" max="120"/>
+      <default>8</default>
+      <summary>Quanto resta «ha finito»</summary>
+      <description>Secondi prima che la mascotte fluttuante si ritiri dopo «ha finito». 0: resta finché non la chiudi. «Ti aspetta» e «si è inceppato» restano comunque finché la sessione non riparte.</description>
+    </key>
+    <key name="watchface-floating-x" type="i">
+      <default>-1</default>
+      <summary>Posizione della mascotte fluttuante (orizzontale)</summary>
+      <description>Il bordo destro della faccina, in pixel. -1 insieme alla verticale: l'angolo in basso a destra del monitor principale.</description>
+    </key>
+    <key name="watchface-floating-y" type="i">
+      <default>-1</default>
+      <summary>Posizione della mascotte fluttuante (verticale)</summary>
+      <description>Il bordo inferiore della faccina, in pixel. -1 insieme all'orizzontale: l'angolo in basso a destra del monitor principale.</description>
+    </key>
+    <key name="watchface-alerts" type="s">
+      <choices>
+        <choice value="notifiche"/>
+        <choice value="mascotte"/>
+        <choice value="nessuno"/>
+      </choices>
+      <default>'notifiche'</default>
+      <summary>Come avvisarti</summary>
+      <description>Quando Claude aspetta una risposta, si inceppa o finisce un lavoro lungo: con una notifica, con la mascotte fluttuante, o per niente (restano la faccina nella barra e il popup). Mai se stai già guardando il terminale.</description>
     </key>
     <key name="watchface-notifications" type="b">
       <default>true</default>
-      <summary>Notifiche di Watchface</summary>
+      <summary>Notifiche di Watchface (sostituita da watchface-alerts)</summary>
       <description>Avvisa quando Claude aspetta una risposta, quando si inceppa, e quando finisce un lavoro lungo — non se stai già guardando il terminale.</description>
     </key>
 </schema>

@@ -790,6 +790,8 @@ uguale "clean.sh: senza --apply non cancella niente" \
 prepara
 export XDG_RUNTIME_DIR="$SANDBOX/run"
 mkdir -p "$XDG_RUNTIME_DIR"
+# Le prove possono girare dentro Claude Code, che esporta l'entrypoint.
+unset CLAUDE_CODE_ENTRYPOINT WATCHFACE_IGNORA CLAUDE_PID
 WF="$XDG_RUNTIME_DIR/claude-code-watchdog/watchface"
 hook() { # hook EVENTO SESSIONE [CWD]
   printf '{"session_id":"%s","transcript_path":"/x.jsonl","cwd":"%s","hook_event_name":"%s","tool_name":"Bash"}' \
@@ -799,6 +801,22 @@ campo() { cut -f"$2" "$WF/$1" 2>/dev/null; }
 uscita=$(hook PreToolUse s1; echo "rc=$?")
 uguale "watchface-hook: nessun output, uscita 0" "$uscita" "rc=0"
 uguale "watchface-hook: scrive evento e cartella" "$(campo s1 1)|$(campo s1 5)" "PreToolUse|/lavoro/prog"
+WATCHFACE_IGNORA=1 hook SessionStart quota
+uguale "watchface-hook: ignora le sessioni del watchdog (lettura quota)" \
+  "$([[ -e $WF/quota ]] && echo c-e || echo assente)" "assente"
+CLAUDE_CODE_ENTRYPOINT=sdk-cli hook SessionStart automatica
+CLAUDE_CODE_ENTRYPOINT=cli hook SessionStart terminale
+uguale "watchface-hook: ignora le sessioni avviate da un programma, non quelle nel terminale" \
+  "$([[ -e $WF/automatica ]] && echo c-e || echo assente)|$([[ -e $WF/terminale ]] && echo c-e || echo assente)" "assente|c-e"
+CLAUDE_PID=4321 hook PreToolUse conpid
+CLAUDE_PID='12; rm -rf /' hook PreToolUse pidstorto
+uguale "watchface-hook: scrive il pid di claude, e solo se e' un numero" \
+  "$(campo conpid 6)|$(campo pidstorto 6)" "4321|"
+# Un bash senza EPOCHSECONDS (prima della 5.0): l'ora resta quella vera.
+printf '{"session_id":"vecchiobash","cwd":"/lavoro/prog"}' \
+  | bash -c 'unset EPOCHSECONDS; . "$0" PreToolUse' "$WD_ROOT/bin/watchface-hook"
+uguale "watchface-hook: scrive l'ora giusta anche senza EPOCHSECONDS" \
+  "$(( $(date +%s) - $(campo vecchiobash 2) < 5 ))" "1"
 hook PreToolUse '../../fuori' >/dev/null
 uguale "watchface-hook: rifiuta un id con ../" \
   "$(find "$SANDBOX" -name fuori | wc -l)" "0"
@@ -809,9 +827,29 @@ uguale "watchface-hook: PreToolUse non azzera i fallimenti" "$(campo s1 3)" "3"
 hook PostToolUse s1
 uguale "watchface-hook: un successo li azzera" "$(campo s1 3)" "0"
 hook SubagentStart s1; hook SubagentStart s1; hook SubagentStop s1
-uguale "watchface-hook: conta gli aiutanti" "$(campo s1 4)" "1"
+uguale "watchface-hook: senza agent_id conta gli aiutanti" "$(campo s1 4)" "1"
 hook SubagentStop s1; hook SubagentStop s1
 uguale "watchface-hook: gli aiutanti non scendono sotto zero" "$(campo s1 4)" "0"
+# Con agent_id si conta per id. I casi, dagli eventi veri del 2026-10-03:
+# Claude Code manda SubagentStop per agenti interni mai partiti, e un aiutante
+# che si risveglia da un lavoro in background manda di nuovo SubagentStart.
+aiuto() { # aiuto EVENTO SESSIONE AGENT_ID
+  printf '{"session_id":"%s","cwd":"/lavoro/prog","agent_id":"%s","agent_type":"x","hook_event_name":"%s"}' \
+    "$2" "$3" "$1" | "$WD_ROOT/bin/watchface-hook" "$1"
+}
+hook SessionStart s4
+aiuto SubagentStart s4 a1; aiuto SubagentStop s4 interno
+uguale "watchface-hook: lo Stop di un agente mai partito non toglie un aiutante" "$(campo s4 4)" "1"
+aiuto SubagentStart s4 a1
+uguale "watchface-hook: lo stesso aiutante avviato due volte conta uno" "$(campo s4 4)" "1"
+aiuto SubagentStop s4 a1; aiuto SubagentStart s4 a1
+uguale "watchface-hook: un aiutante che si risveglia torna" "$(campo s4 4)" "1"
+aiuto SubagentStart s4 a2; aiuto SubagentStop s4 a2
+uguale "watchface-hook: finisce quello giusto" "$(campo s4 4)|$(cat "$WF/s4.aiutanti")" "1|a1"
+hook SessionStart s4
+uguale "watchface-hook: SessionStart azzera l'elenco" "$(campo s4 4)" "0"
+for i in $(seq 12); do aiuto SubagentStart s4 "p$i" & done; wait
+uguale "watchface-hook: dodici aiutanti in parallelo sono dodici" "$(campo s4 4)" "12"
 hook Stop s1; hook Notification s1
 uguale "watchface-hook: Notification dopo Stop non cambia stato" "$(campo s1 1)" "Stop"
 hook PermissionRequest s1
@@ -837,7 +875,9 @@ uguale "watchface-hook: la Notification non copre un errore" "$(campo s3 1)" "St
 uguale "watchface-hook: nessun temporaneo lasciato in giro" \
   "$(ls "$WF" | grep -c '\.[0-9]')" "0"
 hook SessionEnd s1
-uguale "watchface-hook: SessionEnd toglie il file" "$([[ -e $WF/s1 || -e $WF/s1.lock ]] && echo c-e || echo tolto)" "tolto"
+hook SessionEnd s4
+uguale "watchface-hook: SessionEnd toglie il file" \
+  "$([[ -e $WF/s1 || -e $WF/s1.lock || -e $WF/s4.aiutanti ]] && echo c-e || echo tolto)" "tolto"
 unset XDG_RUNTIME_DIR
 
 # ---------------------------------------------------- watchface-hooks.py ---
@@ -910,6 +950,9 @@ uguale "watchface-hooks: togliere uno script lascia gli altri e i prompt" \
 uguale "watchface-hooks: le forme che non conosce restano com'erano" \
   "$(python3 -c "import json;d=json.load(open('$S'));print(d['hooks']['PreToolUse'], d['hooks']['PostToolUse'][0])")" \
   "{'strano': True} {'matcher': 'Bash', 'senza_hooks': 1}"
+# E non e' un modo di dire «non ho fatto niente»: gli altri undici ci sono.
+uguale "watchface-hooks: una forma sconosciuta non blocca gli altri eventi" \
+  "$(stato 'len(d["installati"])')" "11"
 echo '{"hooks": []}' > "$S"
 uguale "watchface-hooks: «hooks» che non e' un oggetto: rifiuta senza toccare" \
   "$("$WH" installa >/dev/null 2>&1; echo $?)|$(cat "$S")" '1|{"hooks": []}'

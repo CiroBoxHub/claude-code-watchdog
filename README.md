@@ -170,11 +170,30 @@ permesso o una risposta, con un punto ambra — oppure **ha finito**. Il
 tre strumenti falliti di fila), il **robottino** nel popup quando Claude manda
 degli aiutanti. Con più sessioni vince la più urgente.
 
-In cima al popup, *Claude adesso* elenca le sessioni aperte. Le notifiche
-arrivano quando Claude ti aspetta, si inceppa o finisce un lavoro di almeno
-mezzo minuto — non se stai già guardando il terminale. Mascotte e notifiche si
-spengono dalle impostazioni; senza mascotte resta l'icona classica, che si
-colora d'ambra o di rosso negli stati urgenti.
+In cima al popup, *Claude adesso* elenca le sessioni aperte: **un clic su una
+riga porta davanti il terminale** in cui gira quella sessione, e lo stesso fa
+un clic sulla notifica. Le notifiche arrivano quando Claude ti aspetta, si
+inceppa o finisce un lavoro di almeno mezzo minuto — non se stai già guardando
+il terminale. Dalle impostazioni si sceglie la grandezza della mascotte
+(piccola, media, grande) e si spegne la mascotte nella barra; senza mascotte
+resta l'icona classica, che si colora d'ambra o di rosso negli stati urgenti.
+Contano solo le sessioni aperte da una persona: quelle avviate da un programma
+(`claude -p`, l'SDK) non compaiono.
+
+<p align="center">
+  <img src="grafica/screenshot/mascotte-fluttuante.png" alt="La mascotte fluttuante: lavora, ti aspetta con la nuvoletta, riparte, dorme" width="760">
+</p>
+
+Al posto delle notifiche si può scegliere una **mascotte fluttuante** (o nessun
+avviso, solo la faccina e il popup): compare sullo schermo
+solo quando Claude ha qualcosa da dirti, con una nuvoletta che elenca gli
+avvisi di tutte le sessioni — ti aspetta, si è inceppato, ha finito — e un
+numero sul disco della faccina. L'avviso evidenziato dà il colore a tutto;
+un clic su un'altra riga lo cambia, un clic sulla faccina porta al terminale.
+Ogni riga se ne va quando la sua sessione riparte, e senza righe la mascotte
+si ritira — oppure, se la vuoi **sempre visibile**, resta sopra le finestre e
+la sua faccia segue Claude come quella della barra. Si trascina dove vuoi, e sopra le finestre a schermo intero non
+compare.
 
 **Come funziona.** Claude Code avvisa `watchface-hook` a ogni evento. È uno
 script Bash da circa 3 ms che scrive una riga per sessione in
@@ -271,10 +290,22 @@ qualunque cosa gli venga passata.
 
 ### Impostazioni
 
-Dall'icona *Impostazioni e guida* nel popup si sceglie cosa compare nella
-barra, quali sezioni mostrare, ogni quanto aggiornare, ogni quanto rileggere la
-quota e dove nascono i progetti nuovi. La prima pagina è una guida che spiega
-ogni indicatore.
+Da *Impostazioni e guida*, in fondo al popup. Cinque pagine, e la **lente** in
+alto cerca in tutte:
+
+| Pagina | Cosa c'è |
+|---|---|
+| **Guida** | ogni indicatore spiegato, con un indice in cima |
+| **Pannello** | i valori nella barra, il suo aspetto, le sezioni del popup |
+| **Watchface** | faccina nella barra e nel popup, grandezza, come avvisarti (notifiche, mascotte fluttuante o niente), hook e backup |
+| **Quota** | ogni quanto rileggere la quota e ogni quanto aggiornare il resto |
+| **Progetti** | dove nascono i nuovi, il terminale di «Riprendi», la conferma prima di eliminare |
+
+Ogni gruppo ha un pulsante che porta alla sezione della guida che lo spiega.
+
+<p align="center">
+  <img src="grafica/screenshot/preferenze-watchface.png" alt="La pagina Watchface delle impostazioni" width="520">
+</p>
 
 Lasciando vuota la radice dei progetti viene dedotta da sola: è la cartella che
 contiene più progetti fra quelli già noti.
@@ -395,16 +426,17 @@ potarlo per quello lo distruggerebbe il giorno dopo averlo cestinato.
 
 ## Sviluppo
 
-    ./bin/prova.sh                 # 136 prove funzionali, sandbox con HOME dirottata
-    ./bin/prova-js.sh              # 41 prove sulle funzioni pure dei moduli JS
+    ./bin/prova.sh                 # 160 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova-js.sh              # 53 prove sulle funzioni pure dei moduli JS
     ./bin/prova-shell.sh           # carica l'estensione in una GNOME Shell annidata
     ./bin/verifica-estensione.sh   # controlli statici, e le prove JS
     ./bin/fotografa-pannello.sh    # foto di barra, popup e preferenze, chiaro e scuro
     ./bin/fotografa-pannello.sh --demo grafica/screenshot   # le foto del README, con dati inventati
     ./bin/fotografa-icone.sh       # foto delle icone come le disegna la shell
+    ./bin/fotografa-preferenze.sh  # foto di ogni pagina delle impostazioni, chiaro e scuro
     ./grafica/mascotte.py          # rigenera le icone (serve Inkscape)
 
-Le due `fotografa-*` girano in una GNOME Shell annidata con una **home finta**:
+Le `fotografa-*` girano in una GNOME Shell annidata con una **home finta**:
 dconf ed estensioni della sessione vera non si toccano.
 
 **Le icone si modificano in `grafica/`, mai in `icons/`.** I sorgenti sono
@@ -431,8 +463,9 @@ diverso.
                             dentro, prove e strumenti di sviluppo
     config/watchdog.conf    soglie, scadenze, consigli sulla quota
     gnome-extension/        l'estensione: extension.js (pannello e popup),
-                            watchface.js (stato di Claude), prefs.js (impostazioni
-                            e guida), icons/ (generate), schemas/
+                            watchface.js (stato di Claude), fumetto.js (mascotte
+                            fluttuante), prefs.js (impostazioni e guida),
+                            icons/ (generate), schemas/
     grafica/                sorgenti delle icone e generatore della mascotte
 
 ## Autore

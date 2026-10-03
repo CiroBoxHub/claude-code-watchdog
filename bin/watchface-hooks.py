@@ -229,12 +229,21 @@ def main() -> int:
             backup()
             togli(d, nostro)          # cosi' un percorso cambiato si aggiorna
             hooks = d.setdefault("hooks", {})
+            # Un evento che non e' un elenco e' una forma che non conosciamo:
+            # resta com'e', e quell'evento si salta. Fino al 2026-10-03 qui
+            # c'era un crash, e non si installava nemmeno il resto.
+            saltati = [ev for ev in EVENTI
+                       if not isinstance(hooks.setdefault(ev, []), list)]
             for ev in EVENTI:
-                hooks.setdefault(ev, []).append(
-                    {"hooks": [{"type": "command", "command": comando(ev),
-                                "timeout": 5}]})
+                if ev not in saltati:
+                    hooks[ev].append(
+                        {"hooks": [{"type": "command", "command": comando(ev),
+                                    "timeout": 5}]})
             scrivi(d)
-            print(f"installati {len(EVENTI)} hook")
+            print(f"installati {len(EVENTI) - len(saltati)} hook")
+            if saltati:
+                print("saltati, forma che non conosco: " + ", ".join(saltati),
+                      file=sys.stderr)
             return 0
 
         if azione == "rimuovi":

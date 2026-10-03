@@ -598,9 +598,17 @@
 }
 
 .fw-wf-riga {
-    spacing: 10px;
     padding: 4px 6px;
     border-radius: 7px;
+}
+
+.fw-wf-riga-dentro {
+    spacing: 10px;
+}
+
+.fw-wf-riga:hover,
+.fw-wf-riga:focus {
+    background-color: rgba(127, 127, 127, 0.16);
 }
 
 .fw-wf-faccia {
@@ -642,3 +650,169 @@
     opacity: 0.78;
 }
 
+
+/* ------------------------------------------------ mascotte fluttuante --- */
+/* La nuvoletta porta i suoi colori, come i pulsanti: fondo chiaro e testo
+   scuro su qualunque tema. Il bordo, la punta, il disco della faccina e il
+   fondo della riga evidenziata prendono il colore dell'avviso evidenziato. */
+.fw-fumetto {
+    spacing: 0;
+}
+
+.fw-fumetto-nuvola {
+    width: 260px;
+    background-color: #FAFAFA;
+    border: 2.5px solid #2F9284;
+    border-radius: 16px;
+    padding: 6px;
+    spacing: 2px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+}
+
+.fw-fumetto-riga {
+    border-radius: 10px;
+    padding: 2px 4px 2px 0;
+    spacing: 4px;
+}
+
+.fw-fumetto-corpo {
+    color: #222222;
+    padding: 4px 6px;
+    border-radius: 10px;
+}
+
+.fw-fumetto-corpo:hover {
+    background-color: rgba(0, 0, 0, 0.06);
+}
+
+.fw-fumetto-dentro {
+    spacing: 9px;
+}
+
+.fw-fumetto-pallino {
+    width: 10px;
+    height: 10px;
+    border-radius: 99px;
+    background-color: #2F9284;
+}
+
+.fw-fumetto-pallino-aspetta {
+    background-color: #B77B1A;
+}
+
+.fw-fumetto-pallino-errore {
+    background-color: #CE5A50;
+}
+
+.fw-fumetto-titolo {
+    font-weight: 700;
+    font-size: 1em;
+    color: #222222;
+}
+
+.fw-fumetto-testo {
+    font-size: 0.9em;
+    color: #444444;
+}
+
+.fw-fumetto-altri {
+    font-size: 0.85em;
+    color: #555555;
+    padding: 2px 8px 2px 25px;
+}
+
+.fw-fumetto-aspetta .fw-fumetto-nuvola,
+.fw-fumetto-aspetta .fw-fumetto-faccia {
+    border-color: #B77B1A;
+}
+
+.fw-fumetto-errore .fw-fumetto-nuvola,
+.fw-fumetto-errore .fw-fumetto-faccia {
+    border-color: #CE5A50;
+}
+
+.fw-fumetto-finito .fw-fumetto-nuvola,
+.fw-fumetto-finito .fw-fumetto-faccia {
+    border-color: #2F9284;
+}
+
+/* Sempre visibile e senza avvisi: la faccia segue Claude anche quando
+   lavora o dorme, con il viola della quota e un grigio. */
+.fw-fumetto-lavora .fw-fumetto-faccia {
+    border-color: #8676B8;
+}
+
+.fw-fumetto-dorme .fw-fumetto-faccia {
+    border-color: #9A9A9A;
+}
+
+.fw-fumetto-aspetta .fw-fumetto-sel {
+    background-color: rgba(183, 123, 26, 0.16);
+}
+
+.fw-fumetto-errore .fw-fumetto-sel {
+    background-color: rgba(206, 90, 80, 0.16);
+}
+
+.fw-fumetto-finito .fw-fumetto-sel {
+    background-color: rgba(47, 146, 132, 0.16);
+}
+
+.fw-fumetto-chiudi {
+    color: #666666;
+    background-color: #E6E6E6;
+    border-radius: 99px;
+    padding: 3px;
+}
+
+.fw-fumetto-chiudi:hover {
+    background-color: #D2D2D2;
+}
+
+.fw-fumetto-coda {
+    width: 30px;
+    height: 20px;
+    margin-right: 40px;
+}
+
+.fw-fumetto-sotto {
+    spacing: 4px;
+}
+
+/* Capelli e barba sono quasi neri: su un desktop scuro sparivano (visto nella
+   shell di prova). Un disco chiaro dietro la faccina, come un adesivo, la
+   rende leggibile su qualunque sfondo. */
+.fw-fumetto-faccia {
+    background-color: #FAFAFA;
+    border: 2.5px solid #2F9284;
+    border-radius: 999px;
+    padding: 6px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+}
+
+/* Quanti avvisi: un bollino sul disco, del colore del testo, leggibile su
+   qualunque stato. */
+.fw-fumetto-conto {
+    background-color: #222222;
+    color: #FFFFFF;
+    font-weight: 700;
+    font-size: 0.85em;
+    border-radius: 99px;
+    padding: 1px 7px;
+    border: 2px solid #FAFAFA;
+}
+
+.fw-fumetto-robot {
+    background-color: #FAFAFA;
+    border-radius: 99px;
+    padding: 4px 6px;
+    spacing: 2px;
+    margin-bottom: 4px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.fw-fumetto-robot-conto {
+    font-weight: 700;
+    font-size: 0.85em;
+    color: #222222;
+}

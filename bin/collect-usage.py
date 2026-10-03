@@ -91,7 +91,11 @@ def main() -> int:
     prima = istantanea(dir_prog)
 
     try:
+        # Anche questa è una sessione di Claude Code, e gli hook di Watchface
+        # la vedrebbero: compariva nel pannello come «box», aperta e chiusa a
+        # ogni «Aggiorna» (2026-10-03). La variabile la fa ignorare.
         subprocess.run(["claude", "-p", "/usage"], cwd=str(CWD),
+                       env={**os.environ, "WATCHFACE_IGNORA": "1"},
                        capture_output=True, text=True, timeout=args.timeout)
     except FileNotFoundError:
         if not args.quiet:

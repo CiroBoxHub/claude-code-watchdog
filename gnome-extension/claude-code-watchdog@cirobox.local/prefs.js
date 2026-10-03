@@ -5,83 +5,293 @@
  *
  * Gira nel processo di gnome-extensions-app, separato dalla shell: qui GTK e
  * Adwaita esistono, dentro la shell no.
+ *
+ * Il disegno, rifatto il 2026-10-03 su richiesta dell'utente («iniziano a
+ * diventare tante»): cinque pagine invece di sette, la ricerca accesa, ogni
+ * riga con una tessera colorata dell'area a cui appartiene, sottotitoli di una
+ * riga, e un «?» su ogni gruppo che porta alla sezione della guida. Le scelte
+ * esclusive si vedono tutte insieme — un menu a tendina nascondeva il valore
+ * scelto quando la finestra era stretta.
  */
 
 import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
+import Gdk from 'gi://Gdk';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import Graphene from 'gi://Graphene';
 
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
-/* Gli indicatori disponibili per la barra, nell'ordine in cui compaiono. */
+/* Un colore per area, dalla palette dell'estensione: chi guarda la finestra
+   capisce dove si trova prima di leggere. Le icone sono bianche: su queste
+   tinte reggono il 3:1 che basta alla grafica. */
+const STILE = `
+.wd-tessera { border-radius: 8px; min-width: 30px; min-height: 30px; color: #ffffff; }
+.wd-tessera-piccola { border-radius: 6px; min-width: 22px; min-height: 22px; }
+.wd-verde { background-color: #2F9284; }
+.wd-viola { background-color: #8676B8; }
+.wd-ambra { background-color: #B77B1A; }
+.wd-blu { background-color: #3A6FB0; }
+.wd-rosso { background-color: #B23A31; }
+.wd-grigio { background-color: #6E6E73; }
+.wd-indice button { padding: 6px 10px; border-radius: 8px; }
+`;
+
+/* Gli indicatori per la barra, nell'ordine in cui compaiono, con l'icona
+   che hanno nel pannello. */
 const INDICATORI = [
-    ['disco',           'Disco',           'Quanto è pieno /. Il valore che conta solo quando cresce.'],
-    ['claude',          'Conversazioni',   'Spazio delle tue conversazioni, senza contare gli ambienti che i plugin si installano.'],
-    ['sessioni',        'Conversazioni',   'Quante ce ne sono archiviate in tutto.'],
-    ['messaggi',        'Messaggi',        'Totale su tutte le conversazioni. Misura di lavoro, non di spazio.'],
-    ['recuperabile',    'Recuperabile',    'Spazio liberabile subito, senza password di amministratore.'],
-    ['quota-sessione',  'Sessione corrente', 'Finestra mobile di circa cinque ore, non la giornata: riparte dal primo uso.'],
-    ['quota-settimana', 'Settimana',         'Limite settimanale. È il vincolo che di solito morde per primo.'],
+    ['disco', 'Disco', 'Quanto è pieno /', 'fw-disk', 'verde'],
+    ['claude', 'Peso delle conversazioni', 'Lo spazio che occupano, plugin esclusi', 'fw-data', 'verde'],
+    ['sessioni', 'Numero di conversazioni', 'Quante ce ne sono in archivio', 'fw-chat', 'verde'],
+    ['messaggi', 'Messaggi', 'Il totale: misura di lavoro, non di spazio', 'fw-pulse', 'verde'],
+    ['recuperabile', 'Spazio recuperabile', 'Liberabile subito, senza password', 'fw-reclaim', 'verde'],
+    ['quota-sessione', 'Quota della sessione', 'La finestra di circa cinque ore', 'fw-session', 'viola'],
+    ['quota-settimana', 'Quota della settimana', 'Il limite che morde per primo', 'fw-week', 'viola'],
 ];
-
-/* Una voce della guida: titolo in grassetto e testo a grandezza piena, del
-   colore del testo. */
-function voce(gruppo, titolo, testo) {
-    const box = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL, spacing: 4,
-                             margin_top: 12, margin_bottom: 12,
-                             margin_start: 14, margin_end: 14});
-    box.append(new Gtk.Label({label: titolo, xalign: 0, wrap: true,
-                              css_classes: ['heading']}));
-    box.append(new Gtk.Label({label: testo, xalign: 0, wrap: true,
-                              natural_wrap_mode: Gtk.NaturalWrapMode.WORD,
-                              css_classes: ['body']}));
-    const riga = new Adw.PreferencesRow({activatable: false, focusable: false, child: box});
-    gruppo.add(riga);
-    return riga;
-}
-
-/* Riga di sola lettura per le altre pagine: titolo e spiegazione breve. */
-function spiega(gruppo, titolo, testo) {
-    const r = new Adw.ActionRow({title: titolo, subtitle: testo});
-    r.set_subtitle_lines(0);        // 0 = nessun troncamento
-    gruppo.add(r);
-    return r;
-}
 
 export default class WatchdogPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const s = this.getSettings();
-        window.set_default_size(680, 720);
+        this._finestra = window;
+        this._sezioniGuida = new Map();
+        window.set_default_size(720, 760);
+        // GNOME apre la finestra con la ricerca spenta; con cinque pagine
+        // di voci serve: la lente trova un'impostazione ovunque stia.
+        window.search_enabled = true;
 
-        window.add(this._paginaGuida());
-        window.add(this._paginaBarra(s));
-        window.add(this._paginaPopup(s));
+        const stile = new Gtk.CssProvider();
+        stile.load_from_string(STILE);
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), stile,
+                                                  Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
+
+        // I segnali sulle impostazioni vanno staccati alla chiusura: la
+        // finestra muore prima del processo, e un cambio successivo
+        // toccherebbe righe già distrutte.
+        this._segnali = [];
+        window.connect('close-request', () => {
+            for (const id of this._segnali)
+                s.disconnect(id);
+            this._segnali = [];
+            return false;
+        });
+
+        this._guida = this._paginaGuida();
+        window.add(this._guida);
+        window.add(this._paginaPannello(s));
+        window.add(this._paginaWatchface(s));
         window.add(this._paginaQuota(s));
-        window.add(this._paginaWatchface(s, window));
-        window.add(this._paginaTerminale(s));
-        window.add(this._paginaSicurezza(s));
+        window.add(this._paginaProgetti(s));
+    }
+
+    /* ------------------------------------------------------- mattoncini --- */
+
+    _tessera(icona, colore, piccola = false) {
+        const img = icona.startsWith('fw-')
+            ? Gtk.Image.new_from_gicon(Gio.icon_new_for_string(
+                GLib.build_filenamev([this.path, 'icons', `${icona}-symbolic.svg`])))
+            : Gtk.Image.new_from_icon_name(icona);
+        img.pixel_size = piccola ? 14 : 16;
+        // L'immagine si allarga dentro la tessera per stare al centro; la
+        // tessera no, esplicitamente: altrimenti l'espansione risale alla
+        // riga e sposta titoli e interruttori (visto nelle foto).
+        const box = new Gtk.Box({halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
+                                 hexpand: false, vexpand: false,
+                                 css_classes: ['wd-tessera', `wd-${colore}`,
+                                               ...(piccola ? ['wd-tessera-piccola'] : [])]});
+        img.hexpand = img.vexpand = true;
+        img.halign = img.valign = Gtk.Align.CENTER;
+        box.append(img);
+        return box;
+    }
+
+    /* Un gruppo con titolo, una riga di descrizione e il «?» che porta alla
+       sezione della guida che lo spiega per esteso. */
+    _gruppo(pagina, titolo, descrizione, sezioneGuida) {
+        const g = new Adw.PreferencesGroup({title: titolo});
+        if (descrizione)
+            g.set_description(descrizione);
+        if (sezioneGuida) {
+            const b = new Gtk.Button({icon_name: 'help-about-symbolic', valign: Gtk.Align.CENTER,
+                                      tooltip_text: 'Spiegato nella guida',
+                                      css_classes: ['flat', 'circular']});
+            b.connect('clicked', () => this._vaiAllaGuida(sezioneGuida));
+            g.set_header_suffix(b);
+        }
+        pagina.add(g);
+        return g;
+    }
+
+    _interruttore(gruppo, s, chiave, titolo, sottotitolo, icona, colore) {
+        const r = new Adw.SwitchRow({title: titolo, subtitle: sottotitolo ?? ''});
+        if (icona)
+            r.add_prefix(this._tessera(icona, colore));
+        s.bind(chiave, r, 'active', Gio.SettingsBindFlags.DEFAULT);
+        gruppo.add(r);
+        return r;
+    }
+
+    _numero(gruppo, s, chiave, titolo, sottotitolo, [min, max, passo, pagina], icona, colore) {
+        const r = new Adw.SpinRow({
+            title: titolo, subtitle: sottotitolo ?? '',
+            adjustment: new Gtk.Adjustment({lower: min, upper: max, step_increment: passo,
+                                            page_increment: pagina}),
+        });
+        if (icona)
+            r.add_prefix(this._tessera(icona, colore));
+        s.bind(chiave, r, 'value', Gio.SettingsBindFlags.DEFAULT);
+        gruppo.add(r);
+        return r;
+    }
+
+    /* Una scelta fra pochi valori, tutti visibili: bottoni affiancati, quello
+       scelto premuto. */
+    _bottoniScelta(gruppo, s, chiave, titolo, valori, icona, colore) {
+        const r = new Adw.ActionRow({title: titolo});
+        if (icona)
+            r.add_prefix(this._tessera(icona, colore));
+        const box = new Gtk.Box({valign: Gtk.Align.CENTER, css_classes: ['linked']});
+        const bottoni = valori.map(([valore, etichetta]) => {
+            const b = new Gtk.ToggleButton({label: etichetta});
+            b.connect('toggled', () => {
+                if (b.active && s.get_string(chiave) !== valore)
+                    s.set_string(chiave, valore);
+            });
+            box.append(b);
+            return [valore, b];
+        });
+        for (const [, b] of bottoni.slice(1))
+            b.set_group(bottoni[0][1]);
+        const leggi = () => {
+            const ora = s.get_string(chiave);
+            for (const [valore, b] of bottoni)
+                b.active = valore === ora;
+        };
+        leggi();
+        this._segnali.push(s.connect(`changed::${chiave}`, leggi));
+        r.add_suffix(box);
+        gruppo.add(r);
+        return r;
+    }
+
+    /* Una scelta fra alternative che hanno bisogno di una spiegazione: una
+       riga per alternativa, con il pallino. */
+    _pallini(gruppo, s, chiave, voci) {
+        const righe = [];
+        let primo = null;
+        for (const [valore, titolo, sottotitolo, icona, colore] of voci) {
+            const pallino = new Gtk.CheckButton({valign: Gtk.Align.CENTER});
+            if (primo)
+                pallino.set_group(primo);
+            primo ??= pallino;
+            const r = new Adw.ActionRow({title: titolo, subtitle: sottotitolo,
+                                         activatable_widget: pallino});
+            r.add_prefix(pallino);
+            r.add_suffix(this._tessera(icona, colore));
+            pallino.connect('toggled', () => {
+                if (pallino.active && s.get_string(chiave) !== valore)
+                    s.set_string(chiave, valore);
+            });
+            gruppo.add(r);
+            righe.push([valore, pallino]);
+        }
+        const leggi = () => {
+            const ora = s.get_string(chiave);
+            for (const [valore, p] of righe)
+                p.active = valore === ora;
+        };
+        leggi();
+        this._segnali.push(s.connect(`changed::${chiave}`, leggi));
+    }
+
+    _scorciatoie(gruppo, s, chiave, valori) {
+        const riga = new Adw.ActionRow({title: 'Rapidi'});
+        const box = new Gtk.Box({valign: Gtk.Align.CENTER, css_classes: ['linked']});
+        for (const [etichetta, secondi] of valori) {
+            const b = new Gtk.Button({label: etichetta});
+            b.connect('clicked', () => s.set_int(chiave, secondi));
+            box.append(b);
+        }
+        riga.add_suffix(box);
+        gruppo.add(riga);
+        return riga;
+    }
+
+    _bottone(etichetta, classe, azione) {
+        const b = new Gtk.Button({label: etichetta, valign: Gtk.Align.CENTER});
+        if (classe)
+            b.add_css_class(classe);
+        b.connect('clicked', azione);
+        return b;
+    }
+
+    /* La guida, scorsa fino alla sezione chiesta. Il gruppo si misura dopo
+       che la pagina è stata disposta, quindi al giro successivo. */
+    _vaiAllaGuida(chiave) {
+        this._finestra.visible_page = this._guida;
+        const gruppo = this._sezioniGuida.get(chiave);
+        if (!gruppo)
+            return;
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            let w = this._guida.get_first_child();
+            while (w && !(w instanceof Gtk.ScrolledWindow))
+                w = w.get_next_sibling();
+            if (w) {
+                const [ok, p] = gruppo.compute_point(w.get_child(), new Graphene.Point({x: 0, y: 0}));
+                if (ok)
+                    w.vadjustment.value = Math.max(0, p.y - 12);
+            }
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     /* ---------------------------------------------------------- guida --- */
 
     /* La guida si legge come un documento: ogni voce ha un titolo e un testo a
-       grandezza piena. Prima stava nei sottotitoli delle righe, piccoli e
-       grigi, pensati per mezza riga e non per un paragrafo. */
+       grandezza piena. In cima l'indice, che porta a ogni sezione. */
     _paginaGuida() {
-        const pagina = new Adw.PreferencesPage({
-            title: 'Guida',
-            icon_name: 'help-about-symbolic',
-        });
-        const sezione = (titolo, descrizione = null) => {
+        const pagina = new Adw.PreferencesPage({title: 'Guida', icon_name: 'help-about-symbolic'});
+        const indice = new Adw.PreferencesGroup({title: 'Indice'});
+        const pulsanti = new Gtk.FlowBox({selection_mode: Gtk.SelectionMode.NONE,
+                                          column_spacing: 4, row_spacing: 2,
+                                          min_children_per_line: 2, max_children_per_line: 3,
+                                          homogeneous: true,
+                                          css_classes: ['wd-indice']});
+        indice.add(pulsanti);
+        pagina.add(indice);
+
+        const sezione = (chiave, titolo, colore, icona, descrizione = null) => {
             const g = new Adw.PreferencesGroup({title: titolo});
             if (descrizione)
                 g.set_description(descrizione);
+            g.set_header_suffix(this._tessera(icona, colore, true));
             pagina.add(g);
+            this._sezioniGuida.set(chiave, g);
+            const b = new Gtk.Button({css_classes: ['flat'], halign: Gtk.Align.START});
+            const dentro = new Gtk.Box({spacing: 8});
+            dentro.append(this._tessera(icona, colore, true));
+            dentro.append(new Gtk.Label({label: titolo}));
+            b.set_child(dentro);
+            b.connect('clicked', () => this._vaiAllaGuida(chiave));
+            pulsanti.append(b);
             return g;
         };
+        /* Titolo in grassetto e testo a grandezza piena. Il titolo va anche
+           nella riga, nascosto: è quello che trova la ricerca. */
+        const voce = (gruppo, titolo, testo) => {
+            const box = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL, spacing: 4,
+                                     margin_top: 12, margin_bottom: 12,
+                                     margin_start: 14, margin_end: 14});
+            box.append(new Gtk.Label({label: titolo, xalign: 0, wrap: true,
+                                      css_classes: ['heading']}));
+            box.append(new Gtk.Label({label: testo, xalign: 0, wrap: true,
+                                      natural_wrap_mode: Gtk.NaturalWrapMode.WORD,
+                                      css_classes: ['body']}));
+            gruppo.add(new Adw.PreferencesRow({title: titolo, activatable: false,
+                                               focusable: false, child: box}));
+        };
 
-        const breve = sezione('In breve');
+        const breve = sezione('breve', 'In breve', 'grigio', 'fw-gauge');
         voce(breve, 'Cosa fa',
              'Tiene d’occhio lo spazio del PC, i dati che Claude Code lascia sul ' +
              'disco e la quota di utilizzo, e mostra cosa sta facendo Claude in ' +
@@ -95,9 +305,13 @@ export default class WatchdogPreferences extends ExtensionPreferences {
              'Prima si guarda, poi si cancella, e si cancella nel cestino. ' +
              'Nessun pulsante elimina al primo clic: il primo mostra cosa ' +
              'sparirebbe, voce per voce, e solo il secondo agisce.');
+        voce(breve, 'Cercare un’impostazione',
+             'La lente in alto cerca in tutte le pagine, guida compresa. Il «?» ' +
+             'accanto a ogni gruppo di impostazioni porta qui, alla sezione che lo ' +
+             'spiega.');
 
-        const barra = sezione('La barra in alto',
-                              'Scegli tu cosa mostrare, nella pagina «Barra».');
+        const barra = sezione('barra', 'La barra in alto', 'verde', 'fw-disk',
+                              'Scegli cosa mostrare nella pagina «Pannello».');
         voce(barra, 'I valori',
              'Disco, conversazioni, quota della sessione e della settimana, e ' +
              'altro ancora. Diventano ambra e poi rossi alle stesse soglie delle ' +
@@ -105,15 +319,16 @@ export default class WatchdogPreferences extends ExtensionPreferences {
         voce(barra, 'La faccina',
              'All’inizio della barra c’è la mascotte di Watchface, che cambia ' +
              'espressione con quello che fa Claude (vedi la sezione successiva). ' +
-             'Se preferisci l’icona classica, spegnila nella pagina «Watchface».');
+             'Nella pagina «Watchface» se ne sceglie la grandezza, e la si spegne ' +
+             'nella barra, nel popup o in tutti e due.');
         voce(barra, 'Poco spazio?',
              'Le «etichette compatte» tolgono unità e sigle. Oppure accendi ' +
              '«un’icona per ogni indicatore»: occupa un po’ di più, ma i valori ' +
              'si riconoscono senza leggere.');
 
-        const wf = sezione('Watchface: cosa fa Claude adesso',
-                           'Funziona dopo aver installato gli hook, nella pagina ' +
-                           '«Watchface».');
+        const wf = sezione('watchface', 'Watchface: cosa fa Claude adesso', 'ambra',
+                           'face-smile-symbolic',
+                           'Funziona dopo aver installato gli hook, nella pagina «Watchface».');
         voce(wf, 'Le quattro espressioni',
              'Dorme quando non ci sono sessioni. Ha gli occhi aperti quando Claude ' +
              'lavora. Apre la bocca, con un punto ambra, quando aspetta te: un ' +
@@ -121,24 +336,58 @@ export default class WatchdogPreferences extends ExtensionPreferences {
         voce(wf, 'Il limone e il robottino',
              'Il limone prende il posto della faccina quando qualcosa si inceppa: ' +
              'la sessione si è fermata per un errore, oppure tre strumenti di fila ' +
-             'sono falliti. Il robottino compare nel popup quando Claude ha ' +
-             'mandato degli aiutanti, con il loro numero.');
+             'sono falliti. Il robottino compare quando Claude ha mandato degli ' +
+             'aiutanti, con il loro numero.');
         voce(wf, 'Più sessioni insieme',
              'La faccina mostra la più urgente: prima chi aspetta te, poi gli ' +
              'errori, poi chi lavora. In cima al popup, sotto «Claude adesso», ' +
              'c’è una riga per ogni sessione aperta.');
-        voce(wf, 'Le notifiche',
-             'Arrivano quando Claude aspetta te, quando si inceppa e quando ' +
-             'finisce un lavoro di almeno mezzo minuto. Non arrivano se stai già ' +
-             'guardando il terminale. Si spengono nella pagina «Watchface».');
+        voce(wf, 'Dalla riga al terminale',
+             'Un clic su una sessione, nel popup, nella notifica o nella mascotte ' +
+             'fluttuante, porta davanti la finestra del terminale in cui gira. Se ' +
+             'il terminale tiene più sessioni in schede della stessa finestra, ' +
+             'arrivi alla finestra e la scheda la scegli tu.');
+        voce(wf, 'Gli avvisi',
+             'Quando Claude aspetta te, si inceppa o finisce un lavoro di almeno ' +
+             'mezzo minuto, Watchface te lo dice in uno di due modi: una notifica, ' +
+             'oppure la mascotte fluttuante. Oppure per niente: restano la faccina ' +
+             'e il popup. Mai se stai già guardando il terminale.');
+        voce(wf, 'La mascotte fluttuante',
+             'Compare in basso a destra solo quando Claude ha qualcosa da dirti. ' +
+             'La nuvoletta elenca gli avvisi di tutte le sessioni, col numero sul ' +
+             'disco della faccina; quello evidenziato dà il colore a tutto, e un ' +
+             'clic su un’altra riga lo cambia. Un clic sulla faccina porta al ' +
+             'terminale di quella evidenziata.');
+        voce(wf, 'Quando se ne va',
+             'Ogni riga si toglie da sola quando la sua sessione riparte. «Ha ' +
+             'finito» dopo i secondi che scegli (0: resta finché non la chiudi); ' +
+             'la × toglie una riga sola. Senza righe la mascotte si ritira. ' +
+             'Trascinala dove vuoi: si ricorda il posto. Sopra un video o un gioco ' +
+             'a schermo intero non compare.');
+        voce(wf, 'Sempre visibile',
+             'Accesa nella pagina «Watchface», la mascotte fluttuante resta sullo ' +
+             'schermo, sopra le finestre, anche quando non ha niente da dire: la ' +
+             'sua faccia segue Claude come quella della barra, e la nuvoletta ' +
+             'compare solo con gli avvisi. Un clic porta al terminale della ' +
+             'sessione più urgente.');
+        voce(wf, 'Le sessioni dei programmi non compaiono',
+             'Solo le sessioni aperte da una persona. Quelle avviate da un ' +
+             'programma (claude -p, l’SDK, la lettura della quota) nessuno le ' +
+             'guarda, e non entrano nella faccina.');
         voce(wf, 'Come lo sa, e quanto costa',
              'A ogni passo Claude Code avvisa un piccolo script (un hook). Lo ' +
              'script scrive una riga in memoria e il pannello la legge solo quando ' +
              'cambia: pochi millesimi di secondo per evento, nessun controllo a ' +
              'intervalli. Non approva e non rifiuta niente: i permessi si danno ' +
              'sempre nel terminale.');
+        voce(wf, 'Hook e backup',
+             'Gli hook stanno in ~/.claude/settings.json. Prima di ogni modifica ' +
+             'se ne fa un backup; gli ultimi si ripristinano dalla pagina ' +
+             '«Watchface», dove si possono anche togliere gli hook di altri ' +
+             'programmi che fanno lo stesso lavoro.');
 
-        const popup = sezione('Il popup', 'La forma di ogni misura dice che tipo di misura è.');
+        const popup = sezione('popup', 'Il popup', 'verde', 'view-list-symbolic',
+                              'La forma di ogni misura dice che tipo di misura è.');
         voce(popup, 'Barra con tacche',
              'Per le grandezze che hanno un massimo: disco e quota. Le due tacche ' +
              'sono le soglie di attenzione e di allarme, e il colore cambia ' +
@@ -154,7 +403,7 @@ export default class WatchdogPreferences extends ExtensionPreferences {
              'Verde acqua per la macchina, viola per la quota. Ambra e rosso ' +
              'valgono per qualunque misura, alle stesse soglie.');
 
-        const quota = sezione('La quota');
+        const quota = sezione('quota', 'La quota', 'viola', 'fw-week');
         voce(quota, 'Sessione e settimana',
              'La «sessione corrente» è una finestra di circa cinque ore che ' +
              'riparte dal primo uso, non la giornata: per questo è scritta l’ora ' +
@@ -169,20 +418,46 @@ export default class WatchdogPreferences extends ExtensionPreferences {
              'fare, per esempio aprire una sessione nuova quando il contesto è ' +
              'diventato enorme. Se va tutto bene, la riga non c’è.');
 
-        const prog = sezione('I progetti', 'Cliccando un progetto si aprono le sue azioni.');
+        const agg = sezione('aggiornamento', 'Quanto sono freschi i numeri', 'viola',
+                            'view-refresh-symbolic');
+        voce(agg, 'Due ritmi',
+             'Disco, spazio e progetti si aggiornano da soli (ogni dieci minuti, di ' +
+             'serie). La quota va più piano, ogni mezz’ora, perché richiede un ' +
+             'accesso alla rete. Si regolano tutti e due nella pagina «Quota».');
+        voce(agg, 'Aggiornare subito',
+             'Il pulsante circolare in cima al popup rilegge tutto, quota compresa. ' +
+             'Accanto è scritto quanto sono vecchi i dati.');
+        voce(agg, 'Un intervallo troppo corto',
+             'La linea di tendenza disegna le ultime 60 rilevazioni: con un minuto ' +
+             'di intervallo copre un’ora, con dieci minuti dieci ore. Se il grafico ' +
+             'ti sembra piatto, allunga l’intervallo.');
+
+        const prog = sezione('progetti', 'I progetti', 'blu', 'folder-symbolic',
+                             'Cliccando un progetto nel popup si aprono le sue azioni.');
         voce(prog, 'Nuovo progetto, con il «+»',
              'Accanto al titolo «Progetti». Scrivi un nome: la cartella nasce nella ' +
              'radice dei progetti (si sceglie nella pagina «Progetti») e ci si apre ' +
              'subito una sessione di Claude Code. Se vuoi, con un README di ' +
              'partenza. Invio conferma, Esc annulla.');
+        voce(prog, 'La radice dei progetti',
+             'Lasciata vuota si deduce da sola: fra le cartelle che contengono ' +
+             'progetti con delle conversazioni vince quella che ne ha di più. Ne ' +
+             'servono almeno due, e la home e /tmp non si considerano mai. Per ' +
+             'sceglierne un’altra scrivi un percorso assoluto o che inizia con la ' +
+             'tilde.');
         voce(prog, 'Cartella e Riprendi',
              '«Cartella» apre la cartella nel gestore file. «Riprendi» apre una ' +
              'scheda del terminale nella cartella del progetto ed esegue ' +
-             'claude --resume, con la tua shell di sempre.');
+             'claude --resume, con la tua shell di sempre. Con la shell vuota si ' +
+             'usa quella del terminale (sul profilo di Ptyxis, se c’è) o quella ' +
+             'della variabile SHELL, avviata con -i perché legga la tua ' +
+             'configurazione. Il comando personalizzato sostituisce tutto: %d ' +
+             'diventa la cartella del progetto.');
         voce(prog, 'Elimina dati',
              'Toglie solo i dati di Claude Code per quel progetto: conversazioni, ' +
              'memorie, scratchpad. La cartella di lavoro, con i tuoi file, non ' +
-             'viene mai toccata. Tutto va nel cestino.');
+             'viene mai toccata, nemmeno per errore: lo script che cancella salta ' +
+             'qualunque percorso caschi lì dentro. Tutto va nel cestino.');
         voce(prog, 'Correggi',
              'Compare quando la cartella di un progetto è stata spostata. Chiede ' +
              'dov’è finita, controlla che i file citati nelle conversazioni ci ' +
@@ -198,7 +473,7 @@ export default class WatchdogPreferences extends ExtensionPreferences {
              'home, /tmp, percorsi sparsi. Qui l’unica azione è togliere le ' +
              'sessioni.');
 
-        const pulizia = sezione('Liberare spazio');
+        const pulizia = sezione('pulizia', 'Liberare spazio', 'verde', 'fw-reclaim');
         voce(pulizia, 'Come funziona',
              '«Libera spazio» elenca cosa si può togliere: cestino scaduto, cache ' +
              'vecchie, scarti di Claude Code, versioni vecchie di Claude. Spunti ' +
@@ -213,20 +488,7 @@ export default class WatchdogPreferences extends ExtensionPreferences {
              'password di amministratore: si puliscono con /watchdog-clean, non da ' +
              'un menu del pannello.');
 
-        const agg = sezione('Quanto sono freschi i numeri');
-        voce(agg, 'Due ritmi',
-             'Disco, spazio e progetti si aggiornano da soli (ogni dieci minuti, di ' +
-             'serie). La quota va più piano, ogni mezz’ora, perché richiede un ' +
-             'accesso alla rete. Entrambi si regolano nelle pagine «Popup» e «Quota».');
-        voce(agg, 'Aggiornare subito',
-             'Il pulsante circolare in cima al popup rilegge tutto, quota compresa. ' +
-             'Accanto è scritto quanto sono vecchi i dati.');
-        voce(agg, 'Un intervallo troppo corto',
-             'La linea di tendenza disegna le ultime 60 rilevazioni: con un minuto ' +
-             'di intervallo copre un’ora, con dieci minuti dieci ore. Se il grafico ' +
-             'ti sembra piatto, allunga l’intervallo.');
-
-        const diag = sezione('Se qualcosa non torna');
+        const diag = sezione('problemi', 'Se qualcosa non torna', 'rosso', 'dialog-warning-symbolic');
         voce(diag, '«nessun dato» in cima al popup',
              'I dati non sono ancora stati raccolti. Premi il pulsante di ' +
              'aggiornamento; se non cambia, lancia bin/collect-metrics.py dalla ' +
@@ -244,261 +506,157 @@ export default class WatchdogPreferences extends ExtensionPreferences {
         voce(diag, '«Libera spazio» è spento',
              'Non c’è niente da liberare: nessun file ha superato le scadenze.');
 
-        const dove = sezione('Dove stanno le cose');
+        const dove = sezione('dove', 'Dove stanno le cose', 'grigio', 'folder-symbolic');
         voce(dove, 'I dati del pannello',
              'In ~/.local/share/claude-code-watchdog/: metrics.json è la fotografia ' +
              'attuale, history.jsonl la serie storica (le ultime 2000 rilevazioni), ' +
              'usage.json l’ultima lettura della quota.');
         voce(dove, 'Soglie e scadenze',
-             'In config/watchdog.conf, nella cartella del progetto ' +
-             'claude-code-watchdog: soglie di colore, scadenze della pulizia e ' +
-             'soglie dei consigli sulla quota. Si modificano lì, senza riavviare ' +
-             'niente.');
-        voce(dove, 'Hook e backup',
-             'Gli hook di Watchface stanno in ~/.claude/settings.json. Prima di ' +
-             'ogni modifica se ne fa un backup in ' +
-             '~/.local/share/claude-code-watchdog/backup-settings/; i più recenti ' +
-             'si ripristinano dalla pagina «Watchface».');
+             'In watchdog.conf: soglie di colore, scadenze della pulizia e soglie ' +
+             'dei consigli sulla quota. Si modificano lì, senza riavviare niente.');
 
-        const info = sezione('Informazioni');
+        const info = sezione('info', 'Informazioni', 'grigio', 'fw-gauge');
         const autore = new Adw.ActionRow({
             title: 'Claude Code Watchdog',
             subtitle: `Versione ${this.metadata.version} · di CiroBoxHub · licenza GPL-2.0 o successiva`,
         });
-        const link = new Gtk.LinkButton({
+        autore.add_suffix(new Gtk.LinkButton({
             label: 'Il progetto su GitHub',
             uri: this.metadata.url ?? 'https://github.com/CiroBoxHub/claude-code-watchdog',
             valign: Gtk.Align.CENTER,
-        });
-        autore.add_suffix(link);
+        }));
         info.add(autore);
 
         return pagina;
     }
 
-    /* ---------------------------------------------------------- barra --- */
-    _paginaBarra(s) {
-        const pagina = new Adw.PreferencesPage({
-            title: 'Barra',
-            icon_name: 'view-continuous-symbolic',
-        });
+    /* -------------------------------------------------------- pannello --- */
 
-        const gruppo = new Adw.PreferencesGroup({
-            title: 'Cosa mostrare nel pannello',
-            description: 'Più indicatori accendi, più spazio occupa la barra. ' +
-                         'Senza nessuno resta la sola icona.',
-        });
-        pagina.add(gruppo);
+    _paginaPannello(s) {
+        const pagina = new Adw.PreferencesPage({title: 'Pannello',
+                                                icon_name: 'view-continuous-symbolic'});
 
+        const valori = this._gruppo(pagina, 'Valori nella barra',
+                                    'Più ne accendi, più spazio occupa la barra.', 'barra');
         const attivi = () => s.get_strv('panel-indicators');
-        for (const [chiave, titolo, sottotitolo] of INDICATORI) {
-            const riga = new Adw.SwitchRow({title: titolo, subtitle: sottotitolo});
-            riga.set_subtitle_lines(0);
-            riga.set_active(attivi().includes(chiave));
-            riga.connect('notify::active', () => {
-                // Si riscrive l'array intero nell'ordine canonico, così la
+        for (const [chiave, titolo, sottotitolo, icona, colore] of INDICATORI) {
+            const r = new Adw.SwitchRow({title: titolo, subtitle: sottotitolo});
+            r.add_prefix(this._tessera(icona, colore));
+            r.active = attivi().includes(chiave);
+            r.connect('notify::active', () => {
+                // Si riscrive l'elenco intero nell'ordine canonico, così la
                 // barra non dipende dall'ordine in cui si è cliccato.
-                const scelti = INDICATORI
-                    .map(([k]) => k)
-                    .filter(k => k === chiave ? riga.get_active() : attivi().includes(k));
+                const scelti = INDICATORI.map(([k]) => k)
+                    .filter(k => (k === chiave ? r.active : attivi().includes(k)));
                 s.set_strv('panel-indicators', scelti);
             });
-            gruppo.add(riga);
+            valori.add(r);
         }
 
-        const aspetto = new Adw.PreferencesGroup({title: 'Aspetto'});
-        pagina.add(aspetto);
-        const icona = new Adw.SwitchRow({
-            title: 'Mostra l’icona',
-            subtitle: 'Il disco stilizzato a sinistra dei valori',
-        });
-        s.bind('panel-show-icon', icona, 'active', Gio.SettingsBindFlags.DEFAULT);
-        aspetto.add(icona);
+        const aspetto = this._gruppo(pagina, 'Aspetto della barra', null, 'barra');
+        this._interruttore(aspetto, s, 'panel-show-icon', 'Icona principale',
+                           'Il misuratore a sinistra dei valori', 'fw-gauge', 'grigio');
+        this._interruttore(aspetto, s, 'panel-icons', 'Un’icona per ogni valore',
+                           'Si riconoscono senza leggere', 'fw-info', 'grigio');
+        this._interruttore(aspetto, s, 'panel-compact', 'Etichette compatte',
+                           '«94» invece di «94 MB»', 'view-continuous-symbolic', 'grigio');
 
-        const icone = new Adw.SwitchRow({
-            title: 'Un\u2019icona per ogni indicatore',
-            subtitle: 'Con più valori accesi si distinguono a colpo d\u2019occhio ' +
-                      'senza leggere. Occupa un po\u2019 più di barra, e toglie ' +
-                      'le sigle «S» e «W» che l\u2019icona già dice.',
-        });
-        icone.set_subtitle_lines(0);
-        s.bind('panel-icons', icone, 'active', Gio.SettingsBindFlags.DEFAULT);
-        aspetto.add(icone);
-
-        const compatto = new Adw.SwitchRow({
-            title: 'Etichette compatte',
-            subtitle: 'Toglie le unità e le sigle: «94» invece di «94 MB», ' +
-                      '«12%» invece di «S 12%». Utile con più indicatori accesi.',
-        });
-        compatto.set_subtitle_lines(0);
-        s.bind('panel-compact', compatto, 'active', Gio.SettingsBindFlags.DEFAULT);
-        aspetto.add(compatto);
+        const sezioni = this._gruppo(pagina, 'Sezioni del popup',
+                                     'Disco e dati di Claude ci sono sempre.', 'popup');
+        this._interruttore(sezioni, s, 'show-usage', 'Quota Claude',
+                           'Sessione e settimana, con l’azzeramento', 'fw-session', 'viola');
+        this._interruttore(sezioni, s, 'show-projects', 'Progetti',
+                           'Apri, riprendi, elimina i dati', 'folder-symbolic', 'blu');
+        this._interruttore(sezioni, s, 'show-other-folders', 'Fuori dai progetti',
+                           'Home, /tmp e altri percorsi', 'folder-symbolic', 'grigio');
+        this._interruttore(sezioni, s, 'show-alerts', 'Allarmi',
+                           'Quando una soglia viene superata', 'dialog-warning-symbolic', 'ambra');
+        this._numero(sezioni, s, 'max-projects', 'Quanti progetti elencare',
+                     'I più pesanti per primi', [3, 25, 1, 5], 'view-list-symbolic', 'blu');
 
         return pagina;
     }
 
-    /* ---------------------------------------------------------- popup --- */
-    _paginaPopup(s) {
-        const pagina = new Adw.PreferencesPage({
-            title: 'Popup',
-            icon_name: 'view-list-symbolic',
-        });
+    /* ------------------------------------------------------- watchface --- */
 
-        const sezioni = new Adw.PreferencesGroup({
-            title: 'Sezioni visibili',
-            description: 'Disco, dati Claude e spazio recuperabile ci sono sempre.',
-        });
-        pagina.add(sezioni);
+    _paginaWatchface(s) {
+        const pagina = new Adw.PreferencesPage({title: 'Watchface',
+                                                icon_name: 'face-smile-symbolic'});
 
-        for (const [chiave, titolo, sottotitolo] of [
-            ['show-usage', 'Quota Claude',
-             'Le due barre di sessione e settimana, con quando si azzerano'],
-            ['show-projects', 'Progetti',
-             'Le cartelle dentro la radice dei progetti: apri, riprendi, elimina i dati'],
-            ['show-other-folders', 'Fuori dai progetti',
-             'Home, /tmp e altri percorsi da cui hai lanciato Claude. Si possono solo ripulire.'],
-            ['show-alerts', 'Allarmi',
-             'Avvisi quando una soglia di config/watchdog.conf viene superata'],
-        ]) {
-            const riga = new Adw.SwitchRow({title: titolo, subtitle: sottotitolo});
-            riga.set_subtitle_lines(0);
-            s.bind(chiave, riga, 'active', Gio.SettingsBindFlags.DEFAULT);
-            sezioni.add(riga);
-        }
+        const mascotte = this._gruppo(pagina, 'La mascotte',
+                                      'Cambia espressione con quello che fa Claude.', 'watchface');
+        const inBarra = this._interruttore(mascotte, s, 'watchface-mascot', 'Faccina nella barra',
+                                           'Spenta, resta l’icona classica', 'face-smile-symbolic',
+                                           'ambra');
+        const inPopup = this._interruttore(mascotte, s, 'watchface-mascot-popup',
+                                           'Faccine nel popup',
+                                           'Una per sessione, col robottino', 'view-list-symbolic',
+                                           'ambra');
+        const taglia = this._bottoniScelta(mascotte, s, 'watchface-size', 'Grandezza',
+                                           [['piccola', 'Piccola'], ['media', 'Media'],
+                                            ['grande', 'Grande']],
+                                           'zoom-in-symbolic', 'ambra');
+        const sensibile = () => {
+            taglia.sensitive = inBarra.active || inPopup.active ||
+                               s.get_string('watchface-alerts') === 'mascotte' ||
+                               s.get_boolean('watchface-floating-always');
+        };
+        inBarra.connect('notify::active', sensibile);
+        inPopup.connect('notify::active', sensibile);
 
-        const quante = new Adw.SpinRow({
-            title: 'Quanti progetti elencare',
-            subtitle: 'I più pesanti per primi',
-            adjustment: new Gtk.Adjustment({
-                lower: 3, upper: 25, step_increment: 1, page_increment: 5,
-            }),
-        });
-        s.bind('max-projects', quante, 'value', Gio.SettingsBindFlags.DEFAULT);
-        sezioni.add(quante);
-
-        const agg = new Adw.PreferencesGroup({
-            title: 'Aggiornamento automatico',
-            description: 'Ogni giro rilegge disco, spazio e progetti. Costa circa ' +
-                         'mezzo secondo e aggiunge un punto alla linea di tendenza: ' +
-                         'più è frequente, più fitto è il grafico.',
-        });
-        pagina.add(agg);
-
-        const intervallo = new Adw.SpinRow({
-            title: 'Ogni quanti secondi',
-            subtitle: 'Da 30 secondi a 2 ore. Dieci minuti è un buon compromesso.',
-            adjustment: new Gtk.Adjustment({
-                lower: 30, upper: 7200, step_increment: 30, page_increment: 300,
-            }),
-        });
-        intervallo.set_subtitle_lines(0);
-        s.bind('refresh-seconds', intervallo, 'value', Gio.SettingsBindFlags.DEFAULT);
-        agg.add(intervallo);
-        agg.add(this._scorciatoie(s, 'refresh-seconds',
-                                  [['1 min', 60], ['5 min', 300], ['10 min', 600],
-                                   ['30 min', 1800], ['1 ora', 3600]]));
-
-        return pagina;
-    }
-
-    /* ---------------------------------------------------------- quota --- */
-    _paginaQuota(s) {
-        const pagina = new Adw.PreferencesPage({
-            title: 'Quota',
-            icon_name: 'battery-level-50-symbolic',   // speedometer c'e' solo in Breeze (KDE)
-        });
-
-        const gruppo = new Adw.PreferencesGroup({
-            title: 'Monitoraggio della quota Claude',
-            description: 'Interroga «claude -p /usage» e rimuove subito la ' +
-                         'trascrizione vuota che ogni invocazione lascia. ' +
-                         'Non consuma token.',
-        });
-        pagina.add(gruppo);
-
-        const attivo = new Adw.SwitchRow({
-            title: 'Attiva',
-            subtitle: 'Se lo spegni, le due barre della quota restano vuote',
-        });
-        s.bind('usage-enabled', attivo, 'active', Gio.SettingsBindFlags.DEFAULT);
-        gruppo.add(attivo);
-
-        const intervallo = new Adw.SpinRow({
-            title: 'Ogni quanti secondi rileggerla',
-            subtitle: 'Costa circa 2 secondi e un giro di rete, quindi va più ' +
-                      'piano dell’aggiornamento normale. Minimo 5 minuti.',
-            adjustment: new Gtk.Adjustment({
-                lower: 300, upper: 86400, step_increment: 60, page_increment: 600,
-            }),
-        });
-        intervallo.set_subtitle_lines(0);
-        s.bind('usage-interval-seconds', intervallo, 'value', Gio.SettingsBindFlags.DEFAULT);
-        gruppo.add(intervallo);
-        gruppo.add(this._scorciatoie(s, 'usage-interval-seconds',
-                                     [['5 min', 300], ['15 min', 900],
-                                      ['30 min', 1800], ['1 ora', 3600],
-                                      ['3 ore', 10800]]));
-
-        return pagina;
-    }
-
-    /* ------------------------------------------------------ watchface --- */
-    _paginaWatchface(s, window) {
-        const pagina = new Adw.PreferencesPage({
-            title: 'Watchface',
-            icon_name: 'face-smile-symbolic',
-        });
-
-        const aspetto = new Adw.PreferencesGroup({
-            title: 'La mascotte',
-            description: 'Cosa sta facendo Claude Code, nella barra e in cima al ' +
-                         'popup: dorme, lavora, aspetta te, ha finito. Il limone ' +
-                         'arriva quando qualcosa si inceppa, il robottino quando ' +
-                         'Claude manda degli aiutanti.',
-        });
-        pagina.add(aspetto);
-        const mascotte = new Adw.SwitchRow({
-            title: 'Mostra la mascotte',
-            subtitle: 'Spenta, resta l\u2019icona di sempre: lo stato urgente la ' +
-                      'colora d\u2019ambra (aspetta te) o di rosso (errore).',
-        });
-        mascotte.set_subtitle_lines(0);
-        s.bind('watchface-mascot', mascotte, 'active', Gio.SettingsBindFlags.DEFAULT);
-        aspetto.add(mascotte);
-        const notifiche = new Adw.SwitchRow({
-            title: 'Notifiche',
-            subtitle: 'Quando Claude aspetta una risposta, quando si inceppa, e ' +
-                      'quando finisce un lavoro di almeno mezzo minuto. Mai se ' +
-                      'stai già guardando il terminale.',
-        });
-        notifiche.set_subtitle_lines(0);
-        s.bind('watchface-notifications', notifiche, 'active', Gio.SettingsBindFlags.DEFAULT);
-        aspetto.add(notifiche);
+        const avvisi = this._gruppo(pagina, 'Come avvisarti',
+                                    'Quando Claude ti aspetta, si inceppa o ha finito.',
+                                    'watchface');
+        this._pallini(avvisi, s, 'watchface-alerts', [
+            ['notifiche', 'Notifiche', 'Come le altre app; restano finché non le chiudi',
+             'preferences-system-notifications-symbolic', 'blu'],
+            ['mascotte', 'Mascotte fluttuante', 'Una nuvoletta sullo schermo, con tutti gli avvisi',
+             'face-smile-symbolic', 'ambra'],
+            ['nessuno', 'Nessun avviso', 'Restano la faccina e il popup',
+             'notifications-disabled-symbolic', 'grigio'],
+        ]);
+        const fluttuante = this._gruppo(pagina, 'Mascotte fluttuante',
+                                        'Sopra le finestre; si trascina dove vuoi.', 'watchface');
+        const sempre = this._interruttore(fluttuante, s, 'watchface-floating-always',
+                                          'Sempre visibile',
+                                          'Segue Claude anche senza avvisi', 'face-smile-symbolic',
+                                          'ambra');
+        const durata = this._numero(fluttuante, s, 'watchface-floating-seconds',
+                                    'Quanto resta «ha finito»',
+                                    'Secondi; 0 finché non la chiudi', [0, 120, 1, 10],
+                                    'view-refresh-symbolic', 'ambra');
+        const posto = new Adw.ActionRow({title: 'Rimettila nell’angolo',
+                                         subtitle: 'In basso a destra del monitor principale'});
+        posto.add_prefix(this._tessera('view-continuous-symbolic', 'ambra'));
+        posto.add_suffix(this._bottone('Rimetti', null, () => {
+            s.reset('watchface-floating-y');
+            s.reset('watchface-floating-x');
+        }));
+        fluttuante.add(posto);
+        // La durata vale per gli avvisi della mascotte; il posto anche per
+        // quella sempre visibile.
+        const modo = () => {
+            const avvisa = s.get_string('watchface-alerts') === 'mascotte';
+            durata.sensitive = avvisa;
+            posto.sensitive = avvisa || sempre.active;
+            sensibile();
+        };
+        modo();
+        sempre.connect('notify::active', modo);
+        this._segnali.push(s.connect('changed::watchface-alerts', modo));
 
         // Gli hook: senza, Watchface non sa niente. Li gestisce
         // watchface-hooks.py, che fa un backup di settings.json prima di ogni
         // modifica; qui ci sono solo i pulsanti.
-        this._gruppoHook = new Adw.PreferencesGroup({
-            title: 'Hook di Claude Code',
-            description: 'Watchface sa cosa fa Claude perché Claude Code glielo ' +
-                         'dice con un hook, in ~/.claude/settings.json. Prima di ' +
-                         'ogni modifica si fa un backup del file.',
-        });
-        pagina.add(this._gruppoHook);
-        this._gruppoAltri = new Adw.PreferencesGroup({
-            title: 'Altri programmi negli hook',
-            description: 'Hook di altri strumenti. Se uno fa lo stesso lavoro di ' +
-                         'Watchface si può togliere da qui, con backup.',
-        });
-        pagina.add(this._gruppoAltri);
-        this._gruppoBackup = new Adw.PreferencesGroup({
-            title: 'Backup di settings.json',
-            description: 'Gli ultimi dieci, uno per modifica. Ripristinarne uno ' +
-                         'fa prima un backup di quello attuale.',
-        });
-        pagina.add(this._gruppoBackup);
+        this._gruppoHook = this._gruppo(pagina, 'Hook di Claude Code',
+                                        'Come Claude Code avvisa Watchface.', 'watchface');
+        this._gruppoAltri = this._gruppo(pagina, 'Altri programmi negli hook',
+                                         'Se uno fa lo stesso lavoro, si può togliere.',
+                                         'watchface');
+        this._gruppoBackup = this._gruppo(pagina, 'Backup di settings.json',
+                                          'Uno per modifica; ripristinare ne fa un altro.',
+                                          'watchface');
         this._righeHook = [];
-        this._finestra = window;
         this._aggiornaHook();
         return pagina;
     }
@@ -567,9 +725,12 @@ export default class WatchdogPreferences extends ExtensionPreferences {
                 st = null;
             }
             if (!st) {
-                aggiungi(this._gruppoHook, new Adw.ActionRow({
+                const r = new Adw.ActionRow({
                     title: 'Stato non leggibile',
-                    subtitle: err || 'settings.json non è JSON valido: non lo tocco.'}));
+                    subtitle: err || 'settings.json non è JSON valido: non lo tocco.'});
+                r.add_prefix(this._tessera('dialog-warning-symbolic', 'rosso'));
+                aggiungi(this._gruppoHook, r);
+                this._gruppoAltri.visible = this._gruppoBackup.visible = false;
                 return;
             }
 
@@ -577,25 +738,20 @@ export default class WatchdogPreferences extends ExtensionPreferences {
             const riga = new Adw.ActionRow({
                 title: n === tot ? 'Installati' : n === 0 ? 'Non installati' : 'Installati in parte',
                 subtitle: n === tot
-                    ? `Tutti i ${tot} eventi arrivano a Watchface.`
+                    ? `Tutti i ${tot} eventi arrivano a Watchface`
                     : n === 0
-                        ? 'Senza hook la mascotte dorme sempre e non arriva nessuna notifica.'
-                        : `${n} eventi su ${tot}: reinstallali per completarli.`,
+                        ? 'Senza hook la mascotte dorme sempre'
+                        : `${n} eventi su ${tot}: reinstallali`,
             });
-            riga.set_subtitle_lines(0);
-            const bottone = (etichetta, classe, azione) => {
-                const b = new Gtk.Button({label: etichetta, valign: Gtk.Align.CENTER});
-                if (classe)
-                    b.add_css_class(classe);
-                b.connect('clicked', azione);
-                return b;
-            };
+            riga.add_prefix(n === tot
+                ? this._tessera('object-select-symbolic', 'verde')
+                : this._tessera('dialog-warning-symbolic', n === 0 ? 'rosso' : 'ambra'));
             if (n < tot) {
-                riga.add_suffix(bottone(n ? 'Reinstalla' : 'Installa', 'suggested-action',
-                                        () => this._azioneHook(['installa'])));
+                riga.add_suffix(this._bottone(n ? 'Reinstalla' : 'Installa', 'suggested-action',
+                                              () => this._azioneHook(['installa'])));
             }
             if (n > 0) {
-                riga.add_suffix(bottone('Rimuovi', null, () => this._conferma(
+                riga.add_suffix(this._bottone('Rimuovi', null, () => this._conferma(
                     'Togliere gli hook di Watchface?',
                     'La mascotte smetterà di seguire Claude. Si possono rimettere ' +
                     'quando vuoi, e prima si fa un backup di settings.json.',
@@ -610,7 +766,8 @@ export default class WatchdogPreferences extends ExtensionPreferences {
                     subtitle: `${a.eventi.length} eventi · ${a.percorso}`,
                 });
                 r.set_subtitle_lines(2);
-                r.add_suffix(bottone('Rimuovi', 'destructive-action', () => this._conferma(
+                r.add_prefix(this._tessera('system-run-symbolic', 'grigio'));
+                r.add_suffix(this._bottone('Rimuovi', 'destructive-action', () => this._conferma(
                     `Togliere gli hook di ${a.programma}?`,
                     `Si tolgono i suoi ${a.eventi.length} hook da settings.json, dopo ` +
                     'un backup. Il programma resta installato: si toglie solo il ' +
@@ -627,9 +784,10 @@ export default class WatchdogPreferences extends ExtensionPreferences {
                     title: m ? `${m[3]}/${m[2]}/${m[1]} alle ${m[4]}:${m[5]}:${m[6]}` : nome,
                     subtitle: nome,
                 });
-                r.add_suffix(bottone('Ripristina', null, () => this._conferma(
+                r.add_prefix(this._tessera('document-save-symbolic', 'grigio'));
+                r.add_suffix(this._bottone('Ripristina', null, () => this._conferma(
                     'Ripristinare questo backup?',
-                    'settings.json torna com\u2019era in quel momento, hook e ' +
+                    'settings.json torna com’era in quel momento, hook e ' +
                     'impostazioni compresi. Prima si fa un backup di quello attuale.',
                     'Ripristina', () => this._azioneHook(['ripristina', f]))));
                 aggiungi(this._gruppoBackup, r);
@@ -637,137 +795,94 @@ export default class WatchdogPreferences extends ExtensionPreferences {
         });
     }
 
-    /* ------------------------------------------------------ terminale --- */
-    _paginaTerminale(s) {
-        const pagina = new Adw.PreferencesPage({
-            title: 'Progetti',
-            icon_name: 'folder-symbolic',
-        });
+    /* ----------------------------------------------- quota e aggiornamento --- */
 
-        const radice = new Adw.PreferencesGroup({
-            title: 'Dove nascono i nuovi progetti',
-            description: 'Il pulsante «+» accanto a «Progetti» nel popup chiede ' +
-                         'un nome, crea la cartella qui dentro e ci apre subito ' +
-                         'una sessione di Claude Code.',
-        });
-        pagina.add(radice);
+    _paginaQuota(s) {
+        // speedometer c'è solo in Breeze (KDE): questa c'è dappertutto.
+        const pagina = new Adw.PreferencesPage({title: 'Quota',
+                                                icon_name: 'battery-level-50-symbolic'});
 
-        const campo = new Adw.EntryRow({title: 'Cartella', show_apply_button: true});
-        campo.set_tooltip_text('Vuoto = automatico. Percorso assoluto o con la tilde.');
+        const quota = this._gruppo(pagina, 'Quota di Claude',
+                                   'Letta con /usage: non consuma token.', 'quota');
+        this._interruttore(quota, s, 'usage-enabled', 'Leggi la quota',
+                           'Spenta, le barre della quota restano vuote', 'fw-week', 'viola');
+        this._numero(quota, s, 'usage-interval-seconds', 'Ogni quanti secondi',
+                     'Minimo 5 minuti: costa un giro di rete', [300, 86400, 60, 600],
+                     'view-refresh-symbolic', 'viola');
+        this._scorciatoie(quota, s, 'usage-interval-seconds',
+                          [['5 min', 300], ['15 min', 900], ['30 min', 1800],
+                           ['1 ora', 3600], ['3 ore', 10800]]);
+
+        const dati = this._gruppo(pagina, 'Disco, spazio e progetti',
+                                  'Ogni giro aggiunge un punto alla linea di tendenza.',
+                                  'aggiornamento');
+        this._numero(dati, s, 'refresh-seconds', 'Ogni quanti secondi',
+                     'Dieci minuti è un buon compromesso', [30, 7200, 30, 300],
+                     'view-refresh-symbolic', 'verde');
+        this._scorciatoie(dati, s, 'refresh-seconds',
+                          [['1 min', 60], ['5 min', 300], ['10 min', 600],
+                           ['30 min', 1800], ['1 ora', 3600]]);
+
+        return pagina;
+    }
+
+    /* -------------------------------------------------------- progetti --- */
+
+    _paginaProgetti(s) {
+        const pagina = new Adw.PreferencesPage({title: 'Progetti', icon_name: 'folder-symbolic'});
+
+        const radice = this._gruppo(pagina, 'Dove nascono i nuovi progetti',
+                                    'Il «+» del popup crea la cartella qui.', 'progetti');
+        const campo = new Adw.EntryRow({title: 'Cartella (vuota: automatica)',
+                                        show_apply_button: true});
+        campo.add_prefix(this._tessera('folder-symbolic', 'blu'));
         s.bind('projects-root', campo, 'text', Gio.SettingsBindFlags.DEFAULT);
         radice.add(campo);
 
         // Il percorso si mostra, non si scrive nei testi: cambia da macchina a
         // macchina, e una guida che ne cita uno fisso è sbagliata altrove.
         const inUso = new Adw.ActionRow({title: 'In uso adesso'});
-        inUso.set_subtitle_lines(0);
+        inUso.add_prefix(this._tessera('object-select-symbolic', 'blu'));
         const aggiornaInUso = () => {
             const scelta = s.get_string('projects-root').trim();
-            inUso.set_subtitle(scelta
+            inUso.subtitle = scelta
                 ? this._abbrevia(this._espandi(scelta))
-                : `${this._abbrevia(this._radiceRilevata())} — rilevata in automatico`);
+                : `${this._abbrevia(this._radiceRilevata())} — rilevata in automatico`;
         };
         aggiornaInUso();
-        s.connect('changed::projects-root', aggiornaInUso);
+        this._segnali.push(s.connect('changed::projects-root', aggiornaInUso));
         radice.add(inUso);
+        this._interruttore(radice, s, 'new-project-readme', 'Crea un README.md',
+                           'Nome, data, percorso e come riprendere', 'document-new-symbolic',
+                           'blu');
 
-        spiega(radice, 'Vuoto = automatico',
-               'Si deduce dai progetti che hanno gi\u00e0 delle conversazioni: ' +
-               'fra tutte le cartelle che ne contengono, vince quella che ne ha ' +
-               'di pi\u00f9. Ne servono almeno due, e la home e /tmp non si ' +
-               'considerano mai. Per sceglierne un\u2019altra scrivi un percorso ' +
-               'assoluto, o uno che inizia con la tilde.');
-
-        const conReadme = new Adw.SwitchRow({
-            title: 'Crea un README.md',
-            subtitle: 'Nome, data, percorso e il comando per riprendere, più ' +
-                      'due righe da riempire su cos\u2019è il progetto.',
-        });
-        conReadme.set_subtitle_lines(0);
-        s.bind('new-project-readme', conReadme, 'active', Gio.SettingsBindFlags.DEFAULT);
-        radice.add(conReadme);
-
-        const gruppo = new Adw.PreferencesGroup({
-            title: 'Il pulsante «Riprendi»',
-            description: 'Apre una scheda nel terminale, dentro la cartella del ' +
-                         'progetto, ed esegue claude --resume. Quando Claude esce ' +
-                         'resta una shell aperta, così la scheda non si chiude.',
-        });
-        pagina.add(gruppo);
-
-        const shell = new Adw.EntryRow({title: 'Shell', show_apply_button: true});
-        const rilevata = this._shellRilevata();
-        shell.set_tooltip_text(`Rilevata ora: ${rilevata}`);
+        const riprendi = this._gruppo(pagina, 'Il pulsante «Riprendi»',
+                                      'Apre il terminale ed esegue claude --resume.', 'progetti');
+        const shell = new Adw.EntryRow({title: 'Shell (vuota: automatica)',
+                                        show_apply_button: true});
+        shell.add_prefix(this._tessera('utilities-terminal-symbolic', 'blu'));
         s.bind('shell', shell, 'text', Gio.SettingsBindFlags.DEFAULT);
-        gruppo.add(shell);
-
-        spiega(gruppo, 'Vuoto = automatico',
-               `Con il campo vuoto si usa la shell che il terminale ha già ` +
-               `configurata — sul profilo di Ptyxis, se c’è un comando ` +
-               `personalizzato — e solo in mancanza di quella la variabile ` +
-               `SHELL. Adesso verrebbe usata: ${rilevata}. Viene avviata con ` +
-               `-i, così legge i tuoi file di configurazione e ritrovi il tuo ` +
-               `prompt e i tuoi alias.`);
-
-        const avanzato = new Adw.PreferencesGroup({
-            title: 'Comando personalizzato',
-            description: 'Da riempire solo se il rilevamento automatico non va ' +
-                         'bene: sostituisce del tutto il comando di apertura. ' +
-                         '%d viene rimpiazzato con la cartella del progetto.',
-        });
-        pagina.add(avanzato);
-
-        const comando = new Adw.EntryRow({title: 'Comando', show_apply_button: true});
+        riprendi.add(shell);
+        const rilevata = new Adw.ActionRow({title: 'Rilevata adesso',
+                                            subtitle: this._shellRilevata()});
+        rilevata.add_prefix(this._tessera('object-select-symbolic', 'blu'));
+        riprendi.add(rilevata);
+        const comando = new Adw.EntryRow({title: 'Comando personalizzato (%d = cartella)',
+                                          show_apply_button: true});
+        comando.add_prefix(this._tessera('system-run-symbolic', 'grigio'));
         s.bind('terminal-command', comando, 'text', Gio.SettingsBindFlags.DEFAULT);
-        avanzato.add(comando);
-        spiega(avanzato, 'Esempio',
-               'kitty --directory %d -- zsh -i -c ’claude --resume; exec zsh -i’');
+        riprendi.add(comando);
 
-        return pagina;
-    }
-
-    /* ----------------------------------------------------- sicurezza --- */
-    _paginaSicurezza(s) {
-        const pagina = new Adw.PreferencesPage({
-            title: 'Sicurezza',
-            icon_name: 'security-high-symbolic',
-        });
-
-        const gruppo = new Adw.PreferencesGroup({
-            title: 'Conferme',
-            description: 'In nessun caso viene toccata la cartella di lavoro di ' +
-                         'un progetto: lì ci sono i file veri, non dati di Claude ' +
-                         'Code. Lo script che cancella ha una rete di sicurezza ' +
-                         'che salta qualunque percorso caschi lì dentro, anche se ' +
-                         'ci finisse per errore.',
-        });
-        pagina.add(gruppo);
-
-        const conferma = new Adw.SwitchRow({
-            title: 'Mostra l’elenco prima di eliminare',
-            subtitle: 'Spegnendolo, «Elimina dati» cancella al primo clic senza ' +
-                      'mostrare cosa. Sconsigliato.',
-        });
-        conferma.set_subtitle_lines(0);
-        s.bind('confirm-delete', conferma, 'active', Gio.SettingsBindFlags.DEFAULT);
-        gruppo.add(conferma);
+        const sicurezza = this._gruppo(pagina, 'Sicurezza',
+                                       'La cartella di lavoro non viene mai toccata.', 'progetti');
+        this._interruttore(sicurezza, s, 'confirm-delete', 'Mostra l’elenco prima di eliminare',
+                           'Spento, «Elimina dati» agisce al primo clic', 'security-high-symbolic',
+                           'rosso');
 
         return pagina;
     }
 
     /* -------------------------------------------------------- utilità --- */
-
-    _scorciatoie(s, chiave, valori) {
-        const riga = new Adw.ActionRow({title: 'Valori rapidi'});
-        const box = new Gtk.Box({spacing: 6, valign: Gtk.Align.CENTER});
-        for (const [etichetta, secondi] of valori) {
-            const b = new Gtk.Button({label: etichetta});
-            b.connect('clicked', () => s.set_int(chiave, secondi));
-            box.append(b);
-        }
-        riga.add_suffix(box);
-        return riga;
-    }
 
     _espandi(percorso) {
         // Stessa normalizzazione dell'estensione, o «In uso adesso» mostrerebbe

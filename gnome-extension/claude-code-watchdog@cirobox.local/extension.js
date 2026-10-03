@@ -26,7 +26,9 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-import {Watchface, iconaStato, testoStato} from './watchface.js';
+import {Watchface, iconaStato, testoStato, misureMascotte, genitoreDaStat, catenaPid}
+    from './watchface.js';
+import {Fumetto} from './fumetto.js';
 
 const DATA_DIR = GLib.build_filenamev([GLib.get_user_data_dir(), 'claude-code-watchdog']);
 const METRICS = GLib.build_filenamev([DATA_DIR, 'metrics.json']);
@@ -682,12 +684,30 @@ class Indicatore extends PanelMenu.Button {
         this._costruisciMenu();
         // Watchface prima del pannello: il pannello ne chiede lo stato. È un
         // accessorio come il suggerimento — se non parte, manca da solo.
+        // Chi nella versione 3 aveva spento le notifiche non deve vedersele
+        // tornare: la scelta nuova, se mai toccata, eredita quella vecchia.
+        if (this._settings.get_user_value('watchface-alerts') === null &&
+            !this._settings.get_boolean('watchface-notifications'))
+            this._settings.set_string('watchface-alerts', 'nessuno');
+        // La mascotte fluttuante prima di Watchface, che le passa gli avvisi.
+        try {
+            this._fumetto = new Fumetto({
+                percorsoEstensione: this._ext.path,
+                settings: this._settings,
+                suApri: s => this._apriSessione(s),
+            });
+        } catch (e) {
+            this._fumetto = null;
+            logError(e, 'claude-code-watchdog: mascotte fluttuante non disponibile');
+        }
         try {
             this._watchface = new Watchface({
                 percorsoEstensione: this._ext.path,
                 suCambio: () => this._aggiornaWatchface(),
-                notifiche: () => this._settings.get_boolean('watchface-notifications'),
+                avvisi: () => this._settings.get_string('watchface-alerts'),
                 terminali: TERMINALI.map(t => t.desktop),
+                suApri: s => this._apriSessione(s),
+                suAvviso: (s, testo) => this._fumetto?.avvisa(s, testo),
             });
         } catch (e) {
             this._watchface = null;
@@ -825,13 +845,15 @@ class Indicatore extends PanelMenu.Button {
         // Gli eventi arrivano a raffica mentre Claude lavora: si tocca l'icona
         // solo quando cambia quello che mostra. `_costruisciPannello` azzera
         // il ricordo, perché lì l'icona è nuova.
-        const chiave = `${mascotte}:${stato}`;
+        const taglia = this._settings.get_string('watchface-size');
+        const chiave = `${mascotte}:${taglia}:${stato}`;
         if (this._iconaStato && chiave !== this._chiaveIconaStato) {
             this._chiaveIconaStato = chiave;
             if (mascotte) {
                 this._iconaStato.gicon = Gio.icon_new_for_string(GLib.build_filenamev(
                     [this._ext.path, 'icons', `${iconaStato(stato)}-symbolic.svg`]));
                 this._iconaStato.style_class = 'system-status-icon fw-wf-icona';
+                this._iconaStato.icon_size = misureMascotte(taglia).barra;
             } else {
                 // Senza mascotte lo stato urgente tinge l'icona di sempre: è
                 // grafica, quindi bastano i 3:1 che ambra e mattone reggono
@@ -842,6 +864,7 @@ class Indicatore extends PanelMenu.Button {
             }
         }
         this._disegnaSessioniClaude();
+        this._fumetto?.aggiorna(this._watchface?.sessioni ?? []);
     }
 
     /* La sezione «Claude adesso» in cima al popup. Si rifà solo quando cambia
@@ -851,8 +874,9 @@ class Indicatore extends PanelMenu.Button {
         if (!this._boxWatchface)
             return;
         const sessioni = (this._watchface?.sessioni ?? []).slice(0, 5);
-        const mascotte = this._settings.get_boolean('watchface-mascot');
-        const firma = JSON.stringify([mascotte, sessioni.map(
+        const mascotte = this._settings.get_boolean('watchface-mascot-popup');
+        const misure = misureMascotte(this._settings.get_string('watchface-size'));
+        const firma = JSON.stringify([mascotte, misure, sessioni.map(
             s => [s.id, s.stato, s.evento === 'PermissionRequest', s.aiutanti, s.progetto])]);
         if (firma === this._firmaWatchface)
             return;
@@ -869,9 +893,19 @@ class Indicatore extends PanelMenu.Button {
                 [this._ext.path, 'icons', `${nome}.svg`])),
             icon_size: lato, style_class: classe});
         for (const s of sessioni) {
-            const riga = new St.BoxLayout({style_class: 'fw-wf-riga', x_expand: true});
+            // Tutta la riga è il pulsante: porta al terminale della sessione.
+            const pulsante = new St.Button({style_class: 'fw-wf-riga', x_expand: true,
+                                            can_focus: true});
+            const riga = new St.BoxLayout({style_class: 'fw-wf-riga-dentro', x_expand: true});
+            pulsante.set_child(riga);
+            pulsante.connect('clicked', () => {
+                if (this._apriSessione(s))
+                    this.menu.close();
+                else
+                    this._mostraEsito('Finestra del terminale non trovata.');
+            });
             if (mascotte)
-                riga.add_child(icona(iconaStato(s.stato), 26, 'fw-wf-faccia'));
+                riga.add_child(icona(iconaStato(s.stato), misure.popup, 'fw-wf-faccia'));
             const testi = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL,
                                             x_expand: true,
                                             y_align: Clutter.ActorAlign.CENTER});
@@ -884,15 +918,57 @@ class Indicatore extends PanelMenu.Button {
                 const aiuto = new St.BoxLayout({style_class: 'fw-wf-aiuto',
                                                 y_align: Clutter.ActorAlign.CENTER});
                 if (mascotte)
-                    aiuto.add_child(icona('fw-robot', 18, 'fw-wf-robot'));
+                    aiuto.add_child(icona('fw-robot', misure.robot, 'fw-wf-robot'));
                 aiuto.add_child(new St.Label({
                     text: s.aiutanti === 1 ? '1 aiutante' : `${s.aiutanti} aiutanti`,
                     style_class: 'fw-wf-aiuto-testo', y_align: Clutter.ActorAlign.CENTER}));
                 riga.add_child(aiuto);
             }
-            this._boxWatchface.add_child(riga);
+            this._boxWatchface.add_child(pulsante);
         }
         this._boxWatchface.add_child(new St.Widget({style_class: 'fw-rule', x_expand: true}));
+    }
+
+    /* Porta davanti il terminale di una sessione. Si risale dal processo di
+       Claude ai suoi antenati fino al primo che possiede una finestra: esatto
+       coi terminali a un processo per finestra (kitty, Alacritty, foot); con
+       un solo processo e più finestre (Ptyxis, GNOME Terminal) vince l'ultima
+       usata, perché le schede non si vedono da qui. Senza pid, o con un
+       terminale che ha pid suoi (Flatpak), l'ultima finestra di un terminale
+       conosciuto. La shell stessa è fra gli antenati quando il terminale l'ha
+       aperto «Riprendi»: lì ci si ferma. */
+    _apriSessione(s) {
+        const finestre = global.get_window_actors().map(a => a.meta_window)
+            .filter(w => w && !w.skip_taskbar);
+        const ultima = elenco => elenco
+            .sort((a, b) => b.get_user_time() - a.get_user_time())[0] ?? null;
+        const genitore = p => {
+            try {
+                const [, dati] = GLib.file_get_contents(`/proc/${p}/stat`);
+                return genitoreDaStat(new TextDecoder().decode(dati));
+            } catch (e) {
+                return 0;            // processo finito, o /proc non leggibile
+            }
+        };
+        const shell = new Gio.Credentials().get_unix_pid();
+        let finestra = null;
+        for (const p of s.pid > 0 ? catenaPid(s.pid, genitore) : []) {
+            if (p === shell)
+                break;
+            finestra = ultima(finestre.filter(w => w.get_pid() === p));
+            if (finestra)
+                break;
+        }
+        if (!finestra) {
+            const tracker = Shell.WindowTracker.get_default();
+            const terminali = TERMINALI.map(t => t.desktop);
+            finestra = ultima(finestre.filter(
+                w => terminali.includes(tracker.get_window_app(w)?.get_id())));
+        }
+        if (!finestra)
+            return false;
+        Main.activateWindow(finestra);
+        return true;
     }
 
     /* Un account può avere più limiti settimanali (weekly_all, weekly_opus):
@@ -2263,6 +2339,8 @@ class Indicatore extends PanelMenu.Button {
         this._morto = true;
         this._watchface?.ferma();
         this._watchface = null;
+        this._fumetto?.distruggi();
+        this._fumetto = null;
         // Il suggerimento vive fuori dal menu, appeso alla chrome della shell:
         // se non lo si toglie a mano resta lì dopo la disattivazione.
         this.suggerimento?.destroy();
