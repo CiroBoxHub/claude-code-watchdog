@@ -25,3 +25,6 @@ gnome-extension/*/watchface-hook
 # Foto di prova della barra e del popup (bin/fotografa-pannello.sh)
 grafica/foto/
 grafica/foto-icone.png
+
+# La copia di config/watchdog.conf che pack-extension.sh mette nel pacchetto.
+gnome-extension/*/watchdog.conf

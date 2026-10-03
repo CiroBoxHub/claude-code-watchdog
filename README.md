@@ -48,7 +48,7 @@ dentro invocano soltanto `du`, `gio`, `gsettings` e `claude`.
     git clone https://github.com/CiroBoxHub/claude-code-watchdog
     cd claude-code-watchdog
 
-    ./bin/prova.sh                 # 110 prove funzionali in sandbox
+    ./bin/prova.sh                 # 136 prove funzionali in sandbox
     ./bin/install-extension.sh     # installa l'estensione
     gnome-extensions enable claude-code-watchdog@cirobox.local
 
@@ -56,27 +56,84 @@ Poi **logout e login**. Non è pignoleria: GNOME Shell tiene in cache il modulo
 ES già importato, quindi `disable/enable` non rilegge il codice. Su Wayland non
 esiste scorciatoia.
 
+Per **Watchface** servono anche gli hook di Claude Code: dalle impostazioni
+dell'estensione, pagina *Watchface*, pulsante **Installa**. Oppure da terminale:
+
+    python3 ~/.local/share/gnome-shell/extensions/claude-code-watchdog@cirobox.local/watchface-hooks.py installa
+
+Prima di toccare `~/.claude/settings.json` ne fa un backup. Claude Code legge
+gli hook all'avvio: le sessioni già aperte non li vedono, quelle nuove sì.
+
 Gli script da terminale non vanno installati: si usano dove sono.
 
 ### Su un altro PC
 
-    ./bin/pack-extension.sh        # produce dist/*.zip (68 KB)
+    ./bin/pack-extension.sh        # produce dist/*.zip
 
     # sull'altra macchina
     gnome-extensions install --force claude-code-watchdog@cirobox.local.shell-extension.zip
     gnome-extensions enable claude-code-watchdog@cirobox.local
     # logout e login
 
-Lo zip porta con sé gli otto script Python e le icone, quindi funziona anche
-dove il repository non è stato clonato.
+Lo zip porta con sé gli script Python, l'hook di Watchface e le icone, quindi
+funziona anche dove il repository non è stato clonato.
+
+### Disinstallare
+
+Prima gli hook, poi l'estensione: in quest'ordine `settings.json` non resta con
+hook che puntano a un file sparito.
+
+    python3 ~/.local/share/gnome-shell/extensions/claude-code-watchdog@cirobox.local/watchface-hooks.py rimuovi
+    gnome-extensions uninstall claude-code-watchdog@cirobox.local
+
+Se l'ordine si inverte non succede niente di grave: ogni hook finisce con
+`|| true`, quindi Claude Code non mostra errori. Restano solo righe inutili in
+`settings.json`, che si tolgono a mano o ripristinando un backup da
+`~/.local/share/claude-code-watchdog/backup-settings/`. I dati del cruscotto
+stanno in `~/.local/share/claude-code-watchdog/` e si possono cancellare.
 
 ---
 
+## Watchface
+
+![La mascotte e le comparse](grafica/anteprima.png)
+
+Cosa sta facendo Claude Code, senza tornare al terminale. La faccina nella
+barra **dorme** quando non ci sono sessioni, **lavora**, **aspetta te** — un
+permesso o una risposta, con un punto ambra — oppure **ha finito**. Il
+**limone** arriva quando qualcosa si inceppa (sessione fermata da un errore,
+tre strumenti falliti di fila), il **robottino** nel popup quando Claude manda
+degli aiutanti. Con più sessioni vince la più urgente.
+
+In cima al popup, *Claude adesso* elenca le sessioni aperte. Le notifiche
+arrivano quando Claude ti aspetta, si inceppa o finisce un lavoro di almeno
+mezzo minuto — non se stai già guardando il terminale. Mascotte e notifiche si
+spengono dalle impostazioni; senza mascotte resta l'icona classica, che si
+colora d'ambra o di rosso negli stati urgenti.
+
+**Come funziona.** Claude Code avvisa `watchface-hook` a ogni evento. È uno
+script Bash da circa 3 ms che scrive una riga per sessione in
+`$XDG_RUNTIME_DIR` (in memoria); l'estensione la osserva con inotify, senza
+interrogare niente a intervalli. Lo script non scrive nulla sull'output — per
+una richiesta di permesso l'output di un hook è una risposta — ed esce sempre
+con 0: non approva, non rifiuta, non blocca.
+
+`watchface-hooks.py` installa, rimuove e ripristina gli hook in
+`~/.claude/settings.json`, con un backup prima di ogni modifica, e sa togliere
+anche gli hook di altri programmi che facciano lo stesso lavoro. Un
+`settings.json` che non è JSON valido non viene mai riscritto.
+
 ## Il pannello
 
-Nel popup: disco, peso di `~/.claude` con la tendenza, cache di Claude, quota
-(sessione corrente e settimana), spazio recuperabile, e l'elenco dei
-**progetti cliccabili**.
+Nel popup: cosa fa Claude adesso, disco, peso di `~/.claude` con la tendenza,
+cache di Claude, quota (sessione corrente e settimana) con i **consigli** su
+cosa la sta consumando, spazio recuperabile, e l'elenco dei **progetti
+cliccabili**.
+
+I consigli sulla quota, dietro l'icona «i», si calcolano dalle conversazioni di
+questo PC: dicono *dove* va la quota, cosa che `/usage` non dice — per esempio
+una sessione aperta da settimane che si porta dietro più di 150k token di
+contesto a ogni richiesta.
 
 La barra della cache misura **solo** `~/.cache/claude` e
 `~/.cache/claude-cli-nodejs` — lo staging degli aggiornamenti e i log degli
@@ -273,10 +330,22 @@ potarlo per quello lo distruggerebbe il giorno dopo averlo cestinato.
 
 ## Sviluppo
 
-    ./bin/prova.sh                 # 110 prove funzionali, sandbox con HOME dirottata
-    ./bin/prova-js.sh              # 25 prove sulle funzioni pure di extension.js
+    ./bin/prova.sh                 # 136 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova-js.sh              # 41 prove sulle funzioni pure dei moduli JS
     ./bin/prova-shell.sh           # carica l'estensione in una GNOME Shell annidata
     ./bin/verifica-estensione.sh   # controlli statici, e le prove JS
+    ./bin/fotografa-pannello.sh    # foto di barra, popup e preferenze, chiaro e scuro
+    ./bin/fotografa-icone.sh       # foto delle icone come le disegna la shell
+    ./grafica/mascotte.py          # rigenera le icone (serve Inkscape)
+
+Le due `fotografa-*` girano in una GNOME Shell annidata con una **home finta**:
+dconf ed estensioni della sessione vera non si toccano.
+
+**Le icone si modificano in `grafica/`, mai in `icons/`.** I sorgenti sono
+disegnati a tratto e leggibili; `mascotte.py` li consegna convertiti in sole
+forme piene, perché la shell riempie ogni forma di un'icona *-symbolic* del
+colore del testo e lascia i tratti del colore scritto nel file. Scoperto
+fotografando la shell vera: le icone a tratto uscivano piene e col bordo grigio.
 
 I controlli statici girano dentro `install-extension.sh` e `pack-extension.sh`,
 che si fermano se qualcosa non torna. Verificano la sintassi, lo schema
@@ -289,6 +358,16 @@ dati finti in una sandbox con `HOME` dirottata, e coprono i casi in cui un
 difetto si vede solo eseguendo — una radice dedotta male, il cestino potato con
 il criterio sbagliato, due script che codificano lo stesso percorso in modo
 diverso.
+
+## Struttura
+
+    bin/                    script da terminale, script che l'estensione si porta
+                            dentro, prove e strumenti di sviluppo
+    config/watchdog.conf    soglie, scadenze, consigli sulla quota
+    gnome-extension/        l'estensione: extension.js (pannello e popup),
+                            watchface.js (stato di Claude), prefs.js (impostazioni
+                            e guida), icons/ (generate), schemas/
+    grafica/                sorgenti delle icone e generatore della mascotte
 
 ## Licenza
 

@@ -14,7 +14,8 @@ settings.json contiene anche le impostazioni dell'utente, quindi:
 Le preferenze dell'estensione chiamano questo script; la logica sta qui, in
 Python, perche' qui si puo' provare.
 """
-import json, os, re, shutil, sys, time
+import json, os, re, sys
+from datetime import datetime
 from pathlib import Path
 
 HOME = Path.home()
@@ -46,6 +47,10 @@ def leggi() -> dict:
         raise Illeggibile(f"{SETTINGS} non e' JSON valido: {e}") from e
     if not isinstance(d, dict):
         raise Illeggibile(f"{SETTINGS} non contiene un oggetto JSON")
+    # Una forma che non si capisce non si tocca: riscriverla vorrebbe dire
+    # indovinare cosa intendeva chi l'ha scritta.
+    if "hooks" in d and not isinstance(d["hooks"], dict):
+        raise Illeggibile(f"in {SETTINGS} «hooks» non e' un oggetto: non lo modifico")
     return d
 
 
@@ -61,25 +66,39 @@ def nostro(h: dict) -> bool:
     return MARCA in str(h.get("command", ""))
 
 
-def programma(cmd: str) -> str:
-    """Il nome del programma di un comando di hook, per raggrupparli."""
-    m = re.match(r"\s*(?:'([^']+)'|\"([^\"]+)\"|(\S+))", cmd)
-    if not m:
-        return "?"
-    return Path(next(g for g in m.groups() if g)).name
+# Interpreti e lanciatori: il programma vero e' lo script che segue. Senza
+# saltarli, tutti gli hook «python3 ...» finivano in un gruppo solo, e
+# «Rimuovi» su uno li toglieva tutti (revisione del 2026-10-03).
+LANCIATORI = {"bash", "sh", "zsh", "dash", "env", "python", "python3", "node",
+              "npx", "uv", "uvx", "deno", "bun", "ruby", "perl", "exec"}
+
+
+def programma(cmd: str) -> str | None:
+    """Lo script che un comando di hook lancia, per raggruppare e togliere.
+
+    None se non si riesce a dirlo: un hook cosi' si mostra ma non si toglie.
+    """
+    parti = re.findall(r"'([^']*)'|\"([^\"]*)\"|(\S+)", cmd or "")
+    for p in ("".join(g) for g in parti):
+        if p.startswith("-") or "=" in p.split("/")[0]:
+            continue                    # opzioni e VAR=valore di env
+        if Path(p).name in LANCIATORI:
+            continue
+        return p
+    return None
 
 
 def backup() -> Path | None:
-    """Copia settings.json nei backup, nato con permessi 600."""
+    """Copia settings.json nei backup, nato con permessi 600.
+
+    Il nome porta i microsecondi: con un suffisso «-1» per le collisioni nello
+    stesso secondo, l'ordine alfabetico metteva il piu' nuovo prima.
+    """
     if not SETTINGS.exists():
         return None
     BACKUP.mkdir(parents=True, exist_ok=True)
     os.chmod(BACKUP, 0o700)
-    nome = BACKUP / f"settings-{time.strftime('%Y%m%d-%H%M%S')}.json"
-    n = 1
-    while nome.exists():
-        nome = BACKUP / f"settings-{time.strftime('%Y%m%d-%H%M%S')}-{n}.json"
-        n += 1
+    nome = BACKUP / f"settings-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.json"
     fd = os.open(nome, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "wb") as fh:
         fh.write(SETTINGS.read_bytes())
@@ -95,18 +114,27 @@ def elenco_backup() -> list[Path]:
 
 
 def scrivi(d: dict) -> None:
+    scrivi_testo(json.dumps(d, indent=2, ensure_ascii=False) + "\n")
+
+
+def scrivi_testo(testo: str) -> None:
     """Temporaneo accanto e rinomina: chi legge vede il file vecchio o il
-    nuovo, mai uno a meta'. Con i permessi dell'originale, 600 se nuovo."""
-    SETTINGS.parent.mkdir(parents=True, exist_ok=True)
-    modo = SETTINGS.stat().st_mode & 0o777 if SETTINGS.exists() else 0o600
-    tmp = SETTINGS.with_name(f".settings.json.{os.getpid()}.tmp")
+    nuovo, mai uno a meta'. Con i permessi dell'originale, 600 se nuovo.
+
+    Se settings.json e' un collegamento (dotfiles, stow) si scrive nel file a
+    cui punta: rinominare sopra il collegamento lo sostituirebbe con un file
+    normale, e il repository dei dotfiles smetterebbe di vedere le modifiche.
+    """
+    dest = SETTINGS.resolve() if SETTINGS.is_symlink() else SETTINGS
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    modo = dest.stat().st_mode & 0o777 if dest.exists() else 0o600
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, modo)
     try:
         with os.fdopen(fd, "w") as fh:
-            json.dump(d, fh, indent=2, ensure_ascii=False)
-            fh.write("\n")
+            fh.write(testo)
         os.chmod(tmp, modo)
-        tmp.replace(SETTINGS)
+        tmp.replace(dest)
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
@@ -120,10 +148,15 @@ def togli(d: dict, scarta) -> int:
     if not isinstance(hooks, dict):
         return 0
     for ev in list(hooks):
-        gruppi = hooks[ev] if isinstance(hooks[ev], list) else []
+        gruppi = hooks[ev]
+        if not isinstance(gruppi, list):
+            continue                     # forma ignota: resta com'e'
         nuovi = []
         for g in gruppi:
-            dentro = g.get("hooks", []) if isinstance(g, dict) else []
+            dentro = g.get("hooks") if isinstance(g, dict) else None
+            if not isinstance(dentro, list):
+                nuovi.append(g)          # forma ignota: resta com'e'
+                continue
             resta = [h for h in dentro if not (isinstance(h, dict) and scarta(h))]
             tolti += len(dentro) - len(resta)
             if resta:
@@ -142,17 +175,21 @@ def stato() -> dict:
     installati, altri = [], {}
     for ev, gruppi in (d.get("hooks") or {}).items():
         for g in gruppi if isinstance(gruppi, list) else []:
-            for h in (g.get("hooks", []) if isinstance(g, dict) else []):
+            dentro = g.get("hooks") if isinstance(g, dict) else None
+            for h in dentro if isinstance(dentro, list) else []:
                 if not isinstance(h, dict):
                     continue
                 if nostro(h):
                     installati.append(ev)
-                else:
-                    cmd = str(h.get("command", ""))
-                    a = altri.setdefault(programma(cmd),
-                                         {"programma": programma(cmd),
-                                          "comando": cmd, "eventi": []})
-                    a["eventi"].append(ev)
+                    continue
+                cmd = str(h.get("command", ""))
+                chi = programma(cmd)
+                if chi is None:
+                    continue             # hook di tipo prompt, o illeggibile
+                a = altri.setdefault(chi, {"programma": Path(chi).name,
+                                           "percorso": chi, "comando": cmd,
+                                           "eventi": []})
+                a["eventi"].append(ev)
     return {"settings": str(SETTINGS), "hook": str(HOOK),
             "hookPresente": HOOK.is_file(),
             "installati": sorted(set(installati)),
@@ -210,13 +247,15 @@ def main() -> int:
             if len(resto) != 1:
                 print("serve il nome del programma", file=sys.stderr)
                 return 2
-            nome = resto[0]
+            # Si identifica per percorso dello script, non per nome: due
+            # «hook.py» in cartelle diverse sono due programmi diversi.
+            chi = resto[0]
             d = leggi()
             backup()
             n = togli(d, lambda h: not nostro(h)
-                      and programma(str(h.get("command", ""))) == nome)
+                      and programma(str(h.get("command", ""))) == chi)
             scrivi(d)
-            print(f"tolti {n} hook di {nome}")
+            print(f"tolti {n} hook di {Path(chi).name}")
             return 0
 
         if azione == "ripristina":
@@ -230,17 +269,23 @@ def main() -> int:
             if f.parent != BACKUP.resolve() or not f.is_file():
                 print("non e' un backup di watchface-hooks", file=sys.stderr)
                 return 1
+            # Si legge PRIMA del backup: il backup pota i piu' vecchi, e
+            # ripristinare il piu' vecchio lo cancellava prima di copiarlo.
+            testo = f.read_text()
             try:
-                json.loads(f.read_text())
+                json.loads(testo)
             except ValueError:
                 print("il backup non e' JSON valido", file=sys.stderr)
                 return 1
             backup()
-            shutil.copyfile(f, SETTINGS)
+            scrivi_testo(testo)
             print(f"ripristinato {f.name}")
             return 0
     except Illeggibile as e:
         print(e, file=sys.stderr)
+        return 1
+    except OSError as e:
+        print(f"{e.strerror or e}: {e.filename or ''}", file=sys.stderr)
         return 1
 
     print(f"azione sconosciuta: {azione}", file=sys.stderr)

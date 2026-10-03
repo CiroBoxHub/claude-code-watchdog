@@ -45,9 +45,12 @@ function leggiRigaWatchface(testo) {
 }
 
 /* Lo stato di una sessione dal suo ultimo evento e da quanto è vecchio.
-   Le scadenze esistono perché una sessione può morire senza SessionEnd —
-   terminale chiuso, macchina sospesa — e non deve restare «al lavoro» per
-   sempre. */
+   Le scadenze esistono perché non sempre arriva un evento che chiude: una
+   sessione può morire senza SessionEnd (terminale chiuso, macchina sospesa), e
+   Claude Code non manda Stop quando interrompi con Esc o neghi un permesso
+   (revisione del 2026-10-03). Resta il silenzio, e lo si legge così: uno
+   strumento in esecuzione può durare a lungo — una compilazione — mentre fra
+   un passo e l'altro Claude non tace per dieci minuti. */
 function statoSessione(s, adesso) {
     if (!s)
         return null;
@@ -58,14 +61,16 @@ function statoSessione(s, adesso) {
     // Prima dei fallimenti: una richiesta di permesso dopo tre errori di fila
     // vuole comunque una risposta, ed è quella che conta.
     if (s.evento === 'PermissionRequest' || s.evento === 'Notification')
-        return eta < 6 * ORA ? 'aspetta' : 'dorme';
+        return eta < ORA ? 'aspetta' : 'dorme';
     if (s.fallimenti >= 3)
         return eta < ORA ? 'errore' : 'dorme';
     if (s.evento === 'Stop')
         return eta < 600 ? 'finito' : 'dorme';
     if (s.evento === 'SessionStart')
         return 'dorme';
-    return eta < 2 * ORA ? 'lavora' : 'dorme';
+    if (s.evento === 'PreToolUse')
+        return eta < ORA ? 'lavora' : 'dorme';
+    return eta < 600 ? 'lavora' : 'dorme';
 }
 
 function piuUrgente(stati) {
@@ -172,6 +177,10 @@ class Watchface {
             let info;
             while ((info = elenco.next_file(null))) {
                 const id = info.get_name();
+                // Gli id hanno solo lettere, cifre e trattini: un punto vuol
+                // dire lock o temporaneo dell'hook.
+                if (id.includes('.'))
+                    continue;
                 let testo = '';
                 try {
                     const [, dati] = GLib.file_get_contents(
@@ -181,8 +190,15 @@ class Watchface {
                     continue;              // sparito fra l'elenco e la lettura
                 }
                 const s = leggiRigaWatchface(testo);
-                if (!s || adesso - s.epoca > VISIBILE_S)
+                if (!s)
                     continue;
+                if (adesso - s.epoca > VISIBILE_S) {
+                    // Finita senza SessionEnd: il file si toglie, se no lo si
+                    // rilegge a ogni evento di ogni altra sessione.
+                    for (const nome of [id, `${id}.lock`])
+                        GLib.unlink(GLib.build_filenamev([CARTELLA, nome]));
+                    continue;
+                }
                 sessioni.push({id, ...s, stato: statoSessione(s, adesso),
                                progetto: GLib.path_get_basename(s.cwd || '?')});
             }

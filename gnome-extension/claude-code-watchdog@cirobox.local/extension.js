@@ -769,6 +769,7 @@ class Indicatore extends PanelMenu.Button {
         // Con la mascotte l'icona principale è la faccina, che dice anche cosa
         // fa Claude; senza, è quella di sempre e lo stato passa dal colore.
         this._iconaStato = null;
+        this._chiaveIconaStato = null;
         if (this._settings.get_boolean('watchface-mascot'))
             this._iconaStato = this._icona(iconaStato(null));
         else if (this._settings.get_boolean('panel-show-icon'))
@@ -808,8 +809,14 @@ class Indicatore extends PanelMenu.Button {
         if (this._morto)
             return;
         const stato = this._watchface?.stato ?? null;
-        if (this._iconaStato) {
-            if (this._settings.get_boolean('watchface-mascot')) {
+        const mascotte = this._settings.get_boolean('watchface-mascot');
+        // Gli eventi arrivano a raffica mentre Claude lavora: si tocca l'icona
+        // solo quando cambia quello che mostra. `_costruisciPannello` azzera
+        // il ricordo, perché lì l'icona è nuova.
+        const chiave = `${mascotte}:${stato}`;
+        if (this._iconaStato && chiave !== this._chiaveIconaStato) {
+            this._chiaveIconaStato = chiave;
+            if (mascotte) {
                 this._iconaStato.gicon = Gio.icon_new_for_string(GLib.build_filenamev(
                     [this._ext.path, 'icons', `${iconaStato(stato)}-symbolic.svg`]));
                 this._iconaStato.style_class = 'system-status-icon fw-wf-icona';

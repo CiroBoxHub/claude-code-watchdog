@@ -22,7 +22,23 @@ const INDICATORI = [
     ['quota-settimana', 'Settimana',         'Limite settimanale. È il vincolo che di solito morde per primo.'],
 ];
 
-/* Riga di sola lettura per la guida: titolo e spiegazione, niente comandi. */
+/* Una voce della guida: titolo in grassetto e testo a grandezza piena, del
+   colore del testo. */
+function voce(gruppo, titolo, testo) {
+    const box = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL, spacing: 4,
+                             margin_top: 12, margin_bottom: 12,
+                             margin_start: 14, margin_end: 14});
+    box.append(new Gtk.Label({label: titolo, xalign: 0, wrap: true,
+                              css_classes: ['heading']}));
+    box.append(new Gtk.Label({label: testo, xalign: 0, wrap: true,
+                              natural_wrap_mode: Gtk.NaturalWrapMode.WORD,
+                              css_classes: ['body']}));
+    const riga = new Adw.PreferencesRow({activatable: false, focusable: false, child: box});
+    gruppo.add(riga);
+    return riga;
+}
+
+/* Riga di sola lettura per le altre pagine: titolo e spiegazione breve. */
 function spiega(gruppo, titolo, testo) {
     const r = new Adw.ActionRow({title: titolo, subtitle: testo});
     r.set_subtitle_lines(0);        // 0 = nessun troncamento
@@ -45,262 +61,201 @@ export default class WatchdogPreferences extends ExtensionPreferences {
     }
 
     /* ---------------------------------------------------------- guida --- */
+
+    /* La guida si legge come un documento: ogni voce ha un titolo e un testo a
+       grandezza piena. Prima stava nei sottotitoli delle righe, piccoli e
+       grigi, pensati per mezza riga e non per un paragrafo. */
     _paginaGuida() {
         const pagina = new Adw.PreferencesPage({
             title: 'Guida',
             icon_name: 'help-about-symbolic',
         });
+        const sezione = (titolo, descrizione = null) => {
+            const g = new Adw.PreferencesGroup({title: titolo});
+            if (descrizione)
+                g.set_description(descrizione);
+            pagina.add(g);
+            return g;
+        };
 
-        const cosa = new Adw.PreferencesGroup({
-            title: 'A cosa serve',
-            description: 'Tiene d’occhio lo spazio del PC e i dati che Claude ' +
-                         'Code lascia sul disco, e permette di intervenire senza ' +
-                         'aprire un terminale. Non misura niente da sé: legge i ' +
-                         'dati raccolti dagli script del progetto claude-code-watchdog.',
-        });
-        pagina.add(cosa);
-        spiega(cosa, 'In una riga',
-               'Se la barra in alto è del suo colore normale e nel popup non ' +
-               'ci sono triangoli gialli, non c\u2019è niente da fare.');
+        const breve = sezione('In breve');
+        voce(breve, 'Cosa fa',
+             'Tiene d’occhio lo spazio del PC, i dati che Claude Code lascia sul ' +
+             'disco e la quota di utilizzo, e mostra cosa sta facendo Claude in ' +
+             'questo momento. Da qui puoi anche fare pulizia, senza aprire un ' +
+             'terminale.');
+        voce(breve, 'Quando preoccuparsi',
+             'Se i numeri nella barra hanno il loro colore normale e nel popup ' +
+             'non ci sono triangoli gialli, va tutto bene. L’ambra vuol dire ' +
+             '«tienilo d’occhio», il rosso «intervieni».');
+        voce(breve, 'La regola di fondo',
+             'Prima si guarda, poi si cancella, e si cancella nel cestino. ' +
+             'Nessun pulsante elimina al primo clic: il primo mostra cosa ' +
+             'sparirebbe, voce per voce, e solo il secondo agisce.');
 
-        const barra = new Adw.PreferencesGroup({
-            title: 'Nella barra in alto',
-            description: 'Scegli tu quali valori mostrare, nella pagina «Barra». ' +
-                         'Restano sempre leggibili: diventano ambra e poi rossi ' +
-                         'alle stesse soglie delle misure nel popup.',
-        });
-        pagina.add(barra);
-        spiega(barra, 'Poco spazio?',
-               'Le «etichette compatte» tolgono unità e sigle. In alternativa ' +
-               'accendi «un\u2019icona per ogni indicatore»: occupa un filo di ' +
-               'più ma si distinguono senza leggere, e le sigle «S» e «W» ' +
-               'spariscono perché l\u2019icona già le dice.');
+        const barra = sezione('La barra in alto',
+                              'Scegli tu cosa mostrare, nella pagina «Barra».');
+        voce(barra, 'I valori',
+             'Disco, conversazioni, quota della sessione e della settimana, e ' +
+             'altro ancora. Diventano ambra e poi rossi alle stesse soglie delle ' +
+             'barre nel popup.');
+        voce(barra, 'La faccina',
+             'All’inizio della barra c’è la mascotte di Watchface, che cambia ' +
+             'espressione con quello che fa Claude (vedi la sezione successiva). ' +
+             'Se preferisci l’icona classica, spegnila nella pagina «Watchface».');
+        voce(barra, 'Poco spazio?',
+             'Le «etichette compatte» tolgono unità e sigle. Oppure accendi ' +
+             '«un’icona per ogni indicatore»: occupa un po’ di più, ma i valori ' +
+             'si riconoscono senza leggere.');
 
-        const misure = new Adw.PreferencesGroup({
-            title: 'Le misure del popup',
-            description: 'La forma dice che tipo di misura è.',
-        });
-        pagina.add(misure);
-        spiega(misure, 'Barra con tacche',
-               'Grandezze che hanno un massimo: disco e quota. Le due tacche ' +
-               'segnano le soglie di allarme, quindi il colore cambia esattamente ' +
-               'dove cade la tacca: fino alla prima è il colore proprio della ' +
-               'misura, poi ambra, poi rosso. Le soglie si regolano in ' +
-               'config/watchdog.conf con ALERT_WARN_PCT e ALERT_CRIT_PCT, e sono ' +
-               'le stesse a cui gli scan suonano l\u2019allarme: una sola ' +
-               'definizione per tutto.');
-        spiega(misure, 'Linea di tendenza',
-               'Grandezze senza un massimo: lo spazio delle conversazioni. Una barra ' +
-               'qui sarebbe una bugia, perché non esiste un "pieno". La linea ' +
-               'mostra le ultime 60 rilevazioni e il punto segna dove siamo ora; ' +
-               'sotto è scritto di quanto è cambiato nel periodo.');
-        spiega(misure, 'Cifra e pulsante',
-               'Lo spazio recuperabile: non è uno stato da sorvegliare ma una ' +
-               'cosa su cui si agisce, quindi ha un’azione accanto invece ' +
-               'di un indicatore.');
-        spiega(misure, 'Verde acqua, viola, ambra, rosso',
-               'Il verde acqua è la macchina, il viola è la quota Claude: sono ' +
-               'due cose diverse e si distinguono a colpo d’occhio. Ambra e ' +
-               'rosso valgono per qualunque misura, alle stesse soglie.');
+        const wf = sezione('Watchface: cosa fa Claude adesso',
+                           'Funziona dopo aver installato gli hook, nella pagina ' +
+                           '«Watchface».');
+        voce(wf, 'Le quattro espressioni',
+             'Dorme quando non ci sono sessioni. Ha gli occhi aperti quando Claude ' +
+             'lavora. Apre la bocca, con un punto ambra, quando aspetta te: un ' +
+             'permesso o una risposta. Sorride quando ha finito.');
+        voce(wf, 'Il limone e il robottino',
+             'Il limone prende il posto della faccina quando qualcosa si inceppa: ' +
+             'la sessione si è fermata per un errore, oppure tre strumenti di fila ' +
+             'sono falliti. Il robottino compare nel popup quando Claude ha ' +
+             'mandato degli aiutanti, con il loro numero.');
+        voce(wf, 'Più sessioni insieme',
+             'La faccina mostra la più urgente: prima chi aspetta te, poi gli ' +
+             'errori, poi chi lavora. In cima al popup, sotto «Claude adesso», ' +
+             'c’è una riga per ogni sessione aperta.');
+        voce(wf, 'Le notifiche',
+             'Arrivano quando Claude aspetta te, quando si inceppa e quando ' +
+             'finisce un lavoro di almeno mezzo minuto. Non arrivano se stai già ' +
+             'guardando il terminale. Si spengono nella pagina «Watchface».');
+        voce(wf, 'Come lo sa, e quanto costa',
+             'A ogni passo Claude Code avvisa un piccolo script (un hook). Lo ' +
+             'script scrive una riga in memoria e il pannello la legge solo quando ' +
+             'cambia: pochi millesimi di secondo per evento, nessun controllo a ' +
+             'intervalli. Non approva e non rifiuta niente: i permessi si danno ' +
+             'sempre nel terminale.');
 
-        const quota = new Adw.PreferencesGroup({
-            title: 'La quota',
-            description: 'Sostituisce l’estensione claude-status.',
-        });
-        pagina.add(quota);
-        spiega(quota, 'Non consuma token',
-               '/usage è un comando locale che legge i contatori: non fa ' +
-               'lavorare il modello e non incide sulla quota che misura.');
-        spiega(quota, 'Non lascia sessioni vuote',
-               'Ogni interrogazione lascerebbe una trascrizione a vuoto in ' +
-               '~/.claude/projects/. Lo script la rimuove subito, ma solo se ' +
-               'non contiene nessuna risposta dell’assistente: una vera ' +
-               'conversazione non viene mai toccata.');
-        spiega(quota, 'Sessione non vuol dire giornata',
-               'La «sessione corrente» è una finestra mobile di circa cinque ' +
-               'ore che riparte dal primo uso, non un contatore che si azzera ' +
-               'a mezzanotte. Per questo sotto la percentuale è scritta l\u2019' +
-               'ora esatta in cui si azzera, non solo fra quanto.');
-        spiega(quota, 'La settimana è il vincolo vero',
-               'Si azzera a giorno e ora fissi. È quella da tenere d\u2019occhio: ' +
-               'la finestra di cinque ore si ricarica da sé più volte al ' +
-               'giorno, il monte settimanale no.');
-        spiega(quota, 'L’età del dato è scritta',
-               'Sotto la percentuale c’è quando è stata letta. Una quota di ' +
-               'mezz’ora fa non viene spacciata per attuale.');
-        spiega(quota, 'I consigli, con l\u2019icona «i»',
-               '/usage dice quanto pesa il contesto lungo, non dove. Sotto le ' +
-               'due barre compare una riga con l\u2019icona «i» quando una ' +
-               'sessione usata nell\u2019ultima settimana consuma più del ' +
-               'dovuto: metà delle richieste con il contesto oltre 150k token, ' +
-               'oppure aperta da una settimana o più. Passando il mouse o ' +
-               'cliccando si legge quale progetto e cosa fare. Al massimo tre, ' +
-               'i più pesanti per primi; se va tutto bene la riga non c\u2019è. ' +
-               'Si calcolano dalle sessioni di questo PC, quindi non contano ' +
-               'altri dispositivi. Le soglie stanno in config/watchdog.conf, ' +
-               'alle voci QUOTA_CONSIGLIO_*.');
+        const popup = sezione('Il popup', 'La forma di ogni misura dice che tipo di misura è.');
+        voce(popup, 'Barra con tacche',
+             'Per le grandezze che hanno un massimo: disco e quota. Le due tacche ' +
+             'sono le soglie di attenzione e di allarme, e il colore cambia ' +
+             'esattamente lì: prima il colore della misura, poi ambra, poi rosso.');
+        voce(popup, 'Linea di tendenza',
+             'Per lo spazio delle conversazioni, che non ha un «pieno». La linea ' +
+             'mostra le ultime 60 rilevazioni, il punto segna il valore attuale e ' +
+             'sotto è scritto di quanto è cambiato.');
+        voce(popup, 'Cifra e pulsante',
+             'Per lo spazio recuperabile: non è uno stato da sorvegliare ma una ' +
+             'cosa su cui agire, quindi accanto c’è il pulsante «Libera spazio».');
+        voce(popup, 'I colori',
+             'Verde acqua per la macchina, viola per la quota. Ambra e rosso ' +
+             'valgono per qualunque misura, alle stesse soglie.');
 
-        const wf = new Adw.PreferencesGroup({
-            title: 'Watchface: cosa fa Claude adesso',
-            description: 'Si attiva dalla pagina «Watchface», installando gli hook.',
-        });
-        pagina.add(wf);
-        spiega(wf, 'La faccina nella barra',
-               'Dorme quando non c\u2019è nessuna sessione, ha gli occhi aperti ' +
-               'quando Claude lavora, apre la bocca e mostra un punto ambra ' +
-               'quando aspetta te — un permesso o una risposta — e sorride ' +
-               'quando ha finito. Con più sessioni aperte mostra la più ' +
-               'urgente: prima chi aspetta te, poi gli errori, poi chi lavora.');
-        spiega(wf, 'Il limone e il robottino',
-               'Il limone prende il posto della faccina quando qualcosa si ' +
-               'inceppa: la sessione si è fermata per un errore, o tre ' +
-               'strumenti di fila sono falliti. Il robottino compare nel popup, ' +
-               'accanto alla sessione, quando Claude ha mandato degli aiutanti ' +
-               '(subagenti), con il loro numero.');
-        spiega(wf, '«Claude adesso», in cima al popup',
-               'Una riga per sessione aperta, la più urgente per prima: ' +
-               'progetto e cosa sta facendo. Sparisce quando non ce ne sono.');
-        spiega(wf, 'Come lo sa, e quanto costa',
-               'Claude Code avvisa uno script a ogni evento (un hook in ' +
-               '~/.claude/settings.json). Lo script scrive una riga in una ' +
-               'cartella in memoria e il pannello la legge quando cambia: ' +
-               'nessun controllo a intervalli, pochi millisecondi per evento. ' +
-               'Non approva né rifiuta niente: i permessi si danno nel terminale.');
+        const quota = sezione('La quota');
+        voce(quota, 'Sessione e settimana',
+             'La «sessione corrente» è una finestra di circa cinque ore che ' +
+             'riparte dal primo uso, non la giornata: per questo è scritta l’ora ' +
+             'esatta in cui si azzera. La settimana si azzera a giorno e ora ' +
+             'fissi, ed è il limite da tenere d’occhio.');
+        voce(quota, 'Non costa niente',
+             'La quota si legge con il comando /usage di Claude Code: non usa ' +
+             'token e non lascia conversazioni vuote in giro.');
+        voce(quota, 'I consigli, con l’icona «i»',
+             'Sotto le due barre può comparire una riga con l’icona «i». Passaci ' +
+             'sopra o cliccala: dice quale progetto sta consumando di più e cosa ' +
+             'fare, per esempio aprire una sessione nuova quando il contesto è ' +
+             'diventato enorme. Se va tutto bene, la riga non c’è.');
 
-        const prog = new Adw.PreferencesGroup({
-            title: 'I progetti',
-            description: 'Ogni riga si apre su tre azioni.',
-        });
-        pagina.add(prog);
-        spiega(prog, 'Il pulsante «+»',
-               'Accanto al titolo «Progetti». Chiede il nome di una cartella, ' +
-               'la crea e ci apre subito una sessione nuova di Claude Code. ' +
-               'Sopra il campo è scritto dove verrà creata; la cartella si ' +
-               'sceglie nella pagina «Progetti» delle impostazioni, dove è ' +
-               'sempre mostrata anche quando è quella rilevata in automatico. ' +
-               'Invio conferma, Esc annulla.');
-        spiega(prog, 'Il nome è un nome, non un percorso',
-               'Niente «/», niente nomi che iniziano per punto, e non si può ' +
-               'riusare il nome di una cartella già esistente: il campo lo dice ' +
-               'invece di creare qualcosa nel posto sbagliato.');
-        spiega(prog, 'Il README di partenza',
-               'Se attivo nelle impostazioni, il progetto nuovo nasce con un ' +
-               'README.md che contiene nome, data, percorso e il comando per ' +
-               'riprendere, più due righe da riempire su cos\u2019è il ' +
-               'progetto. Sono quelle due righe che servono fra sei mesi, ' +
-               'quando il nome della cartella non basterà più.');
-        spiega(prog, 'Cartella',
-               'Apre la cartella di lavoro nel gestore file.');
-        spiega(prog, 'Riprendi',
-               'Apre una scheda nel terminale — una scheda, non una finestra ' +
-               'nuova ogni volta — dentro la cartella del progetto, ed esegue ' +
-               'claude --resume per scegliere quale conversazione riprendere. ' +
-               'Usa la shell che il tuo terminale ha configurata e la avvia in ' +
-               'modo interattivo, così ritrovi il tuo prompt e i tuoi alias. ' +
-               'Quando Claude esce la shell resta, e la scheda non si chiude.');
-        spiega(prog, 'Elimina dati',
-               'Rimuove solo ciò che Claude Code tiene per proprio conto: ' +
-               'trascrizioni, memorie, job, scratchpad temporanei. ' +
-               'La cartella di lavoro non viene mai toccata — lì ci sono i file ' +
-               'veri, non dati di Claude. Prima di cancellare mostra l’elenco ' +
-               'puntuale e aspetta un secondo clic.');
-        spiega(prog, 'Progetti e «fuori dai progetti»',
-               'Nell\u2019elenco «Progetti» stanno solo le cartelle figlie ' +
-               'dirette della radice: quelle che hai creato per lavorarci. ' +
-               'Tutto il resto — la home, /tmp, percorsi sparsi da cui ti è ' +
-               'capitato di lanciare Claude — finisce nella sezione sotto, ' +
-               'dove l\u2019unica azione è togliere le sessioni: non sono ' +
-               'progetti e non ha senso trattarli come tali.');
-        spiega(prog, 'Sessioni automatiche orfane',
-               'Alcuni programmi lanciano Claude da soli in una cartella ' +
-               'temporanea, e ogni volta ne nasce una riga «fuori dai progetti». ' +
-               'Quando quella cartella non esiste più, «Libera spazio» le ' +
-               'offre tutte insieme come «Sessioni automatiche orfane». Prende ' +
-               'solo le sessioni avviate da un programma: le tue conversazioni ' +
-               'restano anche se la loro cartella è sparita, perché a volte ' +
-               'sono l\u2019unica copia di un lavoro perso. Vanno nel cestino.');
-        spiega(prog, 'Correggi',
-               'Compare solo sulle righe la cui cartella è sparita. Chiede dove ' +
-               'è finita e **verifica prima di agire**: le conversazioni citano ' +
-               'i file su cui hai lavorato, e si controlla quanti di quelli ' +
-               'esistono davvero nella cartella che indichi. Se non ne trova ' +
-               'nessuno e il nome è diverso, si rifiuta. Poi riaggancia le ' +
-               'sessioni alla nuova posizione, lasciando gli originali nel ' +
-               'cestino: così «Riprendi» torna a funzionare.');
-        spiega(prog, 'Il triangolo giallo',
-               'Segna un progetto con qualcosa che vale la pena sapere. ' +
-               'Fermando il mouse sulla riga compare la descrizione per esteso. ' +
-               'I casi sono tre: la cartella di lavoro non esiste più (le ' +
-               'conversazioni restano leggibili, è la directory a essere ' +
-               'sparita); il progetto lavora sotto /tmp, che il sistema svuota ' +
-               'al riavvio; le sue trascrizioni stanno in una cartella di ' +
-               '~/.claude/projects/ condivisa con altri progetti, cosa che ' +
-               'succede quando un progetto viene spostato.');
+        const prog = sezione('I progetti', 'Cliccando un progetto si aprono le sue azioni.');
+        voce(prog, 'Nuovo progetto, con il «+»',
+             'Accanto al titolo «Progetti». Scrivi un nome: la cartella nasce nella ' +
+             'radice dei progetti (si sceglie nella pagina «Progetti») e ci si apre ' +
+             'subito una sessione di Claude Code. Se vuoi, con un README di ' +
+             'partenza. Invio conferma, Esc annulla.');
+        voce(prog, 'Cartella e Riprendi',
+             '«Cartella» apre la cartella nel gestore file. «Riprendi» apre una ' +
+             'scheda del terminale nella cartella del progetto ed esegue ' +
+             'claude --resume, con la tua shell di sempre.');
+        voce(prog, 'Elimina dati',
+             'Toglie solo i dati di Claude Code per quel progetto: conversazioni, ' +
+             'memorie, scratchpad. La cartella di lavoro, con i tuoi file, non ' +
+             'viene mai toccata. Tutto va nel cestino.');
+        voce(prog, 'Correggi',
+             'Compare quando la cartella di un progetto è stata spostata. Chiede ' +
+             'dov’è finita, controlla che i file citati nelle conversazioni ci ' +
+             'siano davvero, e poi ricollega le sessioni: così «Riprendi» torna a ' +
+             'funzionare.');
+        voce(prog, 'Il triangolo giallo',
+             'Segnala qualcosa da sapere; fermando il mouse sulla riga si legge il ' +
+             'dettaglio. Per esempio: la cartella di lavoro non esiste più, il ' +
+             'progetto lavora sotto /tmp (che si svuota al riavvio), oppure le sue ' +
+             'conversazioni sono mescolate con quelle di altri progetti.');
+        voce(prog, 'Fuori dai progetti',
+             'Le cartelle da cui hai lanciato Claude ma che non sono progetti: la ' +
+             'home, /tmp, percorsi sparsi. Qui l’unica azione è togliere le ' +
+             'sessioni.');
 
-        const agg = new Adw.PreferencesGroup({
-            title: 'Quanto sono freschi i numeri',
-        });
-        pagina.add(agg);
-        spiega(agg, 'Due ritmi diversi',
-               'Disco, spazio e progetti si rileggono da soli a intervalli ' +
-               '(dieci minuti di serie). La quota va più piano, perché costa un ' +
-               'giro di rete: mezz\u2019ora. Entrambi si regolano nelle pagine ' +
-               '«Popup» e «Quota».');
-        spiega(agg, 'Aggiornare subito',
-               'Il pulsante circolare in cima al popup rilegge tutto all\u2019' +
-               'istante, quota compresa. Accanto c\u2019è scritto da quanto ' +
-               'tempo risalgono i dati, e il conto scorre finché il popup ' +
-               'resta aperto.');
-        spiega(agg, 'Attenzione a scendere troppo',
-               'La linea di tendenza mostra le ultime 60 rilevazioni: con un ' +
-               'minuto di intervallo copre un\u2019ora, con dieci minuti copre ' +
-               'dieci ore. Se il grafico ti sembra piatto e poco utile, ' +
-               'probabilmente l\u2019intervallo è troppo corto per quello che ' +
-               'vuoi vedere.');
+        const pulizia = sezione('Liberare spazio');
+        voce(pulizia, 'Come funziona',
+             '«Libera spazio» elenca cosa si può togliere: cestino scaduto, cache ' +
+             'vecchie, scarti di Claude Code, versioni vecchie di Claude. Spunti ' +
+             'quello che vuoi e confermi.');
+        voce(pulizia, 'Sessioni automatiche orfane',
+             'Alcuni programmi lanciano Claude da soli in una cartella temporanea. ' +
+             'Quando quella cartella sparisce, le loro sessioni compaiono qui tutte ' +
+             'insieme. Le tue conversazioni non ci finiscono mai, nemmeno se la ' +
+             'loro cartella non c’è più.');
+        voce(pulizia, 'Quello che qui non c’è',
+             'Cache dei pacchetti, journal di sistema e kernel vecchi chiedono la ' +
+             'password di amministratore: si puliscono con /watchdog-clean, non da ' +
+             'un menu del pannello.');
 
-        const dove = new Adw.PreferencesGroup({
-            title: 'Dove stanno le cose',
-            description: 'Utile se qualcosa va storto.',
-        });
-        pagina.add(dove);
-        spiega(dove, 'I dati che il popup mostra',
-               '~/.local/share/claude-code-watchdog/metrics.json è la fotografia ' +
-               'corrente; history.jsonl è la serie storica che disegna la linea ' +
-               'di tendenza, tenuta alle ultime 2000 rilevazioni.');
-        spiega(dove, 'Le soglie di allarme',
-               'ALERT_WARN_PCT e ALERT_CRIT_PCT in config/watchdog.conf, nella ' +
-               'cartella del progetto claude-code-watchdog. Valgono per tutto: ' +
-               'colore delle barre, colore delle etichette nella barra in alto, ' +
-               'allarmi. Le tacche sui misuratori si spostano di conseguenza.');
+        const agg = sezione('Quanto sono freschi i numeri');
+        voce(agg, 'Due ritmi',
+             'Disco, spazio e progetti si aggiornano da soli (ogni dieci minuti, di ' +
+             'serie). La quota va più piano, ogni mezz’ora, perché richiede un ' +
+             'accesso alla rete. Entrambi si regolano nelle pagine «Popup» e «Quota».');
+        voce(agg, 'Aggiornare subito',
+             'Il pulsante circolare in cima al popup rilegge tutto, quota compresa. ' +
+             'Accanto è scritto quanto sono vecchi i dati.');
+        voce(agg, 'Un intervallo troppo corto',
+             'La linea di tendenza disegna le ultime 60 rilevazioni: con un minuto ' +
+             'di intervallo copre un’ora, con dieci minuti dieci ore. Se il grafico ' +
+             'ti sembra piatto, allunga l’intervallo.');
 
-        const diag = new Adw.PreferencesGroup({title: 'Quando qualcosa non torna'});
-        pagina.add(diag);
-        spiega(diag, '«nessun dato» accanto al titolo',
-               'Il raccoglitore non ha ancora scritto niente. Premi il pulsante ' +
-               'di aggiornamento; se resta così, lancia a mano ' +
-               'bin/collect-metrics.py dalla cartella del progetto e guarda che ' +
-               'errore dà.');
-        spiega(diag, 'Le barre della quota restano vuote',
-               'O il monitoraggio è spento nella pagina «Quota», oppure il ' +
-               'comando claude non è raggiungibile: serve nel PATH.');
-        spiega(diag, '«Cartella» e «Riprendi» sono spenti',
-               'La cartella di lavoro di quel progetto non esiste più — il ' +
-               'triangolo giallo lo conferma. Le conversazioni restano, ma non ' +
-               'c\u2019è una directory in cui aprirle.');
-        spiega(diag, '«Libera spazio» è spento',
-               'Non c\u2019è niente da liberare: nessun file ha superato le ' +
-               'scadenze impostate in config/watchdog.conf.');
+        const diag = sezione('Se qualcosa non torna');
+        voce(diag, '«nessun dato» in cima al popup',
+             'I dati non sono ancora stati raccolti. Premi il pulsante di ' +
+             'aggiornamento; se non cambia, lancia bin/collect-metrics.py dalla ' +
+             'cartella del progetto e leggi l’errore.');
+        voce(diag, 'La faccina dorme sempre',
+             'Gli hook non sono installati (pagina «Watchface»), oppure la sessione ' +
+             'di Claude era già aperta quando li hai installati: Claude Code li ' +
+             'legge all’avvio, quindi apri una sessione nuova.');
+        voce(diag, 'Le barre della quota sono vuote',
+             'Il monitoraggio è spento nella pagina «Quota», oppure il comando ' +
+             'claude non si trova nel PATH.');
+        voce(diag, '«Cartella» e «Riprendi» sono spenti',
+             'La cartella di lavoro di quel progetto non esiste più: il triangolo ' +
+             'giallo lo conferma. Se l’hai spostata, usa «Correggi».');
+        voce(diag, '«Libera spazio» è spento',
+             'Non c’è niente da liberare: nessun file ha superato le scadenze.');
 
-        const sic = new Adw.PreferencesGroup({title: 'La regola di fondo'});
-        pagina.add(sic);
-        spiega(sic, 'Prima si guarda, poi si cancella',
-               'Nessun pulsante di questa estensione cancella al primo clic. ' +
-               'Il primo clic mostra sempre cosa sparirebbe, voce per voce, con ' +
-               'il peso. Solo il secondo agisce. Le operazioni che richiedono i ' +
-               'permessi di amministratore — cache dei pacchetti, journal, ' +
-               'kernel — non sono qui: si fanno con /watchdog-clean, perché un ' +
-               'menu del pannello non è il posto da cui chiedere una password ' +
-               'di root.');
+        const dove = sezione('Dove stanno le cose');
+        voce(dove, 'I dati del pannello',
+             'In ~/.local/share/claude-code-watchdog/: metrics.json è la fotografia ' +
+             'attuale, history.jsonl la serie storica (le ultime 2000 rilevazioni), ' +
+             'usage.json l’ultima lettura della quota.');
+        voce(dove, 'Soglie e scadenze',
+             'In config/watchdog.conf, nella cartella del progetto ' +
+             'claude-code-watchdog: soglie di colore, scadenze della pulizia e ' +
+             'soglie dei consigli sulla quota. Si modificano lì, senza riavviare ' +
+             'niente.');
+        voce(dove, 'Hook e backup',
+             'Gli hook di Watchface stanno in ~/.claude/settings.json. Prima di ' +
+             'ogni modifica se ne fa un backup in ' +
+             '~/.local/share/claude-code-watchdog/backup-settings/; i più recenti ' +
+             'si ripristinano dalla pagina «Watchface».');
 
         return pagina;
     }
@@ -636,7 +591,7 @@ export default class WatchdogPreferences extends ExtensionPreferences {
             for (const a of st.altri) {
                 const r = new Adw.ActionRow({
                     title: a.programma,
-                    subtitle: `${a.eventi.length} eventi · ${a.comando}`,
+                    subtitle: `${a.eventi.length} eventi · ${a.percorso}`,
                 });
                 r.set_subtitle_lines(2);
                 r.add_suffix(bottone('Rimuovi', 'destructive-action', () => this._conferma(
@@ -644,7 +599,7 @@ export default class WatchdogPreferences extends ExtensionPreferences {
                     `Si tolgono i suoi ${a.eventi.length} hook da settings.json, dopo ` +
                     'un backup. Il programma resta installato: si toglie solo il ' +
                     'collegamento con Claude Code.',
-                    'Rimuovi', () => this._azioneHook(['rimuovi-altro', a.programma]))));
+                    'Rimuovi', () => this._azioneHook(['rimuovi-altro', a.percorso]))));
                 aggiungi(this._gruppoAltri, r);
             }
 

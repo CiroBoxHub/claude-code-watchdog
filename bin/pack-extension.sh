@@ -28,6 +28,9 @@ for s in claude-sessions.py collect-metrics.py collect-usage.py session-purge.py
   chmod +x "$SRC/$s"
 done
 
+# Nel pacchetto una copia vera: sull'altro PC il progetto non c'e'.
+cp "$WD_ROOT/config/watchdog.conf" "$SRC/watchdog.conf"
+
 mkdir -p "$DIST"
 rm -f "$DIST/$UUID.shell-extension.zip"
 
@@ -39,6 +42,7 @@ for f in "$SRC"/*.py; do EXTRA+=(--extra-source="$(basename "$f")"); done
 [[ -d "$SRC/icons" ]] && EXTRA+=(--extra-source=icons)
 [[ -f "$SRC/prefs.js" ]] && EXTRA+=(--extra-source=prefs.js)
 [[ -f "$SRC/watchface.js" ]] && EXTRA+=(--extra-source=watchface.js)
+[[ -f "$SRC/watchdog.conf" ]] && EXTRA+=(--extra-source=watchdog.conf)
 [[ -f "$SRC/watchface-hook" ]] && EXTRA+=(--extra-source=watchface-hook)
 
 gnome-extensions pack "$SRC" --force --out-dir="$DIST" "${EXTRA[@]}"

@@ -58,10 +58,13 @@ HISTORY_MAX_LINES = 2000
 def conf() -> dict:
     """Legge config/watchdog.conf senza eseguirlo (è un file bash)."""
     out = {}
-    if ROOT is None:
-        return out                      # copia nell'estensione: solo predefiniti
-    f = ROOT / "config" / "watchdog.conf"
-    if not f.exists():
+    # Nella copia dentro l'estensione il progetto non c'e': si legge il
+    # watchdog.conf che install-extension.sh le mette accanto (un collegamento
+    # a quello del progetto). Prima qui si tornava ai predefiniti, e il
+    # pannello ignorava ogni soglia scritta nel file — anche quelle che la
+    # guida diceva di modificare li'. Segnalato dalla revisione del 2026-10-03.
+    f = (ROOT / "config" / "watchdog.conf") if ROOT else (SCRIPT_DIR / "watchdog.conf")
+    if not f.is_file():
         return out
     for line in f.read_text().splitlines():
         line = line.strip()

@@ -166,12 +166,12 @@ Da lì la rete di sicurezza in `enable()` e attorno alla costruzione del
 suggerimento: un accessorio che non parte deve mancare da solo, non portarsi
 dietro tutto il resto.
 
-**Non si può collaudare l'estensione senza logout su questa macchina:**
-`gnome-shell --wayland` annidato fallisce con «Failed to take control of the
-session: EBUSY» perché il seat è già preso, e gli oggetti St non si costruiscono
-fuori dalla shell (Clutter non ha un contesto). Restano il parsing con `gjs -m`,
-le prove sulle funzioni pure e le simulazioni: tutto il resto si vede solo
-dopo il login.
+**Si collauda senza logout, in una shell annidata headless.** `gnome-shell
+--wayland` annidato fallisce con EBUSY (il seat è preso), ma
+`--headless --virtual-monitor` funziona. `bin/fotografa-pannello.sh` ci
+installa la copia di lavoro con una **HOME finta** — dconf è condiviso, e
+abilitare un'estensione con la home vera la abiliterebbe anche nella sessione
+in corso — e fotografa barra, popup e preferenze in tema chiaro e scuro.
 
 Due dettagli scoperti a video:
 
@@ -188,9 +188,16 @@ Due dettagli scoperti a video:
 
 ### Icone
 
-Insieme proprio in `icons/`, otto simboliche 16×16 sulla stessa griglia e con
-lo stesso spessore (1,35). Il ripiego di colore è `#8a8a8a`, leggibile su
-entrambi i fondi se per qualche motivo la shell non le ricolorasse.
+**Si modificano in `grafica/`, mai in `icons/`**: `grafica/sorgenti/` ha i
+sorgenti a tratto (16×16, spessore 1,35), `grafica/mascotte.py` disegna la
+mascotte e consegna tutto in `icons/`. Le *-symbolic escono **convertite in
+sole forme piene**: fotografato il 2026-10-03 in una shell annidata
+(`bin/fotografa-icone.sh`), la shell **riempie** ogni forma — ellissi
+comprese — del colore del testo e **lascia i tratti** del colore del file. Le
+icone a tratto uscivano quindi piene e col bordo grigio fisso, da sempre, e il
+«ripiego `#8a8a8a`» che si credeva usato solo in emergenza era il colore di
+tutti i bordi. L'unico colore che sopravvive è quello degli elementi con
+classe `warning` (il punto ambra), preso da `warning-color` nel CSS.
 **`gnome-extensions pack` non include `icons/` da sé**: va elencata con
 `--extra-source`, come i file `.py` e `prefs.js`.
 

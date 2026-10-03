@@ -14,8 +14,8 @@
 # - USCITA SEMPRE 0, e niente che possa bloccare: un hook che si inceppa
 #   ferma Claude.
 # - Bash e solo builtin dove si puo': un processo Python costerebbe 30-80 ms a
-#   ogni strumento usato. Qui si forka solo per mkdir la prima volta e per
-#   scartare la coda di un payload grosso.
+#   ogni strumento usato. Si forka per il lock, per la rinomina, per mkdir la
+#   prima volta e per scartare la coda di un payload grosso.
 exec >/dev/null 2>&1
 
 evento=$1
@@ -40,8 +40,14 @@ dir=$base/claude-code-watchdog/watchface
 [[ -d $dir ]] || mkdir -p -m 700 "$dir" || exit 0
 f=$dir/$sid
 
+# Leggi-modifica-scrivi sotto lock: gli aiutanti partono in parallelo e i loro
+# SubagentStart arrivano insieme. Senza lock venti avvii ne contavano otto
+# (riprodotto dalla revisione del 2026-10-03). Al massimo due secondi di
+# attesa: meglio perdere un aggiornamento che fermare Claude.
+exec 9>"$f.lock" && flock -w 2 9 || exit 0
+
 if [[ $evento == SessionEnd ]]; then
-    rm -f -- "$f"
+    rm -f -- "$f" "$f.lock"
     exit 0
 fi
 
@@ -50,10 +56,16 @@ prima=Nessuno fallimenti=0 aiutanti=0
 [[ $fallimenti =~ ^[0-9]+$ ]] || fallimenti=0
 [[ $aiutanti =~ ^[0-9]+$ ]] || aiutanti=0
 
+# A turno chiuso (Stop o StopFailure) lo stato resta quello: la Notification
+# che arriva dopo un minuto di inattivita' («waiting for your input») non e'
+# una domanda nuova, e la fine di un aiutante in background non riapre il
+# lavoro. Gli aiutanti pero' si contano lo stesso.
+chiuso=0
+[[ $prima == Stop || $prima == StopFailure ]] && chiuso=1
+nuovo=$evento
 case $evento in
-    # Arriva anche dopo un minuto di inattivita' a fine turno («Claude is
-    # waiting for your input»): se il turno era finito, resta finito.
-    Notification) [[ $prima == Stop ]] && exit 0 ;;
+    Notification) (( chiuso )) && exit 0 ;;
+    SubagentStart|SubagentStop) (( chiuso )) && nuovo=$prima ;;
     PostToolUseFailure) (( fallimenti++ )) ;;
     PostToolUse|UserPromptSubmit|SessionStart|Stop) fallimenti=0 ;;
 esac
@@ -63,8 +75,8 @@ case $evento in
     SessionStart) aiutanti=0 ;;
 esac
 
-# Una write sola su un file piccolo: chi legge vede la riga vecchia o la
-# nuova. Un file vuoto (troncato e non ancora scritto) il pannello lo salta.
-printf '%s\t%s\t%s\t%s\t%s\n' "$evento" "${EPOCHSECONDS:-0}" \
-    "$fallimenti" "$aiutanti" "$cwd" > "$f"
+# Su un temporaneo e poi rinomina: chi legge vede la riga vecchia o la nuova,
+# mai un file troncato a meta'.
+printf '%s\t%s\t%s\t%s\t%s\n' "$nuovo" "${EPOCHSECONDS:-0}" \
+    "$fallimenti" "$aiutanti" "$cwd" > "$f.$$" && mv -f -- "$f.$$" "$f"
 exit 0

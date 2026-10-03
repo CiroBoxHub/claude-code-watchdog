@@ -132,9 +132,11 @@ const st = (evento, eta, fallimenti = 0) =>
     statoSessione({evento, epoca: 100000 - eta, fallimenti, aiutanti: 0}, 100000);
 const casi = [
     ["PreToolUse", 5, 0, "lavora"], ["UserPromptSubmit", 5, 0, "lavora"],
-    ["PreToolUse", 3 * 3600, 0, "dorme"],
+    ["PreToolUse", 30 * 60, 0, "lavora"], ["PreToolUse", 2 * 3600, 0, "dorme"],
+    ["PostToolUse", 5 * 60, 0, "lavora"], ["PostToolUse", 15 * 60, 0, "dorme"],
+    ["UserPromptSubmit", 15 * 60, 0, "dorme"],
     ["PermissionRequest", 5, 0, "aspetta"], ["Notification", 5, 0, "aspetta"],
-    ["PermissionRequest", 7 * 3600, 0, "dorme"],
+    ["PermissionRequest", 2 * 3600, 0, "dorme"],
     ["PermissionRequest", 5, 5, "aspetta"],
     ["StopFailure", 5, 0, "errore"], ["StopFailure", 2 * 3600, 0, "dorme"],
     ["PostToolUseFailure", 5, 3, "errore"], ["PostToolUseFailure", 5, 2, "lavora"],

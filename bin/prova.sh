@@ -505,6 +505,15 @@ uguale "collect-metrics: funziona anche copiato fuori da bin/" \
   "$(python3 -c "import json;print(json.load(open('$M'))['claude']['conversazioni'])" 2>/dev/null)" "1"
 uguale "collect-metrics: senza progetto non inventa una radice" \
   "$(python3 -c "import json;print(json.load(open('$M'))['progetto'])" 2>/dev/null)" "None"
+# La copia legge il watchdog.conf che le sta accanto: prima tornava ai
+# predefiniti e il pannello ignorava ogni soglia del file.
+printf 'ALERT_WARN_PCT=60\nTRASH_RETENTION_DAYS=5\n' > "$COPIA/watchdog.conf"
+rm -f "$M"; (cd "$COPIA" && ./collect-metrics.py --quiet >/dev/null 2>&1)
+uguale "collect-metrics: la copia legge il watchdog.conf accanto" \
+  "$(python3 -c "import json;print(json.load(open('$M'))['soglie']['attenzione'])" 2>/dev/null)" "60"
+uguale "reclaim: la copia legge il watchdog.conf accanto" \
+  "$(cd "$COPIA" && python3 -c "import reclaim;print(reclaim.giorni('trash'))")" "5"
+rm -f "$COPIA/watchdog.conf"
 
 # Una sessione aperta in una sottocartella del progetto: capita ogni volta che
 # si lavora dentro un repository clonato li'. Deve restare dentro la radice e
@@ -812,8 +821,21 @@ grosso=$( { printf '{"session_id":"s2","cwd":"/lavoro/grosso","hook_event_name":
           | timeout 10 "$WD_ROOT/bin/watchface-hook" PreToolUse; echo "rc=$?")
 uguale "watchface-hook: un payload enorme non blocca" "$grosso" "rc=0"
 uguale "watchface-hook: e lo stato si scrive lo stesso" "$(campo s2 5)" "/lavoro/grosso"
+# Gli aiutanti partono in parallelo: venti avvii insieme sono venti, non otto.
+hook SessionStart s3
+for i in $(seq 20); do hook SubagentStart s3 & done; wait
+uguale "watchface-hook: venti aiutanti in parallelo sono venti" "$(campo s3 4)" "20"
+# A turno chiuso, la fine di un aiutante non riapre il lavoro e la
+# Notification di inattivita' non diventa «aspetta te».
+hook Stop s3; hook SubagentStop s3; hook Notification s3
+uguale "watchface-hook: dopo Stop un aiutante che finisce non riapre il turno" \
+  "$(campo s3 1)|$(campo s3 4)" "Stop|19"
+hook StopFailure s3; hook Notification s3
+uguale "watchface-hook: la Notification non copre un errore" "$(campo s3 1)" "StopFailure"
+uguale "watchface-hook: nessun temporaneo lasciato in giro" \
+  "$(ls "$WF" | grep -c '\.[0-9]')" "0"
 hook SessionEnd s1
-uguale "watchface-hook: SessionEnd toglie il file" "$([[ -e $WF/s1 ]] && echo c-e || echo tolto)" "tolto"
+uguale "watchface-hook: SessionEnd toglie il file" "$([[ -e $WF/s1 || -e $WF/s1.lock ]] && echo c-e || echo tolto)" "tolto"
 unset XDG_RUNTIME_DIR
 
 # ---------------------------------------------------- watchface-hooks.py ---
@@ -850,7 +872,7 @@ uguale "watchface-hooks: l'hook non fa fallire Claude se manca il file" \
 "$WH" rimuovi >/dev/null 2>&1
 uguale "watchface-hooks: rimuovi toglie solo i nostri" \
   "$(stato 'len(d["installati"]), [a["programma"] for a in d["altri"]]')" "0 ['coucou-hook']"
-"$WH" rimuovi-altro coucou-hook >/dev/null 2>&1
+"$WH" rimuovi-altro /opt/coucou/bin/coucou-hook >/dev/null 2>&1
 uguale "watchface-hooks: rimuove gli hook di un altro programma" \
   "$(python3 -c "import json;d=json.load(open('$S'));print('hooks' in d, d['theme'])")" "False dark"
 primo=$(stato 'd["backup"][-1]')
@@ -862,6 +884,55 @@ uguale "watchface-hooks: non ripristina un file fuori dai backup" \
 echo '{"theme": "dark",' > "$S"
 uguale "watchface-hooks: non riscrive un settings.json illeggibile" \
   "$("$WH" installa >/dev/null 2>&1; echo $?)|$(cat "$S")" '1|{"theme": "dark",'
+
+# Revisione del 2026-10-03: un caso per rilievo.
+prepara
+S="$HOME/.claude/settings.json"
+python3 - "$S" <<'PY'
+import json, sys
+d = {"hooks": {
+    "Stop": [{"hooks": [{"type": "command", "command": "python3 /opt/a/hook.py"}]},
+             {"hooks": [{"type": "command", "command": "python3 /home/io/guardia.py --forte"}]},
+             {"hooks": [{"type": "prompt", "prompt": "controlla"}]}],
+    "PreToolUse": {"strano": True},
+    "PostToolUse": [{"matcher": "Bash", "senza_hooks": 1}]}}
+json.dump(d, open(sys.argv[1], "w"), indent=2)
+PY
+uguale "watchface-hooks: gli altri si raggruppano per script, non per interprete" \
+  "$(stato '[a["percorso"] for a in d["altri"]]')" "['/opt/a/hook.py', '/home/io/guardia.py']"
+"$WH" rimuovi-altro /opt/a/hook.py >/dev/null 2>&1
+uguale "watchface-hooks: togliere uno script lascia gli altri e i prompt" \
+  "$(python3 -c "import json;d=json.load(open('$S'));print([h.get('command', h.get('type')) for g in d['hooks']['Stop'] for h in g['hooks']])")" \
+  "['python3 /home/io/guardia.py --forte', 'prompt']"
+"$WH" installa >/dev/null 2>&1
+uguale "watchface-hooks: le forme che non conosce restano com'erano" \
+  "$(python3 -c "import json;d=json.load(open('$S'));print(d['hooks']['PreToolUse'], d['hooks']['PostToolUse'][0])")" \
+  "{'strano': True} {'matcher': 'Bash', 'senza_hooks': 1}"
+echo '{"hooks": []}' > "$S"
+uguale "watchface-hooks: «hooks» che non e' un oggetto: rifiuta senza toccare" \
+  "$("$WH" installa >/dev/null 2>&1; echo $?)|$(cat "$S")" '1|{"hooks": []}'
+
+# Un settings.json che e' un collegamento resta un collegamento.
+prepara
+mkdir -p "$HOME/dotfiles"
+echo '{"theme": "dark"}' > "$HOME/dotfiles/settings.json"
+ln -sf "$HOME/dotfiles/settings.json" "$HOME/.claude/settings.json"
+"$WD_ROOT/bin/watchface-hooks.py" installa >/dev/null 2>&1
+uguale "watchface-hooks: scrive attraverso un collegamento senza sostituirlo" \
+  "$([[ -L $HOME/.claude/settings.json ]] && echo link || echo file)|$(grep -c watchface-hook "$HOME/dotfiles/settings.json")" "link|12"
+
+# Ripristinare il backup piu' vecchio quando sono gia' dieci: prima lo si
+# cancellava potando, e poi non c'era piu' niente da copiare.
+prepara
+echo '{"theme": "primo"}' > "$HOME/.claude/settings.json"
+for i in $(seq 11); do "$WD_ROOT/bin/watchface-hooks.py" rimuovi >/dev/null 2>&1; done
+vecchio=$("$WD_ROOT/bin/watchface-hooks.py" stato --json | python3 -c "import json,sys;print(json.load(sys.stdin)['backup'][0])")
+echo '{"theme": "ultimo"}' > "$HOME/.claude/settings.json"
+"$WD_ROOT/bin/watchface-hooks.py" ripristina "$vecchio" >/dev/null 2>&1
+uguale "watchface-hooks: ripristina anche il backup piu' vecchio" \
+  "$(python3 -c "import json;print(json.load(open('$HOME/.claude/settings.json'))['theme'])")" "primo"
+uguale "watchface-hooks: i backup restano dieci e in ordine" \
+  "$("$WD_ROOT/bin/watchface-hooks.py" stato --json | python3 -c "import json,sys;b=json.load(sys.stdin)['backup'];print(len(b), b==sorted(b))")" "10 True"
 
 # La quota alta colora la sua barra: un avviso testuale in piu' era un doppione.
 prepara

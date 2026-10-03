@@ -38,6 +38,11 @@ il dry-run, mostra l'elenco, chiedi. Anche quando la risposta sembra ovvia.
     bin/prova-js.sh         esegue le funzioni pure di extension.js con gjs
     bin/prova-shell.sh      carica l'estensione in una GNOME Shell annidata
     bin/verifica-estensione.sh controlli statici, obbligatori prima di installare
+    bin/watchface-hook      hook di Claude Code per Watchface — bash, niente output
+    bin/watchface-hooks.py  mette, toglie e ripristina gli hook in settings.json
+    bin/fotografa-pannello.sh foto di barra, popup e preferenze (shell annidata)
+    bin/fotografa-icone.sh  foto delle icone come le disegna la shell
+    grafica/mascotte.py     disegna la mascotte e consegna le icone in icons/
     bin/install-extension.sh installa l'estensione GNOME
     bin/pack-extension.sh   crea lo zip distribuibile in dist/
     bin/lib.sh              funzioni condivise
@@ -238,6 +243,24 @@ primo, e `ultimo_mid` passa nella cache perché la lettura incrementale può
 ripartire a metà di un messaggio. Le percentuali di quota restano quelle di
 `/usage`, verificate identiche il 2026-10-03.
 
+**La copia installata legge il `watchdog.conf` che le sta accanto.** Fino al
+2026-10-03 `conf()` tornava `{}` quando `ROOT` è `None` — cioè sempre, per il
+pannello — e ogni soglia del file veniva ignorata: colori, scadenze, consigli.
+Stessa famiglia del difetto di `progetto` qui sopra. `install-extension.sh` ora
+mette nella cartella dell'estensione un **collegamento** a `config/watchdog.conf`
+(una modifica vale subito) e `pack-extension.sh` una copia vera. Trovato da
+`/code-review`.
+
+**Watchface, revisione del 2026-10-03: dieci rilievi, tutti corretti.** I tre
+che contavano: l'hook faceva leggi-modifica-scrivi senza lock, e venti aiutanti
+avviati in parallelo ne contavano otto (ora `flock -w 2` e rinomina atomica);
+Claude Code non manda `Stop` quando si interrompe con Esc o si nega un permesso,
+quindi gli stati scadono col silenzio (10 minuti fra un passo e l'altro, un'ora
+con uno strumento in esecuzione o un permesso in attesa); `watchface-hooks.py`
+raggruppava gli hook degli altri per interprete, e «Rimuovi» su un
+`python3 …` li avrebbe tolti tutti — ora si identificano per percorso dello
+script, e gli hook senza comando non si toccano mai.
+
 **Un inciampo nella lettura della quota non è un guasto.** Il 2026-09-30 alle
 16:02:07, un minuto dopo l'accesso, `collect-usage.py` è uscito con esito
 diverso da zero: in 23 ore non si è più ripetuto, e non era il `PATH` — la
@@ -336,8 +359,8 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              110 prove funzionali, sandbox con HOME dirottata
-    ./bin/prova-js.sh           25 prove sulle funzioni pure di extension.js
+    ./bin/prova.sh              136 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova-js.sh           41 prove sulle funzioni pure dei moduli JS
     ./bin/prova-shell.sh        carica l'estensione in una shell annidata (~1 min)
     ./bin/verifica-estensione.sh  controlli statici + le prove JS (gira dentro
                                   install e pack, che si fermano se qualcosa

@@ -33,6 +33,10 @@ done
 
 # Gli schemi GSettings vanno compilati nella destinazione: senza
 # gschemas.compiled l'estensione non parte proprio.
+# La configurazione: un collegamento, non una copia, cosi' una soglia cambiata
+# nel progetto vale subito anche per gli script che il pannello lancia da qui.
+ln -sfn "$WD_ROOT/config/watchdog.conf" "$DST/watchdog.conf"
+
 if [[ -d "$DST/schemas" ]]; then
   glib-compile-schemas "$DST/schemas" || {
     echo "compilazione degli schemi fallita" >&2; exit 1; }

@@ -82,13 +82,12 @@ TARGET = ["trash", "usercache", "claude-cache", "claude-stubs",
 def conf() -> dict:
     """Legge config/watchdog.conf senza eseguirlo (è un file bash).
 
-    Copiato dentro l'estensione il file non c'è: si usano i default, che sono
-    gli stessi scritti nel conf di serie.
+    Copiato dentro l'estensione si legge il watchdog.conf che
+    install-extension.sh gli mette accanto; se manca, i default, che sono gli
+    stessi scritti nel conf di serie.
     """
     out = {}
-    if not ROOT:
-        return out
-    f = ROOT / "config" / "watchdog.conf"
+    f = (ROOT / "config" / "watchdog.conf") if ROOT else (SCRIPT_DIR / "watchdog.conf")
     if not f.is_file():
         return out
     for riga in f.read_text().splitlines():
