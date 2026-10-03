@@ -50,13 +50,21 @@
 
 ## 🚀 Installazione rapida
 
+**Con lo zip**, senza clonare niente: scarica
+[`claude-code-watchdog@cirobox.local.shell-extension.zip`](https://github.com/CiroBoxHub/claude-code-watchdog/releases/latest/download/claude-code-watchdog@cirobox.local.shell-extension.zip)
+dall'[ultima release](https://github.com/CiroBoxHub/claude-code-watchdog/releases/latest), poi:
+
+    gnome-extensions install --force claude-code-watchdog@cirobox.local.shell-extension.zip
+
+**Dal sorgente**:
+
     git clone https://github.com/CiroBoxHub/claude-code-watchdog
     cd claude-code-watchdog
     ./bin/install-extension.sh
 
-Poi **logout e login**, e dalle impostazioni dell'estensione → *Watchface* →
-**Installa** per collegare la faccina a Claude Code. Su un PC dove non vuoi
-clonare il repository c'è lo zip: vedi [Su un altro PC](#su-un-altro-pc).
+In tutti e due i casi: **logout e login**, `gnome-extensions enable
+claude-code-watchdog@cirobox.local`, e dalle impostazioni dell'estensione →
+*Watchface* → **Installa** per collegare la faccina a Claude Code.
 
 <p align="center">
   <img src="grafica/screenshot/guida.png" alt="La guida nelle impostazioni" width="520">
