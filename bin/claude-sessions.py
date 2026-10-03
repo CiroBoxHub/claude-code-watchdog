@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 """Inventario delle sessioni Claude Code.
 
 Legge ~/.claude/projects/**/*.jsonl e produce una tabella markdown con, per

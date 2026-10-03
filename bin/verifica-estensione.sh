@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 # Controlli statici sull'estensione, da passare PRIMA di installarla.
 #
 # Esiste per un motivo preciso: il 2026-09-17 una riscrittura ha cancellato il

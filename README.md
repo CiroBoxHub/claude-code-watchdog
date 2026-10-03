@@ -1,18 +1,75 @@
-# claude-code-watchdog
+<p align="center">
+  <img src="grafica/banner.svg" alt="Claude Code Watchdog: disco, quota e progetti di Claude Code nella barra di GNOME" width="100%">
+</p>
 
-Tiene d'occhio lo spazio su disco e i dati che
-[Claude Code](https://claude.com/claude-code) lascia dietro di sé —
-trascrizioni delle conversazioni, memorie dei progetti, job, quota di
-utilizzo — e li pulisce senza sorprese.
+<p align="center">
+  <img alt="GNOME 48 · 49 · 50" src="https://img.shields.io/badge/GNOME-48%20%C2%B7%2049%20%C2%B7%2050-4A86CF?logo=gnome&logoColor=white">
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white">
+  <img alt="Licenza GPL-2.0-or-later" src="https://img.shields.io/badge/licenza-GPL--2.0--or--later-2F9284">
+  <img alt="149 prove" src="https://img.shields.io/badge/prove-149%20%2B%2041%20JS-8676B8">
+</p>
 
-Sono due strumenti che funzionano anche separati:
+<p align="center">
+  <b>Tiene d'occhio quello che <a href="https://claude.com/claude-code">Claude Code</a> lascia sul tuo PC — e ti dice cosa sta facendo adesso.</b><br>
+  Disco, conversazioni, quota e progetti nella barra di GNOME. Pulizia senza sorprese, sempre nel cestino.
+</p>
+
+<p align="center">
+  <img src="grafica/screenshot/barra-chiaro.png" alt="La barra di GNOME con la faccina e i valori" width="430">
+  <img src="grafica/screenshot/barra-scuro.png" alt="La stessa barra in tema scuro" width="430">
+</p>
+
+<table align="center">
+  <tr>
+    <td><img src="grafica/screenshot/popup-chiaro.png" alt="Il popup in tema chiaro" width="400"></td>
+    <td><img src="grafica/screenshot/popup-scuro.png" alt="Il popup in tema scuro" width="400"></td>
+  </tr>
+</table>
+
+<p align="center"><sub>Foto vere della shell, con dati inventati: <code>bin/fotografa-pannello.sh --demo</code>.</sub></p>
+
+## ✨ Cosa fa
+
+- 🙂 **Watchface** — una faccina nella barra che segue Claude Code: dorme, lavora, **ti aspetta** (un permesso, una risposta) o ha finito. Con le notifiche quando serve davvero.
+- 📊 **Quota** — sessione e settimana con l'ora esatta dell'azzeramento, e **consigli** su cosa la sta consumando: per progetto, non solo in percentuale.
+- 💾 **Spazio** — disco, conversazioni con la loro tendenza, cache di Claude, versioni vecchie: tutto quello che cresce senza che te ne accorga.
+- 📁 **Progetti** — uno per riga: apri la cartella, riprendi la conversazione nel terminale, ricollega un progetto spostato, creane uno nuovo con un clic.
+- 🧹 **Pulizia** — «Libera spazio» elenca, tu scegli, e tutto finisce nel **cestino**. Mai un clic che cancella.
+- 📖 **Guida integrata** — ogni indicatore spiegato, direttamente nelle impostazioni.
+
+### Watchface
+
+| | Stato | Quando |
+|:---:|---|---|
+| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-faccina-dorme.svg" width="44"> | **dorme** | nessuna sessione di Claude aperta |
+| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-faccina-lavora.svg" width="44"> | **lavora** | Claude sta eseguendo, pensando, usando strumenti |
+| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-faccina-aspetta.svg" width="44"> | **aspetta te** | un permesso o una risposta: il punto ambra |
+| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-faccina-finito.svg" width="44"> | **ha finito** | il turno è chiuso, tocca a te |
+| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-limone.svg" width="44"> | **si è inceppato** | un errore ha fermato la sessione, o tre strumenti di fila sono falliti |
+| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-robot.svg" width="44"> | **aiutanti** | nel popup, quando Claude ha mandato dei subagenti |
+
+## 🚀 Installazione rapida
+
+    git clone https://github.com/CiroBoxHub/claude-code-watchdog
+    cd claude-code-watchdog
+    ./bin/install-extension.sh
+
+Poi **logout e login**, e dalle impostazioni dell'estensione → *Watchface* →
+**Installa** per collegare la faccina a Claude Code. Su un PC dove non vuoi
+clonare il repository c'è lo zip: vedi [Su un altro PC](#su-un-altro-pc).
+
+<p align="center">
+  <img src="grafica/screenshot/guida.png" alt="La guida nelle impostazioni" width="520">
+</p>
+
+---
+
+## Due strumenti in uno
 
 | | Cosa fa | Dove gira |
 |---|---|---|
-| **Estensione GNOME** | Cruscotto nel pannello: disco, conversazioni per progetto, quota, spazio recuperabile, andamento nel tempo. Da lì si interviene senza aprire un terminale. | Qualunque distribuzione con GNOME |
+| **Estensione GNOME** | Cruscotto nel pannello: cosa fa Claude adesso, disco, conversazioni per progetto, quota, spazio recuperabile, andamento nel tempo. Da lì si interviene senza aprire un terminale. | Qualunque distribuzione con GNOME |
 | **Script da terminale** (`bin/`) | Scansione del sistema, inventario delle conversazioni, pulizia guidata, riparazione dei progetti spostati. | Fedora per i target di sistema, ovunque per il resto |
-
----
 
 ## La regola che tiene insieme tutto
 
@@ -94,7 +151,7 @@ stanno in `~/.local/share/claude-code-watchdog/` e si possono cancellare.
 
 ---
 
-## Watchface
+## Watchface, come funziona
 
 ![La mascotte e le comparse](grafica/anteprima.png)
 
@@ -335,6 +392,7 @@ potarlo per quello lo distruggerebbe il giorno dopo averlo cestinato.
     ./bin/prova-shell.sh           # carica l'estensione in una GNOME Shell annidata
     ./bin/verifica-estensione.sh   # controlli statici, e le prove JS
     ./bin/fotografa-pannello.sh    # foto di barra, popup e preferenze, chiaro e scuro
+    ./bin/fotografa-pannello.sh --demo grafica/screenshot   # le foto del README, con dati inventati
     ./bin/fotografa-icone.sh       # foto delle icone come le disegna la shell
     ./grafica/mascotte.py          # rigenera le icone (serve Inkscape)
 
@@ -369,6 +427,13 @@ diverso.
                             e guida), icons/ (generate), schemas/
     grafica/                sorgenti delle icone e generatore della mascotte
 
+## Autore
+
+**CiroBoxHub** — [github.com/CiroBoxHub](https://github.com/CiroBoxHub).
+La mascotte di Watchface è un ritratto stilizzato dell'autore, con il limone e
+il robottino che lo accompagnano.
+
 ## Licenza
 
-GPL-2.0-or-later, la stessa di GNOME Shell. Vedi [`LICENSE`](LICENSE).
+GPL-2.0-or-later, la stessa di GNOME Shell. Copyright © 2026 CiroBoxHub.
+Vedi [`LICENSE`](LICENSE).

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 # Fotografa le icone -symbolic come le disegna davvero GNOME Shell.
 #
 #   bin/fotografa-icone.sh [FILE.png]     (predefinito: grafica/foto-icone.png)

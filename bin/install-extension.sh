@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 # Installa (o reinstalla) l'estensione GNOME nella home dell'utente.
 #
 # Si usa una copia e non un symlink: GNOME Shell non segue i link simbolici

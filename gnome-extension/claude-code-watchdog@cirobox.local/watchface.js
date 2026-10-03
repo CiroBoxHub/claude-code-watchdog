@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 CiroBoxHub
+
 /* Watchface — cosa sta facendo Claude Code, adesso.
  *
  * L'hook `watchface-hook` scrive una riga per sessione in

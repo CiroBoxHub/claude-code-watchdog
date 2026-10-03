@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 # Collaudo funzionale degli script, su dati finti in una sandbox.
 #
 # Esiste perché i controlli statici non bastano: dei difetti trovati dalla

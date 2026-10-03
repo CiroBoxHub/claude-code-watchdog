@@ -42,6 +42,7 @@ il dry-run, mostra l'elenco, chiedi. Anche quando la risposta sembra ovvia.
     bin/watchface-hooks.py  mette, toglie e ripristina gli hook in settings.json
     bin/fotografa-pannello.sh foto di barra, popup e preferenze (shell annidata)
     bin/fotografa-icone.sh  foto delle icone come le disegna la shell
+    bin/dati-demo.py        home finta con progetti inventati, per le foto pubbliche
     grafica/mascotte.py     disegna la mascotte e consegna le icone in icons/
     bin/install-extension.sh installa l'estensione GNOME
     bin/pack-extension.sh   crea lo zip distribuibile in dist/

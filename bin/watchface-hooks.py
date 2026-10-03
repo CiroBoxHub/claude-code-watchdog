@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 """Mette e toglie gli hook di Watchface in ~/.claude/settings.json.
 
     watchface-hooks.py stato [--json]       cosa c'e' adesso

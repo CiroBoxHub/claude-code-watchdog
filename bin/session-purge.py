@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 """Elenca (o rimuove) tutto ciò che appartiene a una sessione Claude Code.
 
 Una sessione non vive solo nella trascrizione: lascia tracce in sei posti

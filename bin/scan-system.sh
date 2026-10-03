@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 # Fotografia del sistema. SOLA LETTURA: non modifica e non cancella nulla.
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"

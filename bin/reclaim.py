@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 """Libera lo spazio che il pannello elenca come recuperabile.
 
 Fa soltanto i target che il pulsante «Libera spazio» può chiedere: cestino

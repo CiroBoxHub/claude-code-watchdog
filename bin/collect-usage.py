@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 """Legge il consumo di quota Claude e lo scrive in usage.json.
 
 Il dato non esiste in locale: va chiesto alla CLI con `claude -p "/usage"`.

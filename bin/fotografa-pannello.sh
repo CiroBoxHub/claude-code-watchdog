@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 # Fotografa la barra e il popup dell'estensione, in tema chiaro e scuro.
 #
-#   bin/fotografa-pannello.sh [CARTELLA]   (predefinito: grafica/foto/)
+#   bin/fotografa-pannello.sh [--demo] [CARTELLA]   (predefinito: grafica/foto/)
+#
+# Con --demo non si usa niente dell'utente: progetti, conversazioni, quota e
+# preferenze sono inventati. E' il modo con cui si fanno le foto del README —
+# quelle vere mostrerebbero i nomi dei progetti, quindi dei clienti.
 #
 # Lo stesso trucco di fotografa-icone.sh: shell annidata headless con una HOME
 # FINTA, cosi' dconf e le estensioni della sessione vera non si toccano. Dentro
@@ -13,6 +19,8 @@
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
+DEMO=0
+[[ ${1:-} == --demo ]] && { DEMO=1; shift; }
 UUID="claude-code-watchdog@cirobox.local"
 SRC="$WD_ROOT/gnome-extension/$UUID"
 OUT=$(realpath -m "${1:-$WD_ROOT/grafica/foto}")
@@ -34,18 +42,24 @@ for s in claude-sessions.py collect-metrics.py collect-usage.py session-purge.py
   cp -a "$WD_ROOT/bin/$s" "$EXT/$UUID/$s"
 done
 glib-compile-schemas "$EXT/$UUID/schemas"
-ln -s "$HOME/.claude" "$H/.claude"
-# I dati del cruscotto copiati, non collegati: la shell di prova li riscrive.
 mkdir -p "$H/.local/share/claude-code-watchdog"
-cp -a "${XDG_DATA_HOME:-$HOME/.local/share}/claude-code-watchdog/"{metrics.json,usage.json,history.jsonl} \
-  "$H/.local/share/claude-code-watchdog/" 2>/dev/null
-PREF=$(dconf dump /org/gnome/shell/extensions/claude-code-watchdog/)
+if (( DEMO )); then
+  python3 "$WD_ROOT/bin/dati-demo.py" "$H"
+  # Un pannello rappresentativo, non le preferenze di chi lancia la foto.
+  PREF=$'[/]\npanel-indicators=[\'disco\', \'claude\', \'quota-sessione\', \'quota-settimana\']\npanel-icons=true\n'
+else
+  ln -s "$HOME/.claude" "$H/.claude"
+  # I dati del cruscotto copiati, non collegati: la shell di prova li riscrive.
+  cp -a "${XDG_DATA_HOME:-$HOME/.local/share}/claude-code-watchdog/"{metrics.json,usage.json,history.jsonl} \
+    "$H/.local/share/claude-code-watchdog/" 2>/dev/null
+  PREF=$(dconf dump /org/gnome/shell/extensions/claude-code-watchdog/)
+fi
 
 WF="$P/run/claude-code-watchdog/watchface"
 mkdir -p "$WF"
 ora=$(date +%s)
-printf 'PermissionRequest\t%s\t0\t2\t%s\n' "$ora" "/home/utente/Documenti/sito-cliente" > "$WF/sessione-a"
-printf 'PreToolUse\t%s\t0\t0\t%s\n' "$ora" "/home/utente/Documenti/claude-code-watchdog" > "$WF/sessione-b"
+printf 'PermissionRequest\t%s\t0\t2\t%s\n' "$ora" "$H/Progetti/sito-vetrina" > "$WF/sessione-a"
+printf 'PreToolUse\t%s\t0\t0\t%s\n' "$ora" "$H/Progetti/app-ricette" > "$WF/sessione-b"
 
 F="$EXT/foto-pannello@prova"
 mkdir -p "$F"
@@ -122,7 +136,7 @@ for tema in scuro chiaro; do
       gsettings set org.gnome.shell disable-user-extensions false
       gsettings set org.gnome.shell enabled-extensions \"['$UUID', 'foto-pannello@prova']\"
       gsettings set org.gnome.desktop.interface color-scheme '$schema'
-      printf '%s\n' \"\$1\" | dconf load /org/gnome/shell/extensions/claude-code-watchdog/
+      [ -n \"\$1\" ] && printf '%s\n' \"\$1\" | dconf load /org/gnome/shell/extensions/claude-code-watchdog/
       dconf write /org/gnome/shell/extensions/claude-code-watchdog/usage-enabled false
       gnome-shell --headless --virtual-monitor 1600x1000 >'$P/log-$tema' 2>&1 &
       S=\$!; sleep 32; kill \$S; wait \$S" _ "$PREF" >"$P/sessione-$tema" 2>&1

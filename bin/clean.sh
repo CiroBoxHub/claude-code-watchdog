@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 # Pulizia guidata. DRY-RUN PER DEFAULT: senza --apply non cancella niente,
 # si limita a dire cosa farebbe e quanto libererebbe.
 #

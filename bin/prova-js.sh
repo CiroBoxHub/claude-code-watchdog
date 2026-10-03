@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 # Prove sulle funzioni pure di extension.js, eseguite davvero con gjs.
 #
 # Fino al 2026-09-24 nessuna prova eseguiva una riga di JavaScript: di

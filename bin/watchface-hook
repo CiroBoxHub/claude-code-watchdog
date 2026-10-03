@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 # watchface-hook EVENTO — lo stato di una sessione di Claude Code per il pannello.
 #
 # Claude Code lo lancia a ogni evento (hook in ~/.claude/settings.json, li

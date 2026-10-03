@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 CiroBoxHub
+
 /* Impostazioni e guida di Claude Code Watchdog.
  *
  * Gira nel processo di gnome-extensions-app, separato dalla shell: qui GTK e
@@ -257,6 +260,19 @@ export default class WatchdogPreferences extends ExtensionPreferences {
              '~/.local/share/claude-code-watchdog/backup-settings/; i più recenti ' +
              'si ripristinano dalla pagina «Watchface».');
 
+        const info = sezione('Informazioni');
+        const autore = new Adw.ActionRow({
+            title: 'Claude Code Watchdog',
+            subtitle: `Versione ${this.metadata.version} · di CiroBoxHub · licenza GPL-2.0 o successiva`,
+        });
+        const link = new Gtk.LinkButton({
+            label: 'Il progetto su GitHub',
+            uri: this.metadata.url ?? 'https://github.com/CiroBoxHub/claude-code-watchdog',
+            valign: Gtk.Align.CENTER,
+        });
+        autore.add_suffix(link);
+        info.add(autore);
+
         return pagina;
     }
 
@@ -389,7 +405,7 @@ export default class WatchdogPreferences extends ExtensionPreferences {
     _paginaQuota(s) {
         const pagina = new Adw.PreferencesPage({
             title: 'Quota',
-            icon_name: 'speedometer-symbolic',
+            icon_name: 'battery-level-50-symbolic',   // speedometer c'e' solo in Breeze (KDE)
         });
 
         const gruppo = new Adw.PreferencesGroup({

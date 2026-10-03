@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 CiroBoxHub
+
 /* claude-code-watchdog — indicatore di pannello per GNOME Shell.
  *
  * Non calcola niente: legge il JSON prodotto da

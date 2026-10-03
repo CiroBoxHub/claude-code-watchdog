@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 """Elenca gli elementi del cestino buttati da più di N giorni.
 
 Si legge `DeletionDate` dai file `.trashinfo`, non l'mtime del payload: un

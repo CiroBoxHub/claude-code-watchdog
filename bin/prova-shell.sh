@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 # Carica l'estensione in una GNOME Shell vera e guarda se esplode.
 #
 # È l'unico collaudo che esegue extension.js per intero. `prova-js.sh` prende

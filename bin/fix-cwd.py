@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 """Allinea il campo `cwd` delle trascrizioni alla cartella in cui si trovano.
 
     fix-cwd.py                elenca i disallineamenti

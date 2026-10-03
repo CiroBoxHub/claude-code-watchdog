@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 """Disegna la mascotte di Watchface e le sue comparse.
 
     grafica/mascotte.py               rigenera tutte le icone dell'estensione
@@ -208,6 +210,50 @@ def a_forme_piene(sorgente: Path, dest: Path) -> None:
     dest.write_text(testo)
 
 
+def banner() -> str:
+    """La testata del README: la mascotte nei suoi stati, il nome, una riga.
+
+    Testo in SVG e non in un'immagine raster: resta nitido su ogni schermo, e
+    GitHub lo mostra come qualunque altra immagine.
+    """
+    W, H = 1280, 400
+    font = "Cantarell, 'Inter', 'Segoe UI', Helvetica, Arial, sans-serif"
+    p = [f'''<defs>
+  <linearGradient id="fondo" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#16233a"/><stop offset="1" stop-color="#1F4E5A"/>
+  </linearGradient>
+  <radialGradient id="luce" cx="0.28" cy="0.45" r="0.5">
+    <stop offset="0" stop-color="#2F9284" stop-opacity="0.45"/>
+    <stop offset="1" stop-color="#2F9284" stop-opacity="0"/>
+  </radialGradient>
+</defs>
+<rect width="{W}" height="{H}" rx="28" fill="url(#fondo)"/>
+<rect width="{W}" height="{H}" rx="28" fill="url(#luce)"/>''']
+    # La faccina grande al centro della scena, le comparse ai lati.
+    p.append(f'<g transform="translate(120,70) scale(16)">{faccina("finito", True)}</g>')
+    # Un alone chiaro dietro le comparse: il casco del robottino e il bordo
+    # del limone sono scuri, e sul fondo blu notte si perdevano.
+    for cx, cy, r in ((96, 300, 62), (430, 296, 66)):
+        p.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#ffffff" fill-opacity="0.13"/>')
+    p.append(f'<g transform="translate(44,248) scale(6.5)">{limone(True)}</g>')
+    p.append(f'<g transform="translate(374,240) scale(7)">{robot(True)}</g>')
+    # Gli stati, in fila, come li vedi nella barra.
+    for i, st in enumerate(("dorme", "lavora", "aspetta", "finito")):
+        x = 540 + i * 74
+        p.append(f'<rect x="{x}" y="270" width="58" height="58" rx="14" fill="#ffffff" fill-opacity="0.08"/>')
+        p.append(f'<g transform="translate({x + 9},279) scale(2.5)">{faccina(st, True)}</g>')
+    p.append(f'<text x="538" y="150" font-family="{font}" font-size="56" font-weight="800" '
+             f'fill="#ffffff">Claude Code Watchdog</text>')
+    p.append(f'<text x="540" y="198" font-family="{font}" font-size="23" fill="#cfe6e2">'
+             f'Disco, quota e progetti di Claude Code nella barra di GNOME,</text>')
+    p.append(f'<text x="540" y="230" font-family="{font}" font-size="23" fill="#cfe6e2">'
+             f'e una faccina che ti dice cosa sta facendo Claude adesso.</text>')
+    p.append(f'<text x="842" y="306" font-family="{font}" font-size="19" fill="#9fc3bd">'
+             f'dorme · lavora · aspetta te · ha finito</text>')
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
+            f'viewBox="0 0 {W} {H}">{"".join(p)}</svg>\n')
+
+
 def main() -> int:
     SORGENTI.mkdir(parents=True, exist_ok=True)
     ICONE.mkdir(parents=True, exist_ok=True)
@@ -221,6 +267,7 @@ def main() -> int:
             (ICONE / f.name).write_text(f.read_text())
         n += 1
     print(f"{n} icone in {ICONE}")
+    (QUI / "banner.svg").write_text(banner())
     if "--anteprima" in sys.argv:
         f = QUI / "anteprima.svg"
         f.write_text(anteprima())

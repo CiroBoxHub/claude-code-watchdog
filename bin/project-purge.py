@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 """Elenca (o rimuove) i dati Claude Code di un intero progetto.
 
     project-purge.py /percorso/progetto            elenca

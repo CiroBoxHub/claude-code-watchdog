@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 CiroBoxHub
 """Riaggancia le sessioni di un progetto a una cartella spostata.
 
     project-relocate.py <vecchia-cwd> <nuova-cartella>            verifica
