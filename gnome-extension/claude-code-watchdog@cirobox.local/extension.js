@@ -23,6 +23,8 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
+import {Watchface, iconaStato, testoStato} from './watchface.js';
+
 const DATA_DIR = GLib.build_filenamev([GLib.get_user_data_dir(), 'claude-code-watchdog']);
 const METRICS = GLib.build_filenamev([DATA_DIR, 'metrics.json']);
 const HISTORY = GLib.build_filenamev([DATA_DIR, 'history.jsonl']);
@@ -675,7 +677,21 @@ class Indicatore extends PanelMenu.Button {
         this.add_child(this._box);
 
         this._costruisciMenu();
+        // Watchface prima del pannello: il pannello ne chiede lo stato. È un
+        // accessorio come il suggerimento — se non parte, manca da solo.
+        try {
+            this._watchface = new Watchface({
+                percorsoEstensione: this._ext.path,
+                suCambio: () => this._aggiornaWatchface(),
+                notifiche: () => this._settings.get_boolean('watchface-notifications'),
+                terminali: TERMINALI.map(t => t.desktop),
+            });
+        } catch (e) {
+            this._watchface = null;
+            logError(e, 'claude-code-watchdog: Watchface non disponibile');
+        }
         this._costruisciPannello();
+        this._watchface?.avvia();
         this._leggi();
         this._riprogramma();
         this._riprogrammaQuota();
@@ -750,8 +766,15 @@ class Indicatore extends PanelMenu.Button {
     _costruisciPannello() {
         this._box.destroy_all_children();
         const perIndicatore = this._settings.get_boolean('panel-icons');
-        if (this._settings.get_boolean('panel-show-icon'))
-            this._box.add_child(this._icona(ICONE.principale));
+        // Con la mascotte l'icona principale è la faccina, che dice anche cosa
+        // fa Claude; senza, è quella di sempre e lo stato passa dal colore.
+        this._iconaStato = null;
+        if (this._settings.get_boolean('watchface-mascot'))
+            this._iconaStato = this._icona(iconaStato(null));
+        else if (this._settings.get_boolean('panel-show-icon'))
+            this._iconaStato = this._icona(ICONE.principale);
+        if (this._iconaStato)
+            this._box.add_child(this._iconaStato);
 
         this._etichettePannello = new Map();
         for (const chiave of this._settings.get_strv('panel-indicators')) {
@@ -772,8 +795,85 @@ class Indicatore extends PanelMenu.Button {
         }
         // Senza icona né indicatori il pulsante sarebbe invisibile e non
         // cliccabile: si tiene almeno l'icona.
-        if (this._box.get_n_children() === 0)
-            this._box.add_child(this._icona(ICONE.principale));
+        if (this._box.get_n_children() === 0) {
+            this._iconaStato = this._icona(ICONE.principale);
+            this._box.add_child(this._iconaStato);
+        }
+        this._aggiornaWatchface();
+    }
+
+    /* ------------------------------------------------------- watchface --- */
+
+    _aggiornaWatchface() {
+        if (this._morto)
+            return;
+        const stato = this._watchface?.stato ?? null;
+        if (this._iconaStato) {
+            if (this._settings.get_boolean('watchface-mascot')) {
+                this._iconaStato.gicon = Gio.icon_new_for_string(GLib.build_filenamev(
+                    [this._ext.path, 'icons', `${iconaStato(stato)}-symbolic.svg`]));
+                this._iconaStato.style_class = 'system-status-icon fw-wf-icona';
+            } else {
+                // Senza mascotte lo stato urgente tinge l'icona di sempre: è
+                // grafica, quindi bastano i 3:1 che ambra e mattone reggono
+                // su barra chiara e scura.
+                this._iconaStato.style_class = 'system-status-icon' +
+                    (stato === 'aspetta' ? ' fw-wf-tinta-aspetta'
+                        : stato === 'errore' ? ' fw-wf-tinta-errore' : '');
+            }
+        }
+        this._disegnaSessioniClaude();
+    }
+
+    /* La sezione «Claude adesso» in cima al popup. Si rifà solo quando cambia
+       qualcosa che si vede: gli eventi arrivano a raffica mentre Claude
+       lavora, e ricostruire le righe a ogni strumento sarebbe lavoro buttato. */
+    _disegnaSessioniClaude() {
+        if (!this._boxWatchface)
+            return;
+        const sessioni = (this._watchface?.sessioni ?? []).slice(0, 5);
+        const mascotte = this._settings.get_boolean('watchface-mascot');
+        const firma = JSON.stringify([mascotte, sessioni.map(
+            s => [s.id, s.stato, s.evento === 'PermissionRequest', s.aiutanti, s.progetto])]);
+        if (firma === this._firmaWatchface)
+            return;
+        this._firmaWatchface = firma;
+
+        this._boxWatchface.destroy_all_children();
+        this._boxWatchface.visible = sessioni.length > 0;
+        if (!sessioni.length)
+            return;
+        this._boxWatchface.add_child(new St.Label({text: 'Claude adesso',
+                                                   style_class: 'fw-section'}));
+        const icona = (nome, lato, classe) => new St.Icon({
+            gicon: Gio.icon_new_for_string(GLib.build_filenamev(
+                [this._ext.path, 'icons', `${nome}.svg`])),
+            icon_size: lato, style_class: classe});
+        for (const s of sessioni) {
+            const riga = new St.BoxLayout({style_class: 'fw-wf-riga', x_expand: true});
+            if (mascotte)
+                riga.add_child(icona(iconaStato(s.stato), 26, 'fw-wf-faccia'));
+            const testi = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL,
+                                            x_expand: true,
+                                            y_align: Clutter.ActorAlign.CENTER});
+            testi.add_child(new St.Label({text: tagliaNome(s.progetto, 28),
+                                          style_class: 'fw-wf-nome'}));
+            testi.add_child(new St.Label({text: testoStato(s),
+                                          style_class: `fw-wf-stato fw-wf-stato-${s.stato}`}));
+            riga.add_child(testi);
+            if (s.aiutanti > 0) {
+                const aiuto = new St.BoxLayout({style_class: 'fw-wf-aiuto',
+                                                y_align: Clutter.ActorAlign.CENTER});
+                if (mascotte)
+                    aiuto.add_child(icona('fw-robot', 18, 'fw-wf-robot'));
+                aiuto.add_child(new St.Label({
+                    text: s.aiutanti === 1 ? '1 aiutante' : `${s.aiutanti} aiutanti`,
+                    style_class: 'fw-wf-aiuto-testo', y_align: Clutter.ActorAlign.CENTER}));
+                riga.add_child(aiuto);
+            }
+            this._boxWatchface.add_child(riga);
+        }
+        this._boxWatchface.add_child(new St.Widget({style_class: 'fw-rule', x_expand: true}));
     }
 
     /* Un account può avere più limiti settimanali (weekly_all, weekly_opus):
@@ -851,6 +951,14 @@ class Indicatore extends PanelMenu.Button {
         });
         testa.add_child(btnAgg);
         c.add_child(testa);
+
+        // Cosa sta facendo Claude: in cima, perché è l'unica cosa del popup
+        // che può chiedere di fare qualcosa adesso.
+        this._firmaWatchface = null;
+        this._boxWatchface = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL,
+                                               style_class: 'fw-wf', x_expand: true,
+                                               visible: false});
+        c.add_child(this._boxWatchface);
 
         this._esito = new St.Label({text: '', style_class: 'fw-esito', visible: false});
         c.add_child(this._esito);
@@ -2134,6 +2242,8 @@ class Indicatore extends PanelMenu.Button {
         // Le richiamate dei sottoprocessi sopravvivono a destroy(): senza
         // questa bandiera toccherebbero attori già deallocati.
         this._morto = true;
+        this._watchface?.ferma();
+        this._watchface = null;
         // Il suggerimento vive fuori dal menu, appeso alla chrome della shell:
         // se non lo si toglie a mano resta lì dopo la disattivazione.
         this.suggerimento?.destroy();

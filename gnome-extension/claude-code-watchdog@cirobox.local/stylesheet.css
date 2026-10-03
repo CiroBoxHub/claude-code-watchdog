@@ -25,14 +25,17 @@
 
 /* ------------------------------------------------------------ pannello --- */
 
+/* Barra compatta: gruppi staccati fra loro e icona vicina al suo numero, cosi'
+   l'occhio legge «icona-valore» come un'unita'. Rivista il 2026-10-03 sulle
+   foto della shell vera (bin/fotografa-pannello.sh). */
 .fw-panel-box {
-    spacing: 6px;
+    spacing: 10px;
 }
 
 .fw-panel-label {
     font-feature-settings: "tnum";   /* cifre a larghezza fissa: la barra non
                                         balla a ogni aggiornamento */
-    font-weight: 500;
+    font-weight: 600;
 }
 
 .fw-panel-warn {
@@ -353,12 +356,14 @@
 /* Icona e valore di uno stesso indicatore restano vicini fra loro e staccati
    dal gruppo successivo: senza questo la barra diventa una fila indistinta. */
 .fw-panel-group {
-    spacing: 3px;
+    spacing: 4px;
 }
 
+/* Piena opacita': prima era 0.85 perche' le icone uscivano piene e col bordo
+   grigio fisso. Ora che si ricolorano davvero, attenuarle toglie solo
+   contrasto. */
 .fw-panel-icon {
-    icon-size: 14px;
-    opacity: 0.85;
+    icon-size: 15px;
 }
 
 /* --- progetti con problemi --- */
@@ -565,3 +570,72 @@
     font-size: 0.85em;
     background-color: rgba(183, 123, 26, 0.2);
 }
+
+/* ---------------------------------------------------------- watchface --- */
+
+/* L'ambra della faccina che aspetta: le icone -symbolic prendono il colore
+   del testo, e solo gli elementi con classe `warning` questo. */
+.fw-wf-icona {
+    warning-color: #B77B1A;
+    icon-size: 18px;         /* a 16 la faccina e' un puntino con la barba */
+}
+
+/* Senza mascotte lo stato urgente tinge l'icona di sempre. */
+.fw-wf-tinta-aspetta {
+    color: #B77B1A;
+}
+
+.fw-wf-tinta-errore {
+    color: #CE5A50;
+}
+
+.fw-wf {
+    spacing: 2px;
+    padding-bottom: 2px;
+}
+
+.fw-wf-riga {
+    spacing: 10px;
+    padding: 4px 6px;
+    border-radius: 7px;
+}
+
+.fw-wf-faccia {
+    icon-size: 26px;
+}
+
+.fw-wf-nome {
+    font-weight: 600;
+    font-size: 0.95em;
+}
+
+.fw-wf-stato {
+    font-size: 0.84em;
+    opacity: 0.78;
+}
+
+/* Il testo resta del colore del tema: il significato lo porta un fondo
+   tenue, come per gli allarmi dei progetti. */
+.fw-wf-stato-aspetta,
+.fw-wf-stato-errore {
+    opacity: 1;
+    font-weight: 600;
+}
+
+.fw-wf-riga:first-child {
+    margin-top: 2px;
+}
+
+.fw-wf-aiuto {
+    spacing: 4px;
+}
+
+.fw-wf-robot {
+    icon-size: 18px;
+}
+
+.fw-wf-aiuto-testo {
+    font-size: 0.82em;
+    opacity: 0.78;
+}
+

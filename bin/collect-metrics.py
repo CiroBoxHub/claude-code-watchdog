@@ -792,14 +792,9 @@ def main() -> int:
         allarmi.append(f"cache di Claude a {cache_mb} MB")
     if sess["fantasma"] > 50:
         allarmi.append(f"{sess['fantasma']} sessioni-fantasma")
-    # Si distingue per `tipo`: un account può avere weekly_all e weekly_opus,
-    # e chiamarli entrambi "settimana" produrrebbe due allarmi identici.
-    nomi = {"session": "sessione", "weekly_all": "settimana",
-            "weekly_opus": "settimana Opus"}
-    for l in (quota or {}).get("limiti", []):
-        if (l.get("percento") or 0) >= warn:
-            nome = nomi.get(l.get("tipo"), l.get("tipo") or "quota")
-            allarmi.append(f"Quota {nome} al {l['percento']}%")
+    # La quota non genera avvisi: la sua barra diventa ambra e rossa alle
+    # stesse soglie, e la striscia «⚠ Quota sessione al 85%» sotto ripeteva la
+    # stessa cosa. Tolta il 2026-10-03, su richiesta dell'utente.
 
     # Sale al primo livello accanto a «progetto»: la leggono il pannello e le
     # preferenze, che finora la deducevano da «progetto» — null quando lo

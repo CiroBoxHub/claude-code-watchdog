@@ -141,5 +141,15 @@
       <summary>Mostra la quota nel popup</summary>
     </key>
 
-  </schema>
+      <key name="watchface-mascot" type="b">
+      <default>true</default>
+      <summary>Mostra la mascotte</summary>
+      <description>La faccina nel pannello e nel popup cambia con quello che sta facendo Claude Code. Spenta, resta l'icona di sempre e lo stato urgente la colora.</description>
+    </key>
+    <key name="watchface-notifications" type="b">
+      <default>true</default>
+      <summary>Notifiche di Watchface</summary>
+      <description>Avvisa quando Claude aspetta una risposta, quando si inceppa, e quando finisce un lavoro lungo — non se stai già guardando il terminale.</description>
+    </key>
+</schema>
 </schemalist>

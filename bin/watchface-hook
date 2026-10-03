@@ -1,0 +1,70 @@
+#!/bin/bash
+# watchface-hook EVENTO — lo stato di una sessione di Claude Code per il pannello.
+#
+# Claude Code lo lancia a ogni evento (hook in ~/.claude/settings.json, li
+# mette e li toglie watchface-hooks.py) con il JSON dell'evento sullo stdin.
+# Scrive una riga per sessione in $XDG_RUNTIME_DIR, che sta in memoria: il
+# pannello la legge quando cambia, senza interrogare niente a intervalli.
+#
+#   evento <TAB> epoca <TAB> fallimenti di fila <TAB> aiutanti <TAB> cwd
+#
+# Tre regole, perche' gira a ogni passo di Claude:
+# - NIENTE OUTPUT. Per PermissionRequest lo stdout di un hook e' una risposta:
+#   una riga sbagliata qui approverebbe o negherebbe un comando.
+# - USCITA SEMPRE 0, e niente che possa bloccare: un hook che si inceppa
+#   ferma Claude.
+# - Bash e solo builtin dove si puo': un processo Python costerebbe 30-80 ms a
+#   ogni strumento usato. Qui si forka solo per mkdir la prima volta e per
+#   scartare la coda di un payload grosso.
+exec >/dev/null 2>&1
+
+evento=$1
+[[ $evento =~ ^[A-Za-z]{1,40}$ ]] || exit 0
+
+# La testa basta: session_id e cwd sono fra i primi campi. Un Write da
+# qualche MB porta il contenuto nel payload; si legge la testa e il resto si
+# scarta, ma va letto tutto, se no chi scrive riceve un EPIPE.
+IFS= read -r -d '' -N 8192 dati
+(( ${#dati} >= 8192 )) && cat >/dev/null
+
+# L'id finisce in un nome di file: solo lettere, cifre e trattini, cosi'
+# un «../» non porta fuori dalla cartella.
+[[ $dati =~ \"session_id\"[[:space:]]*:[[:space:]]*\"([A-Za-z0-9-]{1,64})\" ]] || exit 0
+sid=${BASH_REMATCH[1]}
+cwd=
+[[ $dati =~ \"cwd\"[[:space:]]*:[[:space:]]*\"(([^\"\\]|\\.)*)\" ]] && cwd=${BASH_REMATCH[1]}
+cwd=${cwd//$'\t'/ }
+
+base=${XDG_RUNTIME_DIR:-/run/user/$UID}
+dir=$base/claude-code-watchdog/watchface
+[[ -d $dir ]] || mkdir -p -m 700 "$dir" || exit 0
+f=$dir/$sid
+
+if [[ $evento == SessionEnd ]]; then
+    rm -f -- "$f"
+    exit 0
+fi
+
+prima=Nessuno fallimenti=0 aiutanti=0
+[[ -f $f ]] && IFS=$'\t' read -r prima _ fallimenti aiutanti _ < "$f"
+[[ $fallimenti =~ ^[0-9]+$ ]] || fallimenti=0
+[[ $aiutanti =~ ^[0-9]+$ ]] || aiutanti=0
+
+case $evento in
+    # Arriva anche dopo un minuto di inattivita' a fine turno («Claude is
+    # waiting for your input»): se il turno era finito, resta finito.
+    Notification) [[ $prima == Stop ]] && exit 0 ;;
+    PostToolUseFailure) (( fallimenti++ )) ;;
+    PostToolUse|UserPromptSubmit|SessionStart|Stop) fallimenti=0 ;;
+esac
+case $evento in
+    SubagentStart) (( aiutanti++ )) ;;
+    SubagentStop) (( aiutanti > 0 )) && (( aiutanti-- )) ;;
+    SessionStart) aiutanti=0 ;;
+esac
+
+# Una write sola su un file piccolo: chi legge vede la riga vecchia o la
+# nuova. Un file vuoto (troncato e non ancora scritto) il pannello lo salta.
+printf '%s\t%s\t%s\t%s\t%s\n' "$evento" "${EPOCHSECONDS:-0}" \
+    "$fallimenti" "$aiutanti" "$cwd" > "$f"
+exit 0

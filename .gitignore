@@ -18,3 +18,10 @@ gnome-extension/*/*.py
 
 __pycache__/
 *.pyc
+
+# Anche l'hook di Watchface viene copiato da bin/ come gli script Python.
+gnome-extension/*/watchface-hook
+
+# Foto di prova della barra e del popup (bin/fotografa-pannello.sh)
+grafica/foto/
+grafica/foto-icone.png

@@ -13,7 +13,9 @@ ko=0
 echo "Verifica di $SRC"
 echo
 
-for f in extension.js prefs.js; do
+# Tutti i moduli, non un elenco: watchface.js e' arrivato dopo, e un elenco
+# fisso l'avrebbe lasciato fuori da ogni controllo senza dirlo.
+for f in $(cd "$SRC" && ls *.js); do
   printf '  %-34s ' "$f: sintassi"
   if gjs -m "$SRC/$f" 2>&1 | grep -qi syntaxerror; then echo "✗"; ko=1; else echo "ok"; fi
 done
@@ -33,12 +35,16 @@ if ( shopt -s nullglob
 
 # I due controlli che contano davvero: riferimenti che non esistono.
 printf '  %-34s ' "metodi chiamati ma non definiti"
-_m=$(python3 - "$SRC/extension.js" <<'PY'
+_m=$(python3 - "$SRC"/*.js <<'PY'
 import re, sys, pathlib
-s = pathlib.Path(sys.argv[1]).read_text()
-definiti = set(re.findall(r'^\s{4}(?:get )?([A-Za-z_]\w*)\s*\(', s, re.M))
-chiamati = set(re.findall(r'this\.(_[A-Za-z]\w*)\(', s))
-print(' '.join(sorted(c for c in chiamati if c not in definiti)))
+# File per file: `this._x()` si riferisce alla classe del file in cui sta.
+manca = []
+for f in sys.argv[1:]:
+    s = pathlib.Path(f).read_text()
+    definiti = set(re.findall(r'^\s{4}(?:get )?([A-Za-z_]\w*)\s*\(', s, re.M))
+    chiamati = set(re.findall(r'this\.(_[A-Za-z]\w*)\(', s))
+    manca += [f"{pathlib.Path(f).name}:{c}" for c in chiamati if c not in definiti]
+print(' '.join(sorted(manca)))
 PY
 )
 if [[ -z "$_m" ]]; then echo "ok"; else echo "✗ $_m"; ko=1; fi
@@ -76,7 +82,7 @@ _c=$(python3 - "$SRC" <<'PY'
 import re, sys, pathlib
 src = pathlib.Path(sys.argv[1])
 css = set(re.findall(r'^\.([\w-]+)', (src / 'stylesheet.css').read_text(), re.M))
-js = (src / 'extension.js').read_text()
+js = ''.join(f.read_text() for f in src.glob('*.js'))
 usate = set()
 for m in re.findall(r"style_class: '([^']+)'", js): usate |= set(m.split())
 for m in re.findall(r"style_class = '([^']+)'", js): usate |= set(m.split())
@@ -91,7 +97,8 @@ if [[ -z "$_c" ]]; then echo "ok"; else echo "✗ $_c"; ko=1; fi
 # dentro l'estensione: install e pack hanno due liste separate, e dimenticarne
 # una lascia il pacchetto senza uno script che il codice chiama.
 printf '  %-34s ' "script citati, presenti e copiati"
-_s=$(grep -o "_percorsoScript('[^']*')" "$SRC/extension.js" | grep -o "'[^']*'" | tr -d "'" | sort -u)
+_s=$( { grep -ho "_percorsoScript('[^']*')" "$SRC"/*.js | grep -o "'[^']*'" | tr -d "'"
+        grep -hoE "'(watchface-hooks?(\.py)?)'" "$SRC"/*.js | tr -d "'"; } | sort -u)
 _manca=""
 for x in $_s; do
   [[ -f "$WD_ROOT/bin/$x" ]] || _manca="$_manca $x(assente)"

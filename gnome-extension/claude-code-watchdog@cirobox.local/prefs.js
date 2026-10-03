@@ -39,6 +39,7 @@ export default class WatchdogPreferences extends ExtensionPreferences {
         window.add(this._paginaBarra(s));
         window.add(this._paginaPopup(s));
         window.add(this._paginaQuota(s));
+        window.add(this._paginaWatchface(s, window));
         window.add(this._paginaTerminale(s));
         window.add(this._paginaSicurezza(s));
     }
@@ -138,6 +139,33 @@ export default class WatchdogPreferences extends ExtensionPreferences {
                'Si calcolano dalle sessioni di questo PC, quindi non contano ' +
                'altri dispositivi. Le soglie stanno in config/watchdog.conf, ' +
                'alle voci QUOTA_CONSIGLIO_*.');
+
+        const wf = new Adw.PreferencesGroup({
+            title: 'Watchface: cosa fa Claude adesso',
+            description: 'Si attiva dalla pagina «Watchface», installando gli hook.',
+        });
+        pagina.add(wf);
+        spiega(wf, 'La faccina nella barra',
+               'Dorme quando non c\u2019è nessuna sessione, ha gli occhi aperti ' +
+               'quando Claude lavora, apre la bocca e mostra un punto ambra ' +
+               'quando aspetta te — un permesso o una risposta — e sorride ' +
+               'quando ha finito. Con più sessioni aperte mostra la più ' +
+               'urgente: prima chi aspetta te, poi gli errori, poi chi lavora.');
+        spiega(wf, 'Il limone e il robottino',
+               'Il limone prende il posto della faccina quando qualcosa si ' +
+               'inceppa: la sessione si è fermata per un errore, o tre ' +
+               'strumenti di fila sono falliti. Il robottino compare nel popup, ' +
+               'accanto alla sessione, quando Claude ha mandato degli aiutanti ' +
+               '(subagenti), con il loro numero.');
+        spiega(wf, '«Claude adesso», in cima al popup',
+               'Una riga per sessione aperta, la più urgente per prima: ' +
+               'progetto e cosa sta facendo. Sparisce quando non ce ne sono.');
+        spiega(wf, 'Come lo sa, e quanto costa',
+               'Claude Code avvisa uno script a ogni evento (un hook in ' +
+               '~/.claude/settings.json). Lo script scrive una riga in una ' +
+               'cartella in memoria e il pannello la legge quando cambia: ' +
+               'nessun controllo a intervalli, pochi millisecondi per evento. ' +
+               'Non approva né rifiuta niente: i permessi si danno nel terminale.');
 
         const prog = new Adw.PreferencesGroup({
             title: 'I progetti',
@@ -441,6 +469,201 @@ export default class WatchdogPreferences extends ExtensionPreferences {
                                       ['3 ore', 10800]]));
 
         return pagina;
+    }
+
+    /* ------------------------------------------------------ watchface --- */
+    _paginaWatchface(s, window) {
+        const pagina = new Adw.PreferencesPage({
+            title: 'Watchface',
+            icon_name: 'face-smile-symbolic',
+        });
+
+        const aspetto = new Adw.PreferencesGroup({
+            title: 'La mascotte',
+            description: 'Cosa sta facendo Claude Code, nella barra e in cima al ' +
+                         'popup: dorme, lavora, aspetta te, ha finito. Il limone ' +
+                         'arriva quando qualcosa si inceppa, il robottino quando ' +
+                         'Claude manda degli aiutanti.',
+        });
+        pagina.add(aspetto);
+        const mascotte = new Adw.SwitchRow({
+            title: 'Mostra la mascotte',
+            subtitle: 'Spenta, resta l\u2019icona di sempre: lo stato urgente la ' +
+                      'colora d\u2019ambra (aspetta te) o di rosso (errore).',
+        });
+        mascotte.set_subtitle_lines(0);
+        s.bind('watchface-mascot', mascotte, 'active', Gio.SettingsBindFlags.DEFAULT);
+        aspetto.add(mascotte);
+        const notifiche = new Adw.SwitchRow({
+            title: 'Notifiche',
+            subtitle: 'Quando Claude aspetta una risposta, quando si inceppa, e ' +
+                      'quando finisce un lavoro di almeno mezzo minuto. Mai se ' +
+                      'stai già guardando il terminale.',
+        });
+        notifiche.set_subtitle_lines(0);
+        s.bind('watchface-notifications', notifiche, 'active', Gio.SettingsBindFlags.DEFAULT);
+        aspetto.add(notifiche);
+
+        // Gli hook: senza, Watchface non sa niente. Li gestisce
+        // watchface-hooks.py, che fa un backup di settings.json prima di ogni
+        // modifica; qui ci sono solo i pulsanti.
+        this._gruppoHook = new Adw.PreferencesGroup({
+            title: 'Hook di Claude Code',
+            description: 'Watchface sa cosa fa Claude perché Claude Code glielo ' +
+                         'dice con un hook, in ~/.claude/settings.json. Prima di ' +
+                         'ogni modifica si fa un backup del file.',
+        });
+        pagina.add(this._gruppoHook);
+        this._gruppoAltri = new Adw.PreferencesGroup({
+            title: 'Altri programmi negli hook',
+            description: 'Hook di altri strumenti. Se uno fa lo stesso lavoro di ' +
+                         'Watchface si può togliere da qui, con backup.',
+        });
+        pagina.add(this._gruppoAltri);
+        this._gruppoBackup = new Adw.PreferencesGroup({
+            title: 'Backup di settings.json',
+            description: 'Gli ultimi dieci, uno per modifica. Ripristinarne uno ' +
+                         'fa prima un backup di quello attuale.',
+        });
+        pagina.add(this._gruppoBackup);
+        this._righeHook = [];
+        this._finestra = window;
+        this._aggiornaHook();
+        return pagina;
+    }
+
+    /* Lancia watchface-hooks.py della copia installata — quella accanto
+       all'hook che scrive nei settings — e passa l'esito a `fatto`. */
+    _hooks(argomenti, fatto) {
+        const script = GLib.build_filenamev([this.path, 'watchface-hooks.py']);
+        try {
+            const p = Gio.Subprocess.new(['python3', script, ...argomenti],
+                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE);
+            p.communicate_utf8_async(null, null, (src, res) => {
+                let out = '', err = '';
+                try {
+                    [, out, err] = src.communicate_utf8_finish(res);
+                } catch (e) {
+                    err = e.message;
+                }
+                fatto(src.get_successful(), (out ?? '').trim(), (err ?? '').trim());
+            });
+        } catch (e) {
+            fatto(false, '', e.message);
+        }
+    }
+
+    _avviso(testo) {
+        this._finestra?.add_toast(new Adw.Toast({title: testo, timeout: 4}));
+    }
+
+    _azioneHook(argomenti) {
+        this._hooks(argomenti, (ok, out, err) => {
+            this._avviso(ok ? out : `Non riuscito: ${err || out}`);
+            this._aggiornaHook();
+        });
+    }
+
+    /* Prima di toccare la configurazione di Claude Code si chiede: è un file
+       dell'utente, e anche con il backup un clic distratto non va premiato. */
+    _conferma(titolo, testo, etichetta, azione) {
+        const d = new Adw.AlertDialog({heading: titolo, body: testo});
+        d.add_response('annulla', 'Annulla');
+        d.add_response('ok', etichetta);
+        d.set_response_appearance('ok', Adw.ResponseAppearance.DESTRUCTIVE);
+        d.set_default_response('annulla');
+        d.set_close_response('annulla');
+        d.connect('response', (_d, r) => {
+            if (r === 'ok')
+                azione();
+        });
+        d.present(this._finestra);
+    }
+
+    _aggiornaHook() {
+        this._hooks(['stato', '--json'], (ok, out, err) => {
+            for (const [gruppo, riga] of this._righeHook)
+                gruppo.remove(riga);
+            this._righeHook = [];
+            const aggiungi = (gruppo, riga) => {
+                gruppo.add(riga);
+                this._righeHook.push([gruppo, riga]);
+            };
+            let st = null;
+            try {
+                st = ok ? JSON.parse(out) : null;
+            } catch (e) {
+                st = null;
+            }
+            if (!st) {
+                aggiungi(this._gruppoHook, new Adw.ActionRow({
+                    title: 'Stato non leggibile',
+                    subtitle: err || 'settings.json non è JSON valido: non lo tocco.'}));
+                return;
+            }
+
+            const n = st.installati.length, tot = n + st.mancanti.length;
+            const riga = new Adw.ActionRow({
+                title: n === tot ? 'Installati' : n === 0 ? 'Non installati' : 'Installati in parte',
+                subtitle: n === tot
+                    ? `Tutti i ${tot} eventi arrivano a Watchface.`
+                    : n === 0
+                        ? 'Senza hook la mascotte dorme sempre e non arriva nessuna notifica.'
+                        : `${n} eventi su ${tot}: reinstallali per completarli.`,
+            });
+            riga.set_subtitle_lines(0);
+            const bottone = (etichetta, classe, azione) => {
+                const b = new Gtk.Button({label: etichetta, valign: Gtk.Align.CENTER});
+                if (classe)
+                    b.add_css_class(classe);
+                b.connect('clicked', azione);
+                return b;
+            };
+            if (n < tot) {
+                riga.add_suffix(bottone(n ? 'Reinstalla' : 'Installa', 'suggested-action',
+                                        () => this._azioneHook(['installa'])));
+            }
+            if (n > 0) {
+                riga.add_suffix(bottone('Rimuovi', null, () => this._conferma(
+                    'Togliere gli hook di Watchface?',
+                    'La mascotte smetterà di seguire Claude. Si possono rimettere ' +
+                    'quando vuoi, e prima si fa un backup di settings.json.',
+                    'Rimuovi', () => this._azioneHook(['rimuovi']))));
+            }
+            aggiungi(this._gruppoHook, riga);
+
+            this._gruppoAltri.visible = st.altri.length > 0;
+            for (const a of st.altri) {
+                const r = new Adw.ActionRow({
+                    title: a.programma,
+                    subtitle: `${a.eventi.length} eventi · ${a.comando}`,
+                });
+                r.set_subtitle_lines(2);
+                r.add_suffix(bottone('Rimuovi', 'destructive-action', () => this._conferma(
+                    `Togliere gli hook di ${a.programma}?`,
+                    `Si tolgono i suoi ${a.eventi.length} hook da settings.json, dopo ` +
+                    'un backup. Il programma resta installato: si toglie solo il ' +
+                    'collegamento con Claude Code.',
+                    'Rimuovi', () => this._azioneHook(['rimuovi-altro', a.programma]))));
+                aggiungi(this._gruppoAltri, r);
+            }
+
+            this._gruppoBackup.visible = st.backup.length > 0;
+            for (const f of st.backup.slice().reverse().slice(0, 5)) {
+                const nome = GLib.path_get_basename(f);
+                const m = /settings-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})/.exec(nome);
+                const r = new Adw.ActionRow({
+                    title: m ? `${m[3]}/${m[2]}/${m[1]} alle ${m[4]}:${m[5]}:${m[6]}` : nome,
+                    subtitle: nome,
+                });
+                r.add_suffix(bottone('Ripristina', null, () => this._conferma(
+                    'Ripristinare questo backup?',
+                    'settings.json torna com\u2019era in quel momento, hook e ' +
+                    'impostazioni compresi. Prima si fa un backup di quello attuale.',
+                    'Ripristina', () => this._azioneHook(['ripristina', f]))));
+                aggiungi(this._gruppoBackup, r);
+            }
+        });
     }
 
     /* ------------------------------------------------------ terminale --- */

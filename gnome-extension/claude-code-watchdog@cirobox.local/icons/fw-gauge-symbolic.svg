@@ -1,8 +1,32 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-  <g fill="none" stroke="#8a8a8a" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M2.6 11.4a5.9 5.9 0 1 1 10.8 0"/>
-    <path d="M8 11.4 11.2 7.4"/>
-    <circle cx="8" cy="11.4" r="0.95" fill="#8a8a8a" stroke="none"/>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="16"
+   height="16"
+   viewBox="0 0 16 16"
+   version="1.1"
+   id="svg2"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs2" />
+  <g
+    
+    
+    
+    
+    
+     id="g2">
+    <path
+       style="baseline-shift:baseline;display:inline;overflow:visible;vector-effect:none;fill:#8a8a8a;stroke:none;stroke-linecap:butt;stroke-linejoin:miter;enable-background:accumulate;stop-color:#000000;stop-opacity:1;opacity:1"
+       d="m 8,2.4472656 c -4.7228449,0 -7.9203255,4.9019535 -6.0175781,9.2246094 A 0.67500001,0.67500001 0 0 0 2.8710938,12.017578 0.67500001,0.67500001 0 0 0 3.21875,11.128906 C 1.6885469,7.6525953 4.2018615,3.7988281 8,3.7988281 c 3.798138,0 6.311453,3.8537672 4.78125,7.3300779 a 0.67500001,0.67500001 0 0 0 0.347656,0.888672 0.67500001,0.67500001 0 0 0 0.888672,-0.345703 C 15.920326,7.3492191 12.722845,2.4472656 8,2.4472656 Z"
+       id="path1" />
+    <path
+       style="baseline-shift:baseline;display:inline;overflow:visible;vector-effect:none;fill:#8a8a8a;stroke:none;stroke-linecap:butt;stroke-linejoin:miter;enable-background:accumulate;stop-color:#000000;stop-opacity:1;opacity:1"
+       d="M 11.621094,6.8730469 A 0.67500001,0.67500001 0 0 0 10.673828,6.9785156 L 7.4726562,10.978516 A 0.67500001,0.67500001 0 0 0 7.578125,11.927734 0.67500001,0.67500001 0 0 0 8.5273438,11.822266 L 11.726563,7.8222656 A 0.67500001,0.67500001 0 0 0 11.621094,6.8730469 Z"
+       id="path2" />
+    <path
+       id="circle2"
+       style="fill:#8a8a8a;stroke:none"
+       d="M 8.95,11.4 A 0.94999999,0.94999999 0 0 1 8,12.35 0.94999999,0.94999999 0 0 1 7.05,11.4 0.94999999,0.94999999 0 0 1 8,10.45 0.94999999,0.94999999 0 0 1 8.95,11.4 Z" />
   </g>
 </svg>

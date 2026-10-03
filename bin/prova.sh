@@ -773,6 +773,108 @@ uguale "clean.sh: rifiuta un target sconosciuto" \
 uguale "clean.sh: senza --apply non cancella niente" \
   "$("$WD_ROOT/bin/clean.sh" claude-stubs 2>/dev/null | grep -c 'comando:')" "1"
 
+# ------------------------------------------------------ watchface-hook ---
+# Gira a ogni passo di Claude: niente output (per PermissionRequest lo stdout
+# e' una risposta), uscita sempre 0, nessun percorso fuori dalla sua cartella.
+prepara
+export XDG_RUNTIME_DIR="$SANDBOX/run"
+mkdir -p "$XDG_RUNTIME_DIR"
+WF="$XDG_RUNTIME_DIR/claude-code-watchdog/watchface"
+hook() { # hook EVENTO SESSIONE [CWD]
+  printf '{"session_id":"%s","transcript_path":"/x.jsonl","cwd":"%s","hook_event_name":"%s","tool_name":"Bash"}' \
+    "$2" "${3:-/lavoro/prog}" "$1" | "$WD_ROOT/bin/watchface-hook" "$1"
+}
+campo() { cut -f"$2" "$WF/$1" 2>/dev/null; }
+uscita=$(hook PreToolUse s1; echo "rc=$?")
+uguale "watchface-hook: nessun output, uscita 0" "$uscita" "rc=0"
+uguale "watchface-hook: scrive evento e cartella" "$(campo s1 1)|$(campo s1 5)" "PreToolUse|/lavoro/prog"
+hook PreToolUse '../../fuori' >/dev/null
+uguale "watchface-hook: rifiuta un id con ../" \
+  "$(find "$SANDBOX" -name fuori | wc -l)" "0"
+for i in 1 2 3; do hook PostToolUseFailure s1; done
+uguale "watchface-hook: conta i fallimenti di fila" "$(campo s1 3)" "3"
+hook PreToolUse s1
+uguale "watchface-hook: PreToolUse non azzera i fallimenti" "$(campo s1 3)" "3"
+hook PostToolUse s1
+uguale "watchface-hook: un successo li azzera" "$(campo s1 3)" "0"
+hook SubagentStart s1; hook SubagentStart s1; hook SubagentStop s1
+uguale "watchface-hook: conta gli aiutanti" "$(campo s1 4)" "1"
+hook SubagentStop s1; hook SubagentStop s1
+uguale "watchface-hook: gli aiutanti non scendono sotto zero" "$(campo s1 4)" "0"
+hook Stop s1; hook Notification s1
+uguale "watchface-hook: Notification dopo Stop non cambia stato" "$(campo s1 1)" "Stop"
+hook PermissionRequest s1
+uguale "watchface-hook: PermissionRequest si registra" "$(campo s1 1)" "PermissionRequest"
+# Un Write da qualche MB: l'hook legge la testa e scarta il resto senza
+# bloccare chi scrive.
+grosso=$( { printf '{"session_id":"s2","cwd":"/lavoro/grosso","hook_event_name":"PreToolUse","tool_input":{"content":"'
+            head -c 3000000 /dev/zero | tr '\0' x; printf '"}}'; } \
+          | timeout 10 "$WD_ROOT/bin/watchface-hook" PreToolUse; echo "rc=$?")
+uguale "watchface-hook: un payload enorme non blocca" "$grosso" "rc=0"
+uguale "watchface-hook: e lo stato si scrive lo stesso" "$(campo s2 5)" "/lavoro/grosso"
+hook SessionEnd s1
+uguale "watchface-hook: SessionEnd toglie il file" "$([[ -e $WF/s1 ]] && echo c-e || echo tolto)" "tolto"
+unset XDG_RUNTIME_DIR
+
+# ---------------------------------------------------- watchface-hooks.py ---
+# Tocca ~/.claude/settings.json, dove stanno anche le impostazioni
+# dell'utente: backup prima, scrittura atomica, e un file che non si capisce
+# non si riscrive mai.
+prepara
+S="$HOME/.claude/settings.json"
+python3 - "$S" <<'EOF'
+import json, sys
+ev = ["SessionStart", "Stop", "PreToolUse"]
+d = {"theme": "dark", "enabledPlugins": {"x@y": True},
+     "hooks": {e: [{"hooks": [{"type": "command", "timeout": 10,
+               "command": f"'/opt/coucou/bin/coucou-hook' {e}"}]}] for e in ev}}
+json.dump(d, open(sys.argv[1], "w"), indent=2)
+EOF
+chmod 600 "$S"
+WH="$WD_ROOT/bin/watchface-hooks.py"
+stato() { "$WH" stato --json 2>/dev/null | python3 -c "import json,sys;d=json.load(sys.stdin);print($1)"; }
+"$WH" installa >/dev/null 2>&1
+uguale "watchface-hooks: installa i dodici eventi" "$(stato 'len(d["installati"])')" "12"
+uguale "watchface-hooks: lascia gli hook degli altri" \
+  "$(stato '[(a["programma"], len(a["eventi"])) for a in d["altri"]]')" "[('coucou-hook', 3)]"
+uguale "watchface-hooks: lascia le altre impostazioni" \
+  "$(python3 -c "import json;d=json.load(open('$S'));print(d['theme'], list(d['enabledPlugins']))")" "dark ['x@y']"
+uguale "watchface-hooks: fa un backup prima" "$(stato 'len(d["backup"])')" "1"
+uguale "watchface-hooks: conserva i permessi" "$(stat -c %a "$S")" "600"
+"$WH" installa >/dev/null 2>&1
+uguale "watchface-hooks: installare due volte non duplica" \
+  "$(python3 -c "import json;d=json.load(open('$S'));print(sum('watchface-hook' in h['command'] for g in d['hooks']['Stop'] for h in g['hooks']))")" "1"
+uguale "watchface-hooks: l'hook non fa fallire Claude se manca il file" \
+  "$(python3 -c "import json;d=json.load(open('$S'));print([h['command'] for g in d['hooks']['Stop'] for h in g['hooks'] if 'watchface' in h['command']][0].split('/bin/')[-1])")" \
+  "watchface-hook' Stop 2>/dev/null || true"
+"$WH" rimuovi >/dev/null 2>&1
+uguale "watchface-hooks: rimuovi toglie solo i nostri" \
+  "$(stato 'len(d["installati"]), [a["programma"] for a in d["altri"]]')" "0 ['coucou-hook']"
+"$WH" rimuovi-altro coucou-hook >/dev/null 2>&1
+uguale "watchface-hooks: rimuove gli hook di un altro programma" \
+  "$(python3 -c "import json;d=json.load(open('$S'));print('hooks' in d, d['theme'])")" "False dark"
+primo=$(stato 'd["backup"][-1]')
+"$WH" ripristina "$primo" >/dev/null 2>&1
+uguale "watchface-hooks: ripristina un backup" "$(cmp -s "$S" "$primo" && echo uguale || echo diverso)" "uguale"
+echo '{"theme":"x"}' > "$SANDBOX/estraneo.json"
+uguale "watchface-hooks: non ripristina un file fuori dai backup" \
+  "$("$WH" ripristina "$SANDBOX/estraneo.json" >/dev/null 2>&1; echo $?)|$(grep -c '"x"' "$S")" "1|0"
+echo '{"theme": "dark",' > "$S"
+uguale "watchface-hooks: non riscrive un settings.json illeggibile" \
+  "$("$WH" installa >/dev/null 2>&1; echo $?)|$(cat "$S")" '1|{"theme": "dark",'
+
+# La quota alta colora la sua barra: un avviso testuale in piu' era un doppione.
+prepara
+mkdir -p "$HOME/.local/share/claude-code-watchdog"
+printf '{"letteIl":"%s","limiti":[{"tipo":"session","gruppo":"session","percento":95}],"extra":{}}' \
+  "$(date -u +%Y-%m-%dT%H:%M:%S+00:00)" > "$HOME/.local/share/claude-code-watchdog/usage.json"
+"$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1
+uguale "collect-metrics: la quota alta non genera avvisi" \
+  "$(python3 -c "
+import json
+d=json.load(open('$HOME/.local/share/claude-code-watchdog/metrics.json'))
+print(d['quota']['limiti'][0]['percento'], [a for a in d['allarmi'] if 'uota' in a])")" "95 []"
+
 # ----------------------------------------------------------- reclaim.py ---
 # E' lo script che viaggia dentro l'estensione: deve fare le stesse cose di
 # clean.sh sui target portabili, senza dipendere dal checkout del progetto.

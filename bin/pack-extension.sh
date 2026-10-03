@@ -23,7 +23,7 @@ fi
 
 # Gli script di raccolta viaggiano dentro il pacchetto: senza, su un PC che non
 # ha il progetto claude-code-watchdog l'estensione non avrebbe nulla da leggere.
-for s in claude-sessions.py collect-metrics.py collect-usage.py session-purge.py project-purge.py project-relocate.py reclaim.py trash-scaduti.py; do
+for s in claude-sessions.py collect-metrics.py collect-usage.py session-purge.py project-purge.py project-relocate.py reclaim.py trash-scaduti.py watchface-hook watchface-hooks.py; do
   cp -a "$WD_ROOT/bin/$s" "$SRC/$s"
   chmod +x "$SRC/$s"
 done
@@ -38,6 +38,8 @@ EXTRA=()
 for f in "$SRC"/*.py; do EXTRA+=(--extra-source="$(basename "$f")"); done
 [[ -d "$SRC/icons" ]] && EXTRA+=(--extra-source=icons)
 [[ -f "$SRC/prefs.js" ]] && EXTRA+=(--extra-source=prefs.js)
+[[ -f "$SRC/watchface.js" ]] && EXTRA+=(--extra-source=watchface.js)
+[[ -f "$SRC/watchface-hook" ]] && EXTRA+=(--extra-source=watchface-hook)
 
 gnome-extensions pack "$SRC" --force --out-dir="$DIST" "${EXTRA[@]}"
 

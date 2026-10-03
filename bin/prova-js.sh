@@ -12,6 +12,7 @@ set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 SRC="$WD_ROOT/gnome-extension/claude-code-watchdog@cirobox.local/extension.js"
+WF="$WD_ROOT/gnome-extension/claude-code-watchdog@cirobox.local/watchface.js"
 [[ -f "$SRC" ]] || { echo "extension.js non trovato"; exit 2; }
 command -v gjs >/dev/null || { echo "gjs non installato: prove JS saltate"; exit 0; }
 
@@ -19,7 +20,7 @@ echo "Prove sulle funzioni pure di extension.js"
 echo
 
 gjs -c '
-const [file] = ARGV;
+const [file, fileWf] = ARGV;
 const sorgente = imports.gi.GLib.file_get_contents(file)[1];
 const testo = new TextDecoder().decode(sorgente);
 
@@ -38,6 +39,23 @@ for (const nome of PURE) {
 // modo per provare le funzioni vere invece di una copia che diverge. Il file
 // è quello che verrà installato, e se cambia le prove lo seguono.
 eval(codice);
+
+// Watchface: le funzioni pure e le due tabelle che usano, dallo stesso modo.
+const testoWf = new TextDecoder().decode(imports.gi.GLib.file_get_contents(fileWf)[1]);
+let codiceWf = "";
+for (const nome of ["ORDINE_STATI", "TESTI"]) {
+    const m = new RegExp("^const " + nome + " = [\\s\\S]*?;$", "m").exec(testoWf);
+    if (!m)
+        throw new Error("costante non trovata in watchface.js: " + nome);
+    codiceWf += m[0].replace(/^const /, "var ") + "\n";
+}
+for (const nome of ["leggiRigaWatchface", "statoSessione", "piuUrgente", "iconaStato", "testoStato"]) {
+    const m = new RegExp("^function " + nome + "\\([^)]*\\) \\{[\\s\\S]*?^\\}", "m").exec(testoWf);
+    if (!m)
+        throw new Error("funzione non trovata in watchface.js: " + nome);
+    codiceWf += m[0] + "\n";
+}
+eval(codiceWf);
 
 let passate = 0, fallite = 0;
 function uguale(cosa, ottenuto, atteso) {
@@ -98,10 +116,53 @@ uguale("fmtAge: più giorni al plurale", fmtAge(fa(86400 * 3)), "3 giorni fa");
 uguale("fmtAge: una data nel futuro non va in negativo",
        fmtAge(new Date(ora + 60000).toISOString()), "adesso");
 
+// --- Watchface: la riga scritta dall hook
+const r = leggiRigaWatchface("PreToolUse\t1000\t2\t1\t/home/x/prog\n");
+uguale("watchface: legge i cinque campi",
+       [r.evento, r.epoca, r.fallimenti, r.aiutanti, r.cwd].join("|"), "PreToolUse|1000|2|1|/home/x/prog");
+uguale("watchface: una riga vuota non e una sessione", leggiRigaWatchface(""), "null");
+uguale("watchface: una riga troncata non e una sessione", leggiRigaWatchface("Stop\t10"), "null");
+uguale("watchface: decodifica la cartella come stringa JSON",
+       leggiRigaWatchface("Stop\t1\t0\t0\t/home/x/con \\\"virgolette\\\"").cwd, "/home/x/con \"virgolette\"");
+uguale("watchface: un numero storto vale zero",
+       leggiRigaWatchface("Stop\tabc\t0\t0\t/x").epoca, "0");
+
+// --- Watchface: lo stato, sulla tabella dei casi
+const st = (evento, eta, fallimenti = 0) =>
+    statoSessione({evento, epoca: 100000 - eta, fallimenti, aiutanti: 0}, 100000);
+const casi = [
+    ["PreToolUse", 5, 0, "lavora"], ["UserPromptSubmit", 5, 0, "lavora"],
+    ["PreToolUse", 3 * 3600, 0, "dorme"],
+    ["PermissionRequest", 5, 0, "aspetta"], ["Notification", 5, 0, "aspetta"],
+    ["PermissionRequest", 7 * 3600, 0, "dorme"],
+    ["PermissionRequest", 5, 5, "aspetta"],
+    ["StopFailure", 5, 0, "errore"], ["StopFailure", 2 * 3600, 0, "dorme"],
+    ["PostToolUseFailure", 5, 3, "errore"], ["PostToolUseFailure", 5, 2, "lavora"],
+    ["Stop", 60, 0, "finito"], ["Stop", 700, 0, "dorme"],
+    ["SessionStart", 5, 0, "dorme"],
+];
+const sbagliati = casi.filter(([e, eta, f, atteso]) => st(e, eta, f) !== atteso)
+    .map(([e, eta, f, atteso]) => e + "/" + eta + "s/" + f + ": " + st(e, eta, f) + " invece di " + atteso);
+uguale("watchface: lo stato su tutti i casi noti", sbagliati.join("; ") || "tutti", "tutti");
+uguale("watchface: nessuna sessione, nessuno stato", statoSessione(null, 1), "null");
+
+uguale("watchface: aspetta vince su tutto",
+       piuUrgente(["dorme", "lavora", "errore", "aspetta", "finito"]), "aspetta");
+uguale("watchface: errore vince su lavora", piuUrgente(["lavora", "errore"]), "errore");
+uguale("watchface: lavora vince su finito", piuUrgente(["finito", "lavora"]), "lavora");
+uguale("watchface: elenco vuoto", piuUrgente([]), "null");
+
+uguale("watchface: il limone per gli errori", iconaStato("errore"), "fw-limone");
+uguale("watchface: la faccina negli altri stati", iconaStato("aspetta"), "fw-faccina-aspetta");
+uguale("watchface: senza stato dorme", iconaStato(null), "fw-faccina-dorme");
+uguale("watchface: il permesso si dice", testoStato({stato: "aspetta", evento: "PermissionRequest"}),
+       "chiede un permesso");
+uguale("watchface: gli altri stati hanno il loro testo", testoStato({stato: "lavora"}), "sta lavorando");
+
 print("");
 if (fallite > 0) {
     print("\x1b[31m" + fallite + " prove JS fallite\x1b[0m su " + (passate + fallite));
     imports.system.exit(1);
 }
 print("\x1b[32mTutte le " + passate + " prove JS passano.\x1b[0m");
-' "$SRC"
+' "$SRC" "$WF"
