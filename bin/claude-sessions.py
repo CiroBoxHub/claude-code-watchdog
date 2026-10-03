@@ -77,6 +77,12 @@ def scan_file(path: Path, da: dict | None = None) -> dict | None:
     ai_title = custom_title = None
     n_req = n_grande = 0
     ultimo_mid = None
+    # Il contesto che la sessione si porta dietro adesso, e da quando si
+    # contano le richieste: dall'ultimo /compact, se c'è stato. Prima i conti
+    # erano di tutta la vita della sessione, e un consiglio «fai /compact» non
+    # spariva nemmeno dopo averlo fatto (segnalato dall'utente il 2026-10-04).
+    ctx_ultimo = 0
+    compattata = None
     inizio = 0
     if da:
         n_user = da.get("n_user", 0)
@@ -88,6 +94,8 @@ def scan_file(path: Path, da: dict | None = None) -> dict | None:
         n_req = da.get("n_req", 0)
         n_grande = da.get("n_grande", 0)
         ultimo_mid = da.get("ultimo_mid")
+        ctx_ultimo = da.get("ctx_ultimo", 0)
+        compattata = da.get("compattata")
         custom_title = da.get("title")
         inizio = da.get("offset", 0)
     try:
@@ -108,6 +116,15 @@ def scan_file(path: Path, da: dict | None = None) -> dict | None:
                 if t == "custom-title":
                     custom_title = d.get("customTitle") or custom_title
                     continue
+                # Un /compact, a mano o automatico: si riparte da qui. Il
+                # contesto rimasto lo dice Claude Code (postTokens).
+                if t == "system" and d.get("subtype") == "compact_boundary":
+                    n_req = n_grande = 0
+                    meta = d.get("compactMetadata")
+                    post = meta.get("postTokens") if isinstance(meta, dict) else None
+                    ctx_ultimo = post if isinstance(post, int) else 0
+                    compattata = d.get("timestamp") or compattata
+                    continue
                 if t == "user":
                     n_user += 1
                 elif t == "assistant":
@@ -121,7 +138,8 @@ def scan_file(path: Path, da: dict | None = None) -> dict | None:
                     if isinstance(u, dict) and mid and mid != ultimo_mid:
                         ultimo_mid = mid
                         n_req += 1
-                        if contesto(u) > CONTESTO_GRANDE:
+                        ctx_ultimo = contesto(u)
+                        if ctx_ultimo > CONTESTO_GRANDE:
                             n_grande += 1
                 else:
                     continue
@@ -154,8 +172,11 @@ def scan_file(path: Path, da: dict | None = None) -> dict | None:
         "n_user": n_user,
         "n_asst": n_asst,
         "n_msg": n_user + n_asst,
+        # Dall'ultimo /compact, se c'è stato.
         "n_req": n_req,
         "n_grande": n_grande,
+        "ctx_ultimo": ctx_ultimo,
+        "compattata": compattata,
         # Serve alla lettura incrementale: se riparte a meta' di un messaggio,
         # la riga che trova ha lo stesso id e non e' una richiesta nuova.
         "ultimo_mid": ultimo_mid,
@@ -180,7 +201,7 @@ CACHE = (Path(os.environ.get("XDG_CACHE_HOME") or (HOME / ".cache"))
 # Da alzare quando scan_file cambia cosa restituisce: una cache scritta dalla
 # versione precedente contiene campi vecchi, e riusarla darebbe numeri
 # sbagliati senza che niente segnali l'errore.
-CACHE_VERSIONE = 4
+CACHE_VERSIONE = 5
 
 # Quanto si aspetta prima di dire che una trascrizione senza risposte è uno
 # scarto. Due minuti: la lettura della quota ne impiega due o tre secondi, una

@@ -273,6 +273,17 @@ risposta m3 160000 >> "$f"
 uguale "contesto: un messaggio spezzato fra due letture conta una volta" "$(contesto)" "3 2"
 risposta m4 1000 >> "$f"
 uguale "contesto: la richiesta nuova in coda si conta" "$(contesto)" "4 2"
+# Un /compact: si riparte da lì, col contesto che Claude Code dice rimasto.
+# Segnalato dall'utente il 2026-10-04: il consiglio «fai /compact» restava.
+dopo() { "$WD_ROOT/bin/claude-sessions.py" --format json 2>/dev/null | python3 -c "
+import json,sys
+s=[x for x in json.load(sys.stdin)['reali'] if x['id'].startswith('cccccccc')][0]
+print(s['n_req'], s['n_grande'], s['ctx_ultimo'], s['compattata'])"; }
+printf '{"type":"system","subtype":"compact_boundary","content":"Conversation compacted","timestamp":"2026-09-02T10:00:00Z","compactMetadata":{"trigger":"manual","preTokens":612472,"postTokens":14948}}\n' >> "$f"
+uguale "contesto: un /compact azzera i conti e tiene il contesto rimasto" \
+  "$(dopo)" "0 0 14948 2026-09-02T10:00:00Z"
+risposta m5 300000 >> "$f"
+uguale "contesto: dopo il /compact si riconta da capo" "$(dopo)" "1 1 300005 2026-09-02T10:00:00Z"
 unset XDG_CACHE_HOME
 
 # I consigli sulla quota: regole su numeri gia' contati, provate in tabella.
@@ -283,10 +294,12 @@ s = u.spec_from_file_location('cm', '$WD_ROOT/bin/collect-metrics.py')
 m = u.module_from_spec(s); s.loader.exec_module(m)
 adesso = datetime(2026, 10, 3, 12, tzinfo=timezone.utc)
 def iso(giorni): return (adesso - timedelta(days=giorni)).isoformat()
-def sess(nome, req, grandi, dal, fino=0.1):
+def sess(nome, req, grandi, dal, fino=0.1, ctx=200_000, compattata=None):
     return {"id": nome, "cwd": f"/lavoro/{nome}", "title": None, "n_req": req,
-            "n_grande": grandi, "first": iso(dal), "last": iso(fino)}
-soglie = {"pct": 50, "giorni": 7, "minimo": 20, "finestra": 7}
+            "n_grande": grandi, "first": iso(dal), "last": iso(fino),
+            "ctx_ultimo": ctx, "compattata": iso(compattata) if compattata else None}
+soglie = {"pct": 50, "giorni": 7, "minimo": 20, "ore": 12}
+H = 1 / 24   # un'ora, in giorni
 casi = [
     ("pesante",    [sess("p", 100, 60, 1)],               ["p:contesto"]),
     ("leggera",    [sess("q", 100, 49, 1)],               []),
@@ -294,6 +307,21 @@ casi = [
     ("lunga",      [sess("l", 100, 0, 10)],               ["l:durata"]),
     ("entrambe",   [sess("e", 100, 90, 10)],              ["e:contesto+durata"]),
     ("ferma",      [sess("f", 100, 90, 20, fino=10)],     []),
+    # Il contesto di adesso decide: dopo un /compact non c'e' piu' niente da
+    # alleggerire, anche se prima era pesante e la sessione e' vecchia.
+    ("compattata", [sess("k", 100, 90, 20, ctx=15_000)],  []),
+    ("leggera ora", [sess("o", 100, 0, 10, ctx=60_000)],  []),
+    # Ricresciuta dopo il /compact di ieri: pesa di nuovo, ma i giorni si
+    # contano dal compact, quindi niente «durata».
+    ("ricresciuta", [sess("g", 100, 80, 20, ctx=550_000, compattata=1)],
+                    ["g:contesto"]),
+    # Una sessione lasciata non consuma: chi ha seguito il consiglio e ne ha
+    # aperta una nuova non deve rileggerlo per giorni. Conta l'ultima volta
+    # che e' stata usata: entro 12 ore si', oltre no.
+    ("lasciata",   [sess("v", 100, 90, 20, fino=13 * H)], []),
+    ("in pausa",   [sess("w", 100, 90, 20, fino=11 * H)], ["w:contesto+durata"]),
+    ("sostituita", [sess("x", 100, 90, 20, fino=14 * H),
+                    sess("y", 5, 0, 0.1, ctx=20_000)],   []),
     ("tre",        [sess("a", 100, 60, 1), sess("b", 100, 90, 1),
                     sess("c", 100, 70, 1), sess("d", 100, 80, 1)],
                    ["b:contesto", "d:contesto", "c:contesto"]),
@@ -307,6 +335,14 @@ for nome, sessioni, atteso in casi:
 print("; ".join(male) or "tutti")
 EOF
 )" "tutti"
+uguale "consigli: la soglia del contesto grande e' la stessa nei due script" "$(python3 - <<EOF
+import importlib.util as u
+def carica(nome, f):
+    s = u.spec_from_file_location(nome, f'$WD_ROOT/bin/{f}')
+    m = u.module_from_spec(s); s.loader.exec_module(m); return m
+print(carica('cm', 'collect-metrics.py').CONTESTO_GRANDE == carica('cs', 'claude-sessions.py').CONTESTO_GRANDE)
+EOF
+)" "True"
 
 prepara_orfane
 "$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1

@@ -14,6 +14,11 @@ import json, os, shutil, subprocess, sys, time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+# La soglia del contesto «grande», la stessa di claude-sessions.py (e di
+# /usage). Ripetuta perché quel modulo qui si carica solo più avanti; una
+# prova in prova.sh controlla che le due restino uguali.
+CONTESTO_GRANDE = 150_000
+
 def _radici() -> tuple[Path | None, Path]:
     """(radice del progetto o None, cartella che contiene gli script).
 
@@ -479,13 +484,22 @@ def consigli_quota(sessioni: list[dict], radice: Path | None,
     /usage dice quanto pesa il contesto lungo («51% oltre 150k»), non dove.
     Qui si dice dove: il 2026-10-03 quasi tutto veniva da una sola sessione,
     aperta da 24 giorni, che si portava dietro piu' di 150k token a ogni
-    richiesta. I conti sono per sessione e non per richiesta: una sessione
-    conta se e' stata usata nella finestra, e i suoi numeri sono di tutta la
-    sua vita.
+    richiesta.
+
+    Il consiglio riguarda cosa consuma la quota ADESSO. Una sessione ferma da
+    piu' di `ore` ore non consuma: chi ha seguito il consiglio e ne ha aperta
+    una nuova non deve rileggerlo per una settimana, come succedeva con la
+    finestra di 7 giorni (segnalato dall'utente il 2026-10-04).
+
+    Il consiglio riguarda il contesto che la sessione si porta dietro
+    ADESSO: se l'ultima richiesta sta sotto i 150k token non c'e' niente da
+    alleggerire, e il consiglio non c'e'. I conti partono dall'ultimo /compact:
+    prima erano di tutta la vita della sessione, e il consiglio «fai /compact»
+    restava anche dopo averlo fatto (segnalato dall'utente il 2026-10-04).
 
     Due motivi, che si sommano in un consiglio solo se valgono insieme:
     - contesto: almeno `pct`% delle richieste oltre 150k token;
-    - durata: aperta da almeno `giorni` giorni.
+    - durata: lo stesso contesto da almeno `giorni` giorni.
     Sotto `minimo` richieste non si dice niente: una percentuale su dieci
     richieste non vuol dire nulla.
     """
@@ -494,9 +508,12 @@ def consigli_quota(sessioni: list[dict], radice: Path | None,
         req = x.get("n_req") or 0
         if req < soglie["minimo"]:
             continue
-        primo, ultimo = _quando(x.get("first")), _quando(x.get("last"))
-        if not ultimo or adesso - ultimo > timedelta(days=soglie["finestra"]):
+        if (x.get("ctx_ultimo") or 0) <= CONTESTO_GRANDE:
             continue
+        primo, ultimo = _quando(x.get("first")), _quando(x.get("last"))
+        if not ultimo or adesso - ultimo > timedelta(hours=soglie["ore"]):
+            continue
+        primo = _quando(x.get("compattata")) or primo
         grandi = x.get("n_grande") or 0
         pct = round(grandi * 100 / req)
         giorni = (ultimo - primo).days if primo else 0
@@ -515,15 +532,15 @@ def consigli_quota(sessioni: list[dict], radice: Path | None,
             chi += f" · {x['title']}"
         if motivi == ["contesto", "durata"]:
             testo = (f"{chi}: {pct}% delle richieste con il contesto oltre 150k, "
-                     f"e la sessione è aperta da {giorni} giorni. Una sessione "
-                     f"nuova la alleggerisce molto.")
+                     f"e lavora sullo stesso contesto da {giorni} giorni. Una "
+                     f"sessione nuova la alleggerisce molto.")
         elif motivi == ["contesto"]:
             testo = (f"{chi}: {pct}% delle richieste con il contesto oltre 150k. "
                      f"Un /compact, o una sessione nuova, la alleggerisce.")
         else:
-            testo = (f"{chi}: la stessa sessione è aperta da {giorni} giorni. "
-                     f"Per un lavoro nuovo conviene aprirne una nuova: il "
-                     f"contesto accumulato pesa su ogni richiesta.")
+            testo = (f"{chi}: lavora sullo stesso contesto da {giorni} giorni. "
+                     f"Per un lavoro nuovo conviene aprire una sessione nuova: "
+                     f"il contesto accumulato pesa su ogni richiesta.")
         candidati.append((grandi, req, {"progetto": progetto,
                                         "sessione": x.get("id"),
                                         "motivi": motivi, "testo": testo}))
@@ -702,7 +719,7 @@ def main() -> int:
     sess = sessions({"pct": num("QUOTA_CONSIGLIO_CONTESTO_PCT", 50),
                      "giorni": num("QUOTA_CONSIGLIO_SESSIONE_GIORNI", 7),
                      "minimo": num("QUOTA_CONSIGLIO_MIN_RICHIESTE", 20),
-                     "finestra": num("QUOTA_CONSIGLIO_FINESTRA_GIORNI", 7)})
+                     "ore": num("QUOTA_CONSIGLIO_INATTIVA_ORE", 12)})
 
     # Spazio recuperabile: solo le voci che un utente non-root può liberare,
     # perché il cruscotto non deve promettere quello che non può mantenere.

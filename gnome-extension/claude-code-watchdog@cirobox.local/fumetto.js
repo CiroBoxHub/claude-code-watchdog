@@ -237,7 +237,7 @@ class Fumetto {
                 [this._percorso, 'icons', 'fw-robot.svg'])),
             icon_size: Math.round(misure.fumetto * 0.45)}));
         this._robotConto = new St.Label({style_class: 'fw-fumetto-robot-conto',
-                                         y_align: Clutter.ActorAlign.END});
+                                         y_align: Clutter.ActorAlign.CENTER});
         this._robot.add_child(this._robotConto);
         // Posizioni calcolate, non allineamenti: in un BinLayout il
         // contatore finiva in mezzo alla faccia (visto nella shell di prova).

@@ -245,6 +245,17 @@ messaggio occupa **più righe con lo stesso id**, una per blocco: si conta al
 primo, e `ultimo_mid` passa nella cache perché la lettura incrementale può
 ripartire a metà di un messaggio. Le percentuali di quota restano quelle di
 `/usage`, verificate identiche il 2026-10-03.
+**Il consiglio guarda il contesto di adesso, e riparte da ogni `/compact`.**
+Contando tutta la vita della sessione, «fai /compact» restava anche dopo
+averlo fatto (segnalato dall'utente il 2026-10-04). Claude Code scrive una riga
+`system`/`compact_boundary` con `postTokens`: lì `n_req` e `n_grande` si
+azzerano, `ctx_ultimo` riparte dal contesto rimasto e `compattata` segna da
+quando contare i giorni. Senza un'ultima richiesta oltre 150k non c'è
+consiglio. **E una sessione ferma da più di 12 ore non ne ha**
+(`QUOTA_CONSIGLIO_INATTIVA_ORE`): con la finestra di 7 giorni, chi seguiva il
+consiglio e apriva una sessione nuova se lo vedeva ripetere per una settimana
+sulla vecchia. Ogni consiglio sparisce quando viene seguito: `/compact` azzera
+i conti al giro dopo, una sessione nuova lascia ferma la vecchia.
 
 **La copia installata legge il `watchdog.conf` che le sta accanto.** Fino al
 2026-10-03 `conf()` tornava `{}` quando `ROOT` è `None` — cioè sempre, per il
@@ -279,6 +290,16 @@ possiede una finestra; ci si ferma alla shell, che è antenata dei terminali
 aperti da «Riprendi». Ptyxis non espone l'id della scheda al processo figlio
 (ha `focus-tab-by-uuid`, ma l'uuid non arriva nell'ambiente): con più schede
 nella stessa finestra si arriva alla finestra, non alla scheda.
+**Quando approvi un permesso Claude Code non manda nessun evento** (verificato
+il 2026-10-04 registrando gli hook: PermissionRequest alle 00:37:29,
+PostToolUse alle 00:37:55, nulla in mezzo; c'è `PermissionDenied`, ma non un
+«concesso»). La faccina restava «aspetta te» per tutta la durata del comando,
+segnalato dall'utente. Ora, finché una sessione aspetta un permesso, Watchface
+legge una volta al secondo i figli del processo di Claude: il comando
+approvato è un figlio nuovo (`bash -c …`), visto nascere nello stesso secondo
+dell'approvazione. Regola in `approvazioneVista()`: due letture di fila, e il
+nostro hook non conta. Vale per i comandi che avviano un processo; un Write o
+un Edit approvato finisce comunque in un attimo.
 **La mascotte fluttuante** (`fumetto.js`) usa la stessa decisione delle
 notifiche (`_avviso()` in `watchface.js`): le due non possono divergere. È
 **una sola, con l'elenco degli avvisi** (scelta dell'utente: «è il
@@ -420,8 +441,8 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              160 prove funzionali, sandbox con HOME dirottata
-    ./bin/prova-js.sh           53 prove sulle funzioni pure dei moduli JS
+    ./bin/prova.sh              163 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova-js.sh           56 prove sulle funzioni pure dei moduli JS
     ./bin/prova-shell.sh        carica l'estensione in una shell annidata (~1 min)
     ./bin/verifica-estensione.sh  controlli statici + le prove JS (gira dentro
                                   install e pack, che si fermano se qualcosa

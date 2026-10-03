@@ -19,7 +19,7 @@ import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 
-export {leggiRigaWatchface, statoSessione, piuUrgente, iconaStato, testoStato,
+export {leggiRigaWatchface, statoSessione, approvazioneVista, piuUrgente, iconaStato, testoStato,
         misureMascotte, genitoreDaStat, catenaPid, canaleAvviso, ORDINE_STATI, Watchface};
 
 /* Dal più urgente al più tranquillo: con più sessioni vince il primo. */
@@ -83,6 +83,11 @@ function statoSessione(s, adesso) {
     const ORA = 3600;
     if (s.evento === 'StopFailure')
         return eta < ORA ? 'errore' : 'dorme';
+    // Un permesso già dato: il comando gira. Claude Code non manda nessun
+    // evento quando approvi — il prossimo è PostToolUse, a comando finito —
+    // e l'approvazione la vede la sorveglianza dei processi (`approvato`).
+    if (s.evento === 'PermissionRequest' && s.approvato)
+        return eta < ORA ? 'lavora' : 'dorme';
     // Prima dei fallimenti: una richiesta di permesso dopo tre errori di fila
     // vuole comunque una risposta, ed è quella che conta.
     if (s.evento === 'PermissionRequest' || s.evento === 'Notification')
@@ -96,6 +101,24 @@ function statoSessione(s, adesso) {
     if (s.evento === 'PreToolUse')
         return eta < ORA ? 'lavora' : 'dorme';
     return eta < 600 ? 'lavora' : 'dorme';
+}
+
+/* Hai approvato il permesso? Quando lo approvi, Claude avvia il comando: un
+   processo figlio nuovo. `base` sono i figli che c'erano alla richiesta,
+   `attuali` quelli di adesso ([pid, riga di comando]), `contati` quante
+   letture di fila ha passato ogni figlio nuovo. Due letture, non una: un
+   hook che Claude lancia nel frattempo è anche lui un figlio, ma dura un
+   attimo. Il nostro hook si riconosce e non conta. Misurato il 2026-10-04:
+   approvazione alle 00:39:01, figlio nuovo alla stessa ora, PostToolUse
+   undici secondi dopo. */
+function approvazioneVista(base, attuali, contati) {
+    const ora = new Map();
+    for (const [pid, comando] of attuali) {
+        if (base.includes(pid) || comando.includes('watchface-hook'))
+            continue;
+        ora.set(pid, (contati.get(pid) ?? 0) + 1);
+    }
+    return {contati: ora, approvato: [...ora.values()].some(n => n >= 2)};
 }
 
 function piuUrgente(stati) {
@@ -115,6 +138,35 @@ const VISIBILE_S = 12 * 3600;
 /* Un turno più corto di così non merita una notifica a fine lavoro: era una
    risposta veloce, e l'hai vista arrivare. */
 const TURNO_LUNGO_S = 30;
+
+/* I figli di un processo, con la loro riga di comando: [[pid, comando]].
+   Linux li elenca per thread, in /proc/<pid>/task/<tid>/children, e Claude
+   ne ha parecchi. Un processo finito, o /proc illeggibile: nessun figlio. */
+function figliDi(pid) {
+    const figli = [];
+    const leggi = percorso => {
+        try {
+            return new TextDecoder().decode(GLib.file_get_contents(percorso)[1]);
+        } catch (e) {
+            return '';
+        }
+    };
+    try {
+        const elenco = Gio.File.new_for_path(`/proc/${pid}/task`)
+            .enumerate_children('standard::name', Gio.FileQueryInfoFlags.NONE, null);
+        let info;
+        while ((info = elenco.next_file(null))) {
+            for (const f of leggi(`/proc/${pid}/task/${info.get_name()}/children`).split(/\s+/)) {
+                if (/^\d+$/.test(f))
+                    figli.push([parseInt(f, 10), leggi(`/proc/${f}/cmdline`).replace(/\0/g, ' ')]);
+            }
+        }
+        elenco.close(null);
+    } catch (e) {
+        // processo finito
+    }
+    return figli;
+}
 
 const TESTI = {
     aspetta: 'aspetta te',
@@ -143,6 +195,11 @@ class Watchface {
         this._attesa = 0;
         this._orologio = 0;
         this._fonte = null;
+        // Permessi in attesa sorvegliati: id → {epoca, base, contati}; e
+        // quelli visti approvare: id → epoca della richiesta.
+        this._permessi = new Map();
+        this._approvati = new Map();
+        this._sorveglianza = 0;
     }
 
     avvia() {
@@ -164,7 +221,7 @@ class Watchface {
             this._monitor.cancel();
             this._monitor = null;
         }
-        for (const t of ['_attesa', '_orologio']) {
+        for (const t of ['_attesa', '_orologio', '_sorveglianza']) {
             if (this[t]) {
                 GLib.source_remove(this[t]);
                 this[t] = 0;
@@ -226,6 +283,8 @@ class Watchface {
                         GLib.unlink(GLib.build_filenamev([CARTELLA, nome]));
                     continue;
                 }
+                s.approvato = s.evento === 'PermissionRequest' &&
+                              this._approvati.get(id) === s.epoca;
                 sessioni.push({id, ...s, stato: statoSessione(s, adesso),
                                progetto: GLib.path_get_basename(s.cwd || '?')});
             }
@@ -238,7 +297,54 @@ class Watchface {
         this._avvisa(sessioni, adesso);
         this._sessioni = sessioni;
         this._riprogrammaOrologio();
+        this._riprogrammaSorveglianza();
         this._suCambio?.();
+    }
+
+    /* Chi aspetta un permesso, e ha il pid di Claude, si sorveglia una volta
+       al secondo finché la richiesta resta quella: appena compare il comando
+       approvato, la faccina passa a «lavora» senza aspettare che finisca. Una
+       richiesta nuova (epoca diversa) riparte da capo. */
+    _riprogrammaSorveglianza() {
+        const inAttesa = this._sessioni.filter(
+            s => s.evento === 'PermissionRequest' && s.stato === 'aspetta' && s.pid > 0);
+        for (const id of [...this._permessi.keys()]) {
+            if (!inAttesa.some(s => s.id === id && s.epoca === this._permessi.get(id).epoca))
+                this._permessi.delete(id);
+        }
+        for (const id of [...this._approvati.keys()]) {
+            if (!this._sessioni.some(s => s.id === id && s.epoca === this._approvati.get(id)))
+                this._approvati.delete(id);
+        }
+        for (const s of inAttesa) {
+            if (!this._permessi.has(s.id)) {
+                this._permessi.set(s.id, {epoca: s.epoca, pid: s.pid,
+                                          base: figliDi(s.pid).map(([p]) => p),
+                                          contati: new Map()});
+            }
+        }
+        if (this._permessi.size && !this._sorveglianza) {
+            this._sorveglianza = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
+                let visto = false;
+                for (const [id, p] of this._permessi) {
+                    const esito = approvazioneVista(p.base, figliDi(p.pid), p.contati);
+                    p.contati = esito.contati;
+                    if (esito.approvato) {
+                        this._approvati.set(id, p.epoca);
+                        visto = true;
+                    }
+                }
+                if (visto) {
+                    this._sorveglianza = 0;
+                    this._rileggi();
+                    return GLib.SOURCE_REMOVE;
+                }
+                return GLib.SOURCE_CONTINUE;
+            });
+        } else if (!this._permessi.size && this._sorveglianza) {
+            GLib.source_remove(this._sorveglianza);
+            this._sorveglianza = 0;
+        }
     }
 
     /* Gli stati cambiano anche col tempo («finito» torna «dorme» dopo dieci

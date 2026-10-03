@@ -416,7 +416,10 @@ export default class WatchdogPreferences extends ExtensionPreferences {
              'Sotto le due barre può comparire una riga con l’icona «i». Passaci ' +
              'sopra o cliccala: dice quale progetto sta consumando di più e cosa ' +
              'fare, per esempio aprire una sessione nuova quando il contesto è ' +
-             'diventato enorme. Se va tutto bene, la riga non c’è.');
+             'diventato enorme. Guarda solo le sessioni in uso e il loro contesto ' +
+             'di adesso: dopo un /compact sparisce al giro successivo, e se apri ' +
+             'una sessione nuova quella vecchia esce dai consigli dopo 12 ore ' +
+             'ferma. Se va tutto bene, la riga non c’è.');
 
         const agg = sezione('aggiornamento', 'Quanto sono freschi i numeri', 'viola',
                             'view-refresh-symbolic');

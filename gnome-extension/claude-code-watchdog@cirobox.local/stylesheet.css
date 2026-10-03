@@ -802,17 +802,20 @@
     border: 2px solid #FAFAFA;
 }
 
+/* Bordi poco tondi e il numero al centro: con la mascotte «grande» la
+   pillola diventava quasi un cerchio e il «×2», in basso a destra, finiva
+   sulla curva del bordo — tagliato (segnalato dall'utente il 2026-10-04). */
 .fw-fumetto-robot {
     background-color: #FAFAFA;
-    border-radius: 99px;
-    padding: 4px 6px;
-    spacing: 2px;
+    border-radius: 14px;
+    padding: 4px 10px 4px 6px;
+    spacing: 4px;
     margin-bottom: 4px;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
 .fw-fumetto-robot-conto {
     font-weight: 700;
-    font-size: 0.85em;
+    font-size: 0.95em;
     color: #222222;
 }

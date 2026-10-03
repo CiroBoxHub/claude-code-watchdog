@@ -51,7 +51,7 @@ for (const nome of ["ORDINE_STATI", "TESTI", "MISURE_MASCOTTE"]) {
         throw new Error("costante non trovata in watchface.js: " + nome);
     codiceWf += m[0].replace(/^const /, "var ") + "\n";
 }
-for (const nome of ["leggiRigaWatchface", "statoSessione", "piuUrgente", "iconaStato", "testoStato",
+for (const nome of ["leggiRigaWatchface", "statoSessione", "approvazioneVista", "piuUrgente", "iconaStato", "testoStato",
                      "misureMascotte", "genitoreDaStat", "catenaPid", "canaleAvviso"]) {
     const m = new RegExp("^function " + nome + "\\([^)]*\\) \\{[\\s\\S]*?^\\}", "m").exec(testoWf);
     if (!m)
@@ -165,6 +165,39 @@ const sbagliati = casi.filter(([e, eta, f, atteso]) => st(e, eta, f) !== atteso)
     .map(([e, eta, f, atteso]) => e + "/" + eta + "s/" + f + ": " + st(e, eta, f) + " invece di " + atteso);
 uguale("watchface: lo stato su tutti i casi noti", sbagliati.join("; ") || "tutti", "tutti");
 uguale("watchface: nessuna sessione, nessuno stato", statoSessione(null, 1), "null");
+const approvato = (eta, extra = {}) => statoSessione(
+    {evento: "PermissionRequest", epoca: 100000 - eta, fallimenti: 0, aiutanti: 0,
+     approvato: true, ...extra}, 100000);
+uguale("watchface: un permesso approvato vale lavora, anche dopo tre errori, e scade",
+       [approvato(5), approvato(5, {fallimenti: 3}), approvato(2 * 3600)].join(","),
+       "lavora,lavora,dorme");
+uguale("watchface: approvato vale solo per la richiesta di permesso",
+       statoSessione({evento: "Notification", epoca: 99995, fallimenti: 0, aiutanti: 0,
+                      approvato: true}, 100000), "aspetta");
+
+// L approvazione, vista dai processi figli. Ogni caso: figli alla richiesta,
+// letture successive, e se a un certo punto risulta approvato.
+const sorveglia = (base, letture) => {
+    let contati = new Map(), visto = false;
+    for (const attuali of letture) {
+        const esito = approvazioneVista(base, attuali, contati);
+        contati = esito.contati;
+        visto ||= esito.approvato;
+    }
+    return visto;
+};
+const casiAppr = [
+    ["nessun figlio nuovo", [1], [[[1, "mcp"]], [[1, "mcp"]]], false],
+    ["un figlio nuovo visto una volta sola", [1], [[[1, "mcp"], [7, "bash -c ls"]]], false],
+    ["un figlio nuovo visto due volte", [1], [[[7, "bash -c ls"]], [[7, "bash -c ls"]]], true],
+    ["il nostro hook non conta", [], [[[8, "bash x/watchface-hook Notification"]],
+                                      [[8, "bash x/watchface-hook Notification"]]], false],
+    ["un figlio che c era gia non conta", [5], [[[5, "bash -c sleep"]], [[5, "bash -c sleep"]]], false],
+    ["due figli brevi diversi non fanno un approvato", [], [[[8, "hook a"]], [[9, "hook b"]]], false],
+];
+const sbagliatiAppr = casiAppr.filter(([, base, letture, atteso]) => sorveglia(base, letture) !== atteso)
+    .map(([n]) => n);
+uguale("watchface: l approvazione su tutti i casi noti", sbagliatiAppr.join("; ") || "tutti", "tutti");
 
 uguale("watchface: aspetta vince su tutto",
        piuUrgente(["dorme", "lavora", "errore", "aspetta", "finito"]), "aspetta");

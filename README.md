@@ -426,8 +426,8 @@ potarlo per quello lo distruggerebbe il giorno dopo averlo cestinato.
 
 ## Sviluppo
 
-    ./bin/prova.sh                 # 160 prove funzionali, sandbox con HOME dirottata
-    ./bin/prova-js.sh              # 53 prove sulle funzioni pure dei moduli JS
+    ./bin/prova.sh                 # 163 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova-js.sh              # 56 prove sulle funzioni pure dei moduli JS
     ./bin/prova-shell.sh           # carica l'estensione in una GNOME Shell annidata
     ./bin/verifica-estensione.sh   # controlli statici, e le prove JS
     ./bin/fotografa-pannello.sh    # foto di barra, popup e preferenze, chiaro e scuro
