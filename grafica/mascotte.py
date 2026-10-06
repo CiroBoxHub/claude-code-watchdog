@@ -26,7 +26,7 @@ Due famiglie:
   «aspetta te», con la classe `warning`, che la shell rispetta.
 - *.svg a colori, per il popup e le notifiche.
 """
-import re, subprocess, sys
+import re, shutil, subprocess, sys
 from pathlib import Path
 
 QUI = Path(__file__).resolve().parent
@@ -133,6 +133,56 @@ def robot(colore: bool = False, c: str = G) -> str:
     return "".join(parti)
 
 
+# I segni che lampeggiano sopra la mascotte. Sostituiscono il respiro del
+# disco: una cosa che respira sempre non attira l'attenzione piu' di una
+# ferma, mentre un segno che compare solo quando serve si vede.
+ROSSO = "#CE5A50"      # gia' usato per la spia del robottino
+GIALLO = "#F3D23C"     # la buccia del limone
+
+
+def _interrogativo(cx: float, cy: float, s: float, c: str) -> str:
+    """Un punto interrogativo centrato in (cx, cy), in unita' locali."""
+    return (f'<g transform="translate({cx} {cy}) scale({s})">'
+            f'<path d="M-1.45 -1.2 A1.5 1.5 0 1 1 0.15 0.5 L0.15 1.3" fill="none" '
+            f'stroke="{c}" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>'
+            f'<circle cx="0.15" cy="2.5" r="0.68" fill="{c}"/></g>')
+
+
+def _esclamativo(cx: float, cy: float, s: float, c: str) -> str:
+    return (f'<g transform="translate({cx} {cy}) scale({s})">'
+            f'<path d="M0 -1.7 L0 0.9" fill="none" stroke="{c}" stroke-width="1.1" '
+            f'stroke-linecap="round"/>'
+            f'<circle cx="0" cy="2.5" r="0.68" fill="{c}"/></g>')
+
+
+def segno(tipo: str, colore: bool = False, c: str = G) -> str:
+    """Il segno di uno stato: due interrogativi, due esclamativi, o la
+    lampadina. Due e non uno perche' uno solo, piccolo, si legge come un
+    graffio sullo schermo; due dicono «sta chiedendo»."""
+    if tipo == "domanda":
+        t = AMBRA if colore else c
+        return _interrogativo(9.4, 7.2, 1.9, t) + _interrogativo(4.3, 5.4, 1.2, t)
+    if tipo == "errore":
+        t = ROSSO if colore else c
+        return _esclamativo(9.6, 7.2, 1.9, t) + _esclamativo(4.6, 5.4, 1.2, t)
+    if tipo == "lampadina":
+        vetro = GIALLO if colore else "none"
+        bordo = "#B8920F" if colore else c
+        tratto = SCURO if colore else c
+        return (f'<path d="M3.4 11.2 L2.0 11.9 M12.6 11.2 L14.0 11.9 '
+                f'M8 1.4 V0.2 M4.0 3.1 L3.0 2.2 M12.0 3.1 L13.0 2.2" fill="none" '
+                f'stroke="{bordo}" stroke-width="1.0" stroke-linecap="round"/>'
+                f'<path d="M8 1.9 C5.2 1.9 3.3 3.9 3.3 6.3 C3.3 8.2 4.6 9.3 5.3 10.4 '
+                f'L10.7 10.4 C11.4 9.3 12.7 8.2 12.7 6.3 C12.7 3.9 10.8 1.9 8 1.9Z" '
+                f'fill="{vetro}" stroke="{bordo}" stroke-width="1.2" stroke-linejoin="round"/>'
+                f'<path d="M5.6 11.6 H10.4 M6.1 13.4 H9.9" fill="none" stroke="{tratto}" '
+                f'stroke-width="1.3" stroke-linecap="round"/>'
+                f'<path d="M6.6 10.4 L7.3 7.3 L8.7 8.6 L9.4 10.4" fill="none" '
+                f'stroke="{tratto}" stroke-width="0.8" stroke-linejoin="round" '
+                f'stroke-linecap="round"/>')
+    raise KeyError(tipo)
+
+
 def svg(corpo: str, lato: int = 16) -> str:
     return ('<?xml version="1.0" encoding="UTF-8"?>\n'
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{lato}" height="{lato}" '
@@ -149,6 +199,9 @@ def tutte() -> dict[str, str]:
     out["fw-limone.svg"] = svg(limone(colore=True), 64)
     out["fw-robot-symbolic.svg"] = svg(robot())
     out["fw-robot.svg"] = svg(robot(colore=True), 64)
+    for s in ("domanda", "errore", "lampadina"):
+        out[f"fw-segno-{s}-symbolic.svg"] = svg(segno(s))
+        out[f"fw-segno-{s}.svg"] = svg(segno(s, colore=True), 64)
     return out
 
 
@@ -188,7 +241,22 @@ SORGENTI = QUI / "sorgenti"
 
 
 def a_forme_piene(sorgente: Path, dest: Path) -> None:
-    """Ogni tratto diventa una forma piena, cosi' la ricolorazione lo prende."""
+    """Ogni tratto diventa una forma piena, cosi' la ricolorazione lo prende.
+
+    Senza inkscape non si converte, e non si finge di averlo fatto: un'icona
+    gia' in posto resta quella di prima (l'ha convertita chi lo strumento ce
+    l'aveva), una nuova si scrive com'e'. Un tratto non convertito tiene il
+    grigio di ripiego invece di prendere il colore del tema — si vede, ma si
+    legge su tutti e due i fondi, ed e' meglio di un'icona che sparisce.
+    Serve perche' questo progetto gira anche dove inkscape non c'e'.
+    """
+    if shutil.which("inkscape") is None:
+        if dest.exists():
+            print(f"  inkscape assente: {dest.name} resta la versione gia' convertita")
+        else:
+            dest.write_text(sorgente.read_text())
+            print(f"  inkscape assente: {dest.name} scritta senza conversione dei tratti")
+        return
     r = subprocess.run(
         ["inkscape", str(sorgente),
          "--actions=select-all:all;object-to-path;select-all:all;object-stroke-to-path",

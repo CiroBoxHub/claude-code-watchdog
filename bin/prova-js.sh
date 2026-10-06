@@ -51,8 +51,10 @@ for (const nome of ["ORDINE_STATI", "TESTI", "MISURE_MASCOTTE"]) {
         throw new Error("costante non trovata in watchface.js: " + nome);
     codiceWf += m[0].replace(/^const /, "var ") + "\n";
 }
-for (const nome of ["leggiRigaWatchface", "statoSessione", "approvazioneVista", "piuUrgente", "iconaStato", "testoStato",
-                     "misureMascotte", "genitoreDaStat", "catenaPid", "canaleAvviso"]) {
+for (const nome of ["leggiRigaWatchface", "statoSessione", "statoProprio", "approvazioneVista",
+                     "piuUrgente", "iconaStato", "segnoStato", "testoStato", "misureMascotte",
+                     "genitoreDaStat", "catenaPid", "parentela", "ricordaPadri", "ordinaAlbero",
+                     "canaleAvviso"]) {
     const m = new RegExp("^function " + nome + "\\([^)]*\\) \\{[\\s\\S]*?^\\}", "m").exec(testoWf);
     if (!m)
         throw new Error("funzione non trovata in watchface.js: " + nome);
@@ -176,6 +178,135 @@ uguale("watchface: un permesso approvato vale lavora, anche dopo tre errori, e s
 uguale("watchface: approvato vale solo per la richiesta di permesso",
        statoSessione({evento: "Notification", epoca: 99995, fallimenti: 0, aiutanti: 0,
                       approvato: true}, 100000), "aspetta");
+
+// --- Watchface: gli aiutanti al lavoro mentre la sessione tace.
+// Una sessione ferma su Stop con tre agenti in background diceva «ha finito»,
+// e non cera modo di accorgersene (segnalato il 2026-10-06). La regola vale
+// solo sugli stati tranquilli: se Claude aspetta te, o lavora, o si e
+// inceppato, quello viene prima — gli aiutanti non sono la notizia.
+const stA = (evento, eta, aiutanti) =>
+    statoSessione({evento, epoca: 100000 - eta, fallimenti: 0, aiutanti}, 100000);
+const casiAiutanti = [
+    ["Stop", 60, 0, "finito"],
+    ["Stop", 60, 2, "aiutanti"],
+    ["Stop", 700, 2, "aiutanti"],
+    ["SessionStart", 5, 3, "aiutanti"],
+    ["PostToolUse", 15 * 60, 1, "aiutanti"],
+    ["PreToolUse", 5, 2, "lavora"],
+    ["PermissionRequest", 5, 2, "aspetta"],
+    ["StopFailure", 5, 2, "errore"],
+    ["PreCompact", 5, 2, "compatta"],
+];
+const sbAiutanti = casiAiutanti
+    .filter(([e, eta, a, atteso]) => stA(e, eta, a) !== atteso)
+    .map(([e, eta, a, atteso]) => e + "/" + eta + "s/" + a + " aiutanti: " +
+         stA(e, eta, a) + " invece di " + atteso);
+uguale("watchface: gli aiutanti al lavoro su tutti i casi noti",
+       sbAiutanti.join("; ") || "tutti", "tutti");
+uguale("watchface: lo stato proprio non guarda gli aiutanti",
+       statoProprio({evento: "Stop", epoca: 99940, fallimenti: 0, aiutanti: 5}, 100000),
+       "finito");
+uguale("watchface: aiutanti sta fra compatta e finito",
+       piuUrgente(["finito", "aiutanti"]) + "," + piuUrgente(["aiutanti", "lavora"]),
+       "aiutanti,lavora");
+uguale("watchface: licona degli aiutanti e il robottino",
+       iconaStato("aiutanti"), "fw-robot");
+
+// --- Watchface: chi ha avviato chi.
+// Da Claude Code 2.1.291 una sessione non e piu un terminale: per gli
+// aiutanti in background Claude avvia processi `claude` figli, e il demone ne
+// tiene di riserva (`bg-spare`). Senza questa regola un terminale solo
+// compariva come tre sessioni dello stesso progetto.
+const alberoFinto = {10: 0, 20: 10, 30: 20, 40: 30, 50: 0, 60: 50, 70: 0};
+const antenatiFinti = pid => {
+    const out = [];
+    for (let p = pid; p > 0 && out.length < 20; p = alberoFinto[p] ?? 0)
+        out.push(p);
+    return out;
+};
+const comandiFinti = {10: "claude", 20: "claude bg-spare --bg-spare /tmp/s.sock",
+                      30: "claude", 40: "claude", 50: "claude --resume",
+                      60: "claude", 70: "claude"};
+const par = sessioni => parentela(sessioni, antenatiFinti, pid => comandiFinti[pid] ?? "");
+const S = (id, pid) => ({id, pid});
+// La madre non ha padre; la figlia diretta lo ha; il nipote salta la riserva
+// in mezzo e si attacca alla nonna.
+const r1 = par([S("madre", 10), S("riserva", 20), S("nipote", 30)]);
+const leggi = (r, id) => {
+    const s = r.find(x => x.id === id);
+    return s.id + ":padre=" + s.padre + ",impianto=" + s.impianto;
+};
+uguale("parentela: la madre non ha padre", leggi(r1, "madre"), "madre:padre=null,impianto=false");
+uguale("parentela: bg-spare e impianto", leggi(r1, "riserva"), "riserva:padre=madre,impianto=true");
+uguale("parentela: il nipote salta limpianto e si attacca alla nonna",
+       leggi(r1, "nipote"), "nipote:padre=madre,impianto=false");
+// Il padre e il piu vicino, non il piu lontano.
+const r2 = par([S("madre", 10), S("figlia", 30), S("nipote", 40)]);
+uguale("parentela: vince lantenato piu vicino", leggi(r2, "nipote"),
+       "nipote:padre=figlia,impianto=false");
+// Un antenato che non e una sessione non fa padre; e una riga vecchia senza
+// pid non ha modo di saperlo.
+const r3 = par([S("sola", 60), S("senzapid", 0)]);
+uguale("parentela: un antenato che non e sessione non fa padre",
+       leggi(r3, "sola"), "sola:padre=null,impianto=false");
+uguale("parentela: senza pid non si indovina",
+       leggi(r3, "senzapid"), "senzapid:padre=null,impianto=false");
+// Nessuno e padre di se stesso, nemmeno con la stessa riga due volte.
+const r4 = par([S("a", 70), S("b", 70)]);
+uguale("parentela: nessuno e padre di se stesso",
+       leggi(r4, "a") + "|" + leggi(r4, "b"),
+       "a:padre=null,impianto=false|b:padre=a,impianto=false");
+
+// --- Watchface: la parentela si ricorda quando il processo non c e piu.
+const mem = new Map();
+const viva = [{id: "f", padre: "m", impianto: false}, {id: "m", padre: null, impianto: false}];
+ricordaPadri(viva, mem);
+uguale("memoria: impara dalla sessione viva", mem.get("f").padre, "m");
+// Stesso elenco, ma il processo e finito: parentela() non trova piu antenati.
+const morta = [{id: "f", padre: null, impianto: false}, {id: "m", padre: null, impianto: false}];
+ricordaPadri(morta, mem);
+uguale("memoria: la figlia resta figlia anche a processo finito",
+       morta.find(s => s.id === "f").padre, "m");
+// Un bg-spare finito non deve ricomparire come riga vera.
+const mem2 = new Map();
+// Senza padre, se no e quello a farla ricordare e il caso non distingue.
+ricordaPadri([{id: "r", padre: null, impianto: true}], mem2);
+const riserva = [{id: "r", padre: null, impianto: false}];
+ricordaPadri(riserva, mem2);
+uguale("memoria: una riserva finita resta impianto", riserva[0].impianto, "true");
+// La memoria non cresce: chi non ha piu la sua riga esce.
+ricordaPadri([{id: "altro", padre: null, impianto: false}], mem2);
+uguale("memoria: si pota da se", mem2.has("r") ? "tiene" : "pulita", "pulita");
+
+// --- Watchface: le figlie sotto la madre, rientrate.
+const A = (id, padre) => ({id, padre});
+const stampa = r => r.map(s => "  ".repeat(s.livello) + s.id).join("|");
+uguale("albero: senza padri resta lordine di prima",
+       stampa(ordinaAlbero([A("a", null), A("b", null)])), "a|b");
+uguale("albero: la figlia va sotto la madre, rientrata",
+       stampa(ordinaAlbero([A("a", null), A("b", null), A("figlia", "a")])),
+       "a|  figlia|b");
+uguale("albero: la nipote rientra di due",
+       stampa(ordinaAlbero([A("a", null), A("f", "a"), A("n", "f")])),
+       "a|  f|    n");
+// L orfana va rimessa fra le radici al suo posto, non in fondo: se la madre
+// non c e piu, la riga resta dove l ordine per urgenza l aveva messa. Con la
+// madre in testa all elenco i due casi si distinguono.
+uguale("albero: unorfana torna radice al suo posto",
+       stampa(ordinaAlbero([A("orfana", "sparita"), A("a", null)])), "orfana|a");
+uguale("albero: nessuno si perde con un anello nei dati",
+       stampa(ordinaAlbero([A("x", "y"), A("y", "x")])).split("|").sort().join(","),
+       "x,y");
+uguale("albero: le figlie di una stessa madre restano nellordine ricevuto",
+       stampa(ordinaAlbero([A("m", null), A("f1", "m"), A("f2", "m")])),
+       "m|  f1|  f2");
+
+// --- Watchface: il segno che lampeggia, al posto del respiro del disco.
+const segni = ["aspetta", "errore", "lavora", "compatta", "aiutanti", "finito", "dorme"]
+    .map(s => s + "=" + segnoStato(s)).join(" ");
+uguale("watchface: il segno di ogni stato", segni,
+       "aspetta=fw-segno-domanda errore=fw-segno-errore lavora=fw-segno-lampadina " +
+       "compatta=fw-segno-lampadina aiutanti=fw-segno-lampadina finito=null dorme=null");
 
 // L approvazione, vista dai processi figli. Ogni caso: figli alla richiesta,
 // letture successive, e se a un certo punto risulta approvato.

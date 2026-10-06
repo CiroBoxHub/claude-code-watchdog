@@ -19,12 +19,16 @@ import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 
-export {leggiRigaWatchface, statoSessione, approvazioneVista, piuUrgente, iconaStato, testoStato,
-        misureMascotte, genitoreDaStat, catenaPid, canaleAvviso, ORDINE_STATI, Watchface};
+export {leggiRigaWatchface, statoSessione, statoProprio, approvazioneVista, piuUrgente,
+        iconaStato, segnoStato, testoStato, misureMascotte, genitoreDaStat, catenaPid,
+        parentela, ricordaPadri, ordinaAlbero, canaleAvviso, ORDINE_STATI, Watchface};
 
 /* Dal più urgente al più tranquillo: con più sessioni vince il primo. */
 /* «compatta» dopo «lavora»: è lavoro anche lui, solo non una risposta. */
-const ORDINE_STATI = ['aspetta', 'errore', 'lavora', 'compatta', 'finito', 'dorme'];
+/* «aiutanti» dopo «compatta»: è lavoro anche quello, ma non lo fa Claude in
+   prima persona — la sessione tace e gli agenti in background macinano. */
+const ORDINE_STATI = ['aspetta', 'errore', 'lavora', 'compatta', 'aiutanti',
+                      'finito', 'dorme'];
 
 /* «evento \t epoca \t fallimenti \t aiutanti \t cwd \t pid», come la scrive
    watchface-hook (il pid manca nelle righe delle versioni precedenti). Una
@@ -70,6 +74,117 @@ function catenaPid(pid, genitore, massimo = 40) {
     return catena;
 }
 
+/* Chi ha avviato chi, e cosa è impianto.
+
+   Da Claude Code 2.1.291 una sessione non è più un terminale: per gli
+   aiutanti in background Claude avvia processi `claude` figli, e il demone ne
+   tiene di riserva già accesi (`bg-spare`). Ognuno ha un session_id suo e
+   l'hook gli scrive il suo file di stato, quindi un solo terminale compariva
+   nel pannello come tre sessioni dello stesso progetto — segnalato dall'uso
+   il 2026-10-06 e verificato sull'albero dei processi: i pid 2312568, 2312569
+   e 2312570 erano tutti discendenti dello stesso `claude`, il 1861003.
+
+   `antenati(pid)` dà la catena dal più vicino in su, `comando(pid)` la riga
+   di comando. Il padre è **il primo antenato che è una sessione vera**: così
+   un nipote si attacca al nonno quando in mezzo c'è solo impianto, senza
+   bisogno di una regola a parte per quel caso. */
+function parentela(sessioni, antenati, comando) {
+    const impianto = new Map();
+    const diPid = new Map();
+    for (const s of sessioni) {
+        impianto.set(s.id, /\bbg-spare\b/.test(comando(s.pid) ?? ''));
+        // Due sessioni con lo stesso pid non dovrebbero esistere; se capita
+        // vince la prima, così il risultato non dipende dall'ordine del disco.
+        if (s.pid > 0 && !diPid.has(s.pid))
+            diPid.set(s.pid, s.id);
+    }
+    return sessioni.map(s => {
+        let padre = null;
+        for (const pid of s.pid > 0 ? antenati(s.pid) : []) {
+            const id = diPid.get(pid);
+            if (!id || id === s.id || impianto.get(id))
+                continue;
+            padre = id;
+            break;
+        }
+        return {...s, padre, impianto: impianto.get(s.id) ?? false};
+    });
+}
+
+/* La parentela si legge dall'albero dei processi, che esiste solo finché il
+   processo vive. Una sessione figlia che finisce lascia la sua riga — resta
+   visibile fino a VISIBILE_S — ma non ha più antenati da interrogare, e
+   tornerebbe a galla come riga a sé: di nuovo un doppione, proprio il difetto
+   che si sta correggendo. Misurato sui dati veri il 2026-10-06: di tre figlie
+   dello stesso terminale una sola si annidava ancora, le altre avevano già
+   chiuso.
+
+   Quindi: quello che si è capito mentre il processo c'era, si tiene. La
+   memoria si pota da sé — un id che non ha più la sua riga esce — così non
+   cresce e non resuscita parentele di sessioni finite. */
+function ricordaPadri(sessioni, memoria) {
+    for (const s of sessioni) {
+        if (s.padre || s.impianto)
+            memoria.set(s.id, {padre: s.padre, impianto: s.impianto});
+        else if (memoria.has(s.id))
+            Object.assign(s, memoria.get(s.id));
+    }
+    const presenti = new Set(sessioni.map(s => s.id));
+    for (const id of [...memoria.keys()]) {
+        if (!presenti.has(id))
+            memoria.delete(id);
+    }
+    return sessioni;
+}
+
+/* L'ordine di stampa: ogni sessione seguita da quelle che ha avviato lei,
+   rientrate di un livello. Le radici tengono l'ordine che avevano — per
+   urgenza, poi per età — e una figlia sta subito sotto la madre.
+
+   Serve perché tre righe con lo stesso nome di progetto si leggono come tre
+   copie: rientrate si leggono per quello che sono, il lavoro che una sessione
+   ha messo in piedi.
+
+   Un'orfana — la madre non è in elenco, o è scaduta nel frattempo — torna
+   radice invece di sparire: una riga che non si vede è peggio di una riga al
+   posto sbagliato. */
+function ordinaAlbero(sessioni) {
+    const perId = new Map(sessioni.map(s => [s.id, s]));
+    const figlie = new Map();
+    const radici = [];
+    for (const s of sessioni) {
+        if (s.padre && s.padre !== s.id && perId.has(s.padre)) {
+            if (!figlie.has(s.padre))
+                figlie.set(s.padre, []);
+            figlie.get(s.padre).push(s);
+        } else {
+            radici.push(s);
+        }
+    }
+    const out = [];
+    const viste = new Set();
+    const scendi = (s, livello) => {
+        if (viste.has(s.id))
+            return;
+        viste.add(s.id);
+        out.push({...s, livello});
+        for (const f of figlie.get(s.id) ?? [])
+            scendi(f, livello + 1);
+    };
+    for (const s of radici)
+        scendi(s, 0);
+    // Un anello nei dati lascerebbe fuori delle righe: tornano in fondo, a
+    // livello zero. Non dovrebbe succedere — un albero di processi non ne ha —
+    // ma perdere una sessione per un dato storto no.
+    for (const s of sessioni) {
+        if (!viste.has(s.id)) {
+            viste.add(s.id);
+            out.push({...s, livello: 0});
+        }
+    }
+    return out;
+}
+
 /* Lo stato di una sessione dal suo ultimo evento e da quanto è vecchio.
    Le scadenze esistono perché non sempre arriva un evento che chiude: una
    sessione può morire senza SessionEnd (terminale chiuso, macchina sospesa), e
@@ -80,6 +195,20 @@ function catenaPid(pid, genitore, massimo = 40) {
 function statoSessione(s, adesso) {
     if (!s)
         return null;
+    const stato = statoProprio(s, adesso);
+    // Gli aiutanti in background lavorano anche quando la sessione tace: una
+    // sessione ferma su Stop con tre agenti al lavoro diceva «ha finito», e
+    // non c'era modo di accorgersene. Segnalato dall'uso il 2026-10-06.
+    // La regola sta qui e non dentro i rami: sono gli stati tranquilli a
+    // doverla sentire, e dirlo una volta sola evita di dimenticarne uno.
+    if ((stato === 'finito' || stato === 'dorme') && s.aiutanti > 0)
+        return 'aiutanti';
+    return stato;
+}
+
+/* Lo stato per quello che fa la sessione in prima persona, senza gli
+   aiutanti: lo decide l'ultimo evento e quanto è vecchio. */
+function statoProprio(s, adesso) {
     const eta = adesso - s.epoca;
     const ORA = 3600;
     if (s.evento === 'StopFailure')
@@ -144,6 +273,24 @@ const VISIBILE_S = 12 * 3600;
    risposta veloce, e l'hai vista arrivare. */
 const TURNO_LUNGO_S = 30;
 
+/* Il testo di un file di /proc: vuoto se il processo è finito o /proc non si
+   legge. Chi chiama tratta il vuoto come «non so», mai come «no». */
+function leggiProc(percorso) {
+    try {
+        return new TextDecoder().decode(GLib.file_get_contents(percorso)[1]);
+    } catch (e) {
+        return '';
+    }
+}
+
+function genitoreDi(pid) {
+    return genitoreDaStat(leggiProc(`/proc/${pid}/stat`));
+}
+
+function comandoDi(pid) {
+    return leggiProc(`/proc/${pid}/cmdline`).replace(/\0/g, ' ');
+}
+
 /* I figli di un processo, con la loro riga di comando: [[pid, comando]].
    Linux li elenca per thread, in /proc/<pid>/task/<tid>/children, e Claude
    ne ha parecchi. Un processo finito, o /proc illeggibile: nessun figlio. */
@@ -178,6 +325,7 @@ const TESTI = {
     errore: 'si è inceppato',
     lavora: 'sta lavorando',
     compatta: 'riordina la memoria',
+    aiutanti: 'gli aiutanti lavorano',
     finito: 'ha finito',
     dorme: 'aperta',
 };
@@ -205,6 +353,8 @@ class Watchface {
         // quelli visti approvare: id → epoca della richiesta.
         this._permessi = new Map();
         this._approvati = new Map();
+        // id → {padre, impianto}, per le sessioni il cui processo è finito.
+        this._parentele = new Map();
         this._sorveglianza = 0;
     }
 
@@ -291,17 +441,34 @@ class Watchface {
                 }
                 s.approvato = s.evento === 'PermissionRequest' &&
                               this._approvati.get(id) === s.epoca;
-                sessioni.push({id, ...s, stato: statoSessione(s, adesso),
+                sessioni.push({id, ...s,
                                progetto: GLib.path_get_basename(s.cwd || '?')});
             }
             elenco.close(null);
         } catch (e) {
             // La cartella non c'è ancora: nessuna sessione, non è un errore.
         }
-        sessioni.sort((a, b) => ORDINE_STATI.indexOf(a.stato) -
+        const albero = ricordaPadri(
+            parentela(sessioni, pid => catenaPid(pid, genitoreDi), comandoDi),
+            this._parentele);
+        // Le riserve del demone non sono sessioni di nessuno: la riga si
+        // toglie. I loro aiutanti però sì — si contano a chi le ha avviate,
+        // se no sparirebbero dal pannello insieme alla riga, ed è proprio il
+        // lavoro in background che si vuole vedere.
+        const visibili = albero.filter(s => !s.impianto);
+        for (const s of albero) {
+            if (!s.impianto || !s.padre)
+                continue;
+            const padre = visibili.find(v => v.id === s.padre);
+            if (padre)
+                padre.aiutanti += s.aiutanti;
+        }
+        for (const s of visibili)
+            s.stato = statoSessione(s, adesso);
+        visibili.sort((a, b) => ORDINE_STATI.indexOf(a.stato) -
                                 ORDINE_STATI.indexOf(b.stato) || b.epoca - a.epoca);
-        this._avvisa(sessioni, adesso);
-        this._sessioni = sessioni;
+        this._avvisa(visibili, adesso);
+        this._sessioni = visibili;
         this._riprogrammaOrologio();
         this._riprogrammaSorveglianza();
         this._suCambio?.();
@@ -466,11 +633,29 @@ function canaleAvviso(come, terminaleDavanti) {
    all'insù per il /compact — lavoro, ma non una conversazione — la faccina
    per il resto. */
 function iconaStato(stato) {
+    if (stato === 'aiutanti')
+        return 'fw-robot';
     if (stato === 'errore')
         return 'fw-limone';
     if (stato === 'compatta')
         return 'fw-limone-su';
     return `fw-faccina-${stato ?? 'dorme'}`;
+}
+
+/* Il segno che lampeggia sopra la mascotte. Ha preso il posto del respiro
+   del disco: una cosa che respira sempre smette di dire qualcosa, mentre un
+   segno che compare solo quando serve si vede. Gli interrogativi quando
+   Claude aspetta te, gli esclamativi quando si è inceppato, la lampadina
+   quando c'è lavoro in corso — suo o dei suoi aiutanti. Negli stati
+   tranquilli niente: è quello che li rende tranquilli. */
+function segnoStato(stato) {
+    if (stato === 'aspetta')
+        return 'fw-segno-domanda';
+    if (stato === 'errore')
+        return 'fw-segno-errore';
+    if (stato === 'lavora' || stato === 'compatta' || stato === 'aiutanti')
+        return 'fw-segno-lampadina';
+    return null;
 }
 
 /* Pixel della faccina nella barra, nel popup, del robottino e della mascotte

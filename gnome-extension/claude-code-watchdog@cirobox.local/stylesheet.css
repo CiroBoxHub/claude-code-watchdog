@@ -788,6 +788,9 @@
 
 .fw-fumetto-sotto {
     spacing: 4px;
+    /* Spazio per la lampadina, che sporge sopra la testa: senza, finirebbe
+       sulla punta della nuvoletta quando c'e' un avviso da leggere. */
+    padding-top: 22px;
 }
 
 /* Capelli e barba sono quasi neri: su un desktop scuro sparivano (visto nella
@@ -803,6 +806,21 @@
 
 /* Quanti avvisi: un bollino sul disco, del colore del testo, leggibile su
    qualunque stato. */
+/* Il segno dello stato sulla mascotte: interrogativi, esclamativi o la
+   lampadina. Non ha colori suoi — li porta il file SVG — ma la classe serve
+   perche' l'attore sia identificabile, e perche' verifica-estensione.sh
+   controlla che ogni classe usata esista. */
+/* Una sessione avviata da un'altra: rientrata e un filo piu' smorta, cosi'
+   si legge come lavoro di quella sopra e non come una riga doppia. */
+.fw-wf-riga-figlia {
+    opacity: 0.82;
+}
+
+.fw-fumetto-segno {
+    /* Nessuna ombra: l'icona ha gia' il suo bordo, e un'ombra sotto un segno
+       che lampeggia si legge come sporco. */
+}
+
 .fw-fumetto-conto {
     background-color: #222222;
     color: #FFFFFF;

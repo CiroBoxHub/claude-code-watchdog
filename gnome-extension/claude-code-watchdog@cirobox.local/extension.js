@@ -26,7 +26,8 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-import {Watchface, iconaStato, testoStato, misureMascotte, genitoreDaStat, catenaPid}
+import {Watchface, iconaStato, testoStato, misureMascotte, genitoreDaStat, catenaPid,
+        ordinaAlbero}
     from './watchface.js';
 import {Fumetto} from './fumetto.js';
 
@@ -877,11 +878,15 @@ class Indicatore extends PanelMenu.Button {
     _disegnaSessioniClaude() {
         if (!this._boxWatchface)
             return;
-        const sessioni = (this._watchface?.sessioni ?? []).slice(0, 5);
+        // Le figlie sotto la madre, rientrate: da Claude Code 2.1.291 una
+        // sessione ne avvia altre per il lavoro in background, e tre righe
+        // con lo stesso nome di progetto si leggevano come tre copie.
+        const sessioni = ordinaAlbero(this._watchface?.sessioni ?? []).slice(0, 5);
         const mascotte = this._settings.get_boolean('watchface-mascot-popup');
         const misure = misureMascotte(this._settings.get_string('watchface-size'));
         const firma = JSON.stringify([mascotte, misure, sessioni.map(
-            s => [s.id, s.stato, s.evento === 'PermissionRequest', s.aiutanti, s.progetto])]);
+            s => [s.id, s.stato, s.evento === 'PermissionRequest', s.aiutanti, s.progetto,
+                  s.livello])]);
         if (firma === this._firmaWatchface)
             return;
         this._firmaWatchface = firma;
@@ -901,6 +906,12 @@ class Indicatore extends PanelMenu.Button {
             const pulsante = new St.Button({style_class: 'fw-wf-riga', x_expand: true,
                                             can_focus: true});
             const riga = new St.BoxLayout({style_class: 'fw-wf-riga-dentro', x_expand: true});
+            // Il rientro dice «questa l'ha avviata quella sopra». Calcolato e
+            // non una classe per livello: i livelli non hanno un massimo.
+            if (s.livello > 0) {
+                pulsante.add_style_class_name('fw-wf-riga-figlia');
+                pulsante.style = `margin-left: ${s.livello * 16}px`;
+            }
             pulsante.set_child(riga);
             pulsante.connect('clicked', () => {
                 if (this._apriSessione(s))
@@ -913,8 +924,9 @@ class Indicatore extends PanelMenu.Button {
             const testi = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL,
                                             x_expand: true,
                                             y_align: Clutter.ActorAlign.CENTER});
-            testi.add_child(new St.Label({text: tagliaNome(s.progetto, 28),
-                                          style_class: 'fw-wf-nome'}));
+            testi.add_child(new St.Label({
+                text: (s.livello > 0 ? '↳ ' : '') + tagliaNome(s.progetto, s.livello > 0 ? 24 : 28),
+                style_class: 'fw-wf-nome'}));
             testi.add_child(new St.Label({text: testoStato(s),
                                           style_class: `fw-wf-stato fw-wf-stato-${s.stato}`}));
             riga.add_child(testi);

@@ -28,7 +28,8 @@ import GLib from 'gi://GLib';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import {iconaStato, misureMascotte, piuUrgente, ORDINE_STATI} from './watchface.js';
+import {iconaStato, segnoStato, misureMascotte, piuUrgente, ORDINE_STATI}
+    from './watchface.js';
 
 export {posizioneFumetto, aggiungiAvviso, potaAvvisi, togliAvviso, Fumetto};
 
@@ -101,10 +102,9 @@ function togliAvviso(avvisi, via, id) {
 /* Righe visibili nella nuvoletta; le altre si contano in fondo. */
 const MAX_RIGHE = 4;
 
-/* Gli stati in cui il disco della faccina respira: vedi `_pulsa()`. */
-const PULSANO = ['aspetta', 'errore', 'lavora'];
-
-/* Sotto questo spostamento, in pixel, è un clic e non un trascinamento. */
+/* Quanto lontano dal punto di partenza deve finire il dito perché sia un
+   trascinamento e non un clic. Conta **dove finisce**, non se si è mosso
+   strada facendo: vedi `_rilascia()`. */
 const SOGLIA_TRASCINA = 6;
 
 /* Il colore di ogni stato, per la punta disegnata. Il fondo è chiaro in
@@ -251,8 +251,15 @@ class Fumetto {
         this._faccia.connect('button-press-event', (_a, e) => this._premi(e));
         this._faccia.connect('motion-event', (_a, e) => this._muovi(e));
         this._faccia.connect('button-release-event', (_a, e) => this._rilascia(e));
+        // Il segno dello stato: gli interrogativi e gli esclamativi sul
+        // disco, la lampadina sopra la testa. Sta fra la faccina e il
+        // contatore così si disegna sopra la prima e sotto il secondo.
+        this._segno = new St.Icon({style_class: 'fw-fumetto-segno',
+                                   icon_size: Math.round(misure.fumetto * 0.46),
+                                   visible: false});
         this._conto = new St.Label({style_class: 'fw-fumetto-conto', visible: false});
         tondo.add_child(this._faccia);
+        tondo.add_child(this._segno);
         tondo.add_child(this._conto);
         sotto.add_child(this._robot);
         sotto.add_child(tondo);
@@ -367,13 +374,13 @@ class Fumetto {
         this._carta.add_style_class_name(`fw-fumetto-${stato}`);
         this._faccia.gicon = Gio.icon_new_for_string(GLib.build_filenamev(
             [this._percorso, 'icons', `${iconaStato(stato)}.svg`]));
-        this._pulsa(PULSANO.includes(stato));
         this._conto.text = String(this._avvisi.length);
         this._conto.visible = this._avvisi.length > 1;
         // In alto a destra sul disco, appena sporgente.
         const [, lato] = this._faccia.get_preferred_width(-1);
         const [, largo] = this._conto.get_preferred_width(-1);
         this._conto.set_position(Math.round(lato - largo + 4), -4);
+        this._mostraSegno(stato, lato);
         this._robot.visible = aiutanti > 0;
         this._robotConto.text = aiutanti > 1 ? `×${aiutanti}` : '';
         this._coda.queue_repaint();
@@ -389,24 +396,52 @@ class Fumetto {
         }
     }
 
-    /* Il disco respira piano finché Claude aspetta te, si inceppa o lavora:
-       si vede con la coda dell'occhio senza chiedere attenzione. Niente
-       respiro se le animazioni di GNOME sono spente. */
-    _pulsa(si) {
-        if (!this._faccia || si === !!this._pulsando)
+    /* Il segno dello stato, e il suo lampeggio.
+
+       Ha preso il posto del respiro del disco (richiesta dell'utente il
+       2026-10-06): una cosa che respira sempre diventa fondale e smette di
+       dire qualcosa, mentre un segno che compare solo quando serve si vede.
+       Gli interrogativi e gli esclamativi stanno sul disco — è la faccina
+       che chiede o che si lamenta — la lampadina sopra la testa, che è dove
+       si accendono le idee.
+
+       A lampeggiare è solo il segno, mai la faccia: una faccia che sbiadisce
+       si legge peggio, e il segno da solo basta a tirare l'occhio. Con le
+       animazioni di GNOME spente resta fermo e acceso. */
+    _mostraSegno(stato, lato) {
+        if (!this._segno)
             return;
-        this._pulsando = si;
-        this._faccia.remove_all_transitions();
-        this._faccia.opacity = 255;
-        if (si && St.Settings.get().enable_animations) {
-            this._faccia.ease({opacity: 165, duration: 1100, repeatCount: -1, autoReverse: true,
-                               mode: Clutter.AnimationMode.EASE_IN_OUT_SINE});
+        const nome = segnoStato(stato);
+        this._segno.remove_all_transitions();
+        this._segno.opacity = 255;
+        if (!nome) {
+            this._segno.visible = false;
+            this._segnoOra = null;
+            return;
+        }
+        if (nome !== this._segnoOra) {
+            this._segno.gicon = Gio.icon_new_for_string(GLib.build_filenamev(
+                [this._percorso, 'icons', `${nome}.svg`]));
+            this._segnoOra = nome;
+        }
+        // Posizioni calcolate e non allineamenti, come per il contatore: in
+        // un BinLayout finirebbe in mezzo alla faccia.
+        const s = this._segno.icon_size;
+        if (nome === 'fw-segno-lampadina')
+            this._segno.set_position(Math.round((lato - s) / 2), Math.round(-s * 0.8));
+        else
+            this._segno.set_position(Math.round(lato - s * 0.7), Math.round(lato - s * 0.95));
+        this._segno.visible = true;
+        if (St.Settings.get().enable_animations) {
+            this._segno.ease({opacity: 70, duration: 620, repeatCount: -1,
+                              autoReverse: true,
+                              mode: Clutter.AnimationMode.EASE_IN_OUT_SINE});
         }
     }
 
     _ritira(animata) {
         this._lasciaPresa();
-        this._pulsa(false);
+        this._mostraSegno(null, 0);
         this._firma = null;
         const carta = this._carta;
         if (!carta?.visible)
@@ -493,12 +528,20 @@ class Fumetto {
         return Clutter.EVENT_STOP;
     }
 
-    _rilascia(_evento) {
+    _rilascia(evento) {
         const p = this._presa;
         if (!p)
             return Clutter.EVENT_PROPAGATE;
         this._lasciaPresa();
-        if (!p.mossa) {
+        // Clic o trascinamento lo dice **dove finisce il dito**, non se si è
+        // mosso strada facendo. Con la regola di prima bastavano sei pixel di
+        // tremolio durante la pressione perché il rilascio valesse come
+        // trascinamento: la mascotte si spostava di un'inezia e il terminale
+        // non si apriva mai. Segnalato dall'uso il 2026-10-06.
+        const [rx, ry] = evento?.get_coords?.() ?? [p.px, p.py];
+        if (Math.hypot(rx - p.px, ry - p.py) < SOGLIA_TRASCINA) {
+            // Tornata dov'era: si rimette al suo posto e vale come clic.
+            this._esterno.set_position(p.x, p.y);
             this._apri();
             return Clutter.EVENT_STOP;
         }

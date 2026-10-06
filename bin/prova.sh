@@ -881,11 +881,43 @@ uguale "watchface-hook: lo stesso aiutante avviato due volte conta uno" "$(campo
 aiuto SubagentStop s4 a1; aiuto SubagentStart s4 a1
 uguale "watchface-hook: un aiutante che si risveglia torna" "$(campo s4 4)" "1"
 aiuto SubagentStart s4 a2; aiuto SubagentStop s4 a2
-uguale "watchface-hook: finisce quello giusto" "$(campo s4 4)|$(cat "$WF/s4.aiutanti")" "1|a1"
+uguale "watchface-hook: finisce quello giusto" \
+  "$(campo s4 4)|$(cut -f1 "$WF/s4.aiutanti")" "1|a1"
 hook SessionStart s4
 uguale "watchface-hook: SessionStart azzera l'elenco" "$(campo s4 4)" "0"
 for i in $(seq 12); do aiuto SubagentStart s4 "p$i" & done; wait
 uguale "watchface-hook: dodici aiutanti in parallelo sono dodici" "$(campo s4 4)" "12"
+# Un aiutante che finisce senza che il suo Stop arrivi qui resterebbe contato
+# per sempre: succede perche' gli aiutanti in background girano in processi
+# `claude` figli, con un session_id loro, e lo Stop finisce nel file del
+# figlio. Il 2026-10-06 una sessione ne mostrava sette, fermi da quattro ore.
+# Si potano per eta', a ogni evento, non solo ai Subagent*.
+_ora=$(date +%s)
+hook SessionStart s5
+printf 'vecchio1\t%s\nvecchio2\t%s\nfresco\t%s\n' \
+  $((_ora-14400)) $((_ora-14400)) $((_ora-60)) > "$WF/s5.aiutanti"
+hook PostToolUse s5
+uguale "watchface-hook: gli aiutanti fermi da ore non si contano piu'" \
+  "$(campo s5 4)|$(cut -f1 "$WF/s5.aiutanti" | tr '\n' ' ')" "1|fresco "
+aiuto SubagentStart s5 nuovo
+hook PostToolUse s5; hook Stop s5
+uguale "watchface-hook: un aiutante appena avviato sopravvive agli altri eventi" \
+  "$(campo s5 4)" "2"
+# Elenco del formato vecchio, senza epoca: si butta invece di tenerlo per
+# sempre. Il conto si rifa' dagli eventi nuovi.
+hook SessionStart s6
+printf 'a263612d89aecb2ef\na780b916e6c0751be\n' > "$WF/s6.aiutanti"
+hook PostToolUse s6
+uguale "watchface-hook: l'elenco senza epoca si scarta" "$(campo s6 4)" "0"
+# Lo Stop di un aiutante porta il suo rapporto: se agent_id cade oltre la
+# testa letta, non si trova e l'aiutante resta contato per sempre. Riprodotto
+# il 2026-10-06 con un payload da 9 KB.
+hook SessionStart s7
+aiuto SubagentStart s7 lungo
+_zeppa=$(head -c 9000 /dev/zero | tr '\0' 'x')
+printf '{"session_id":"s7","cwd":"/lavoro/prog","result":"%s","agent_id":"lungo"}' "$_zeppa" \
+  | "$WD_ROOT/bin/watchface-hook" SubagentStop
+uguale "watchface-hook: uno Stop con un rapporto lungo toglie l'aiutante" "$(campo s7 4)" "0"
 hook Stop s1; hook Notification s1
 uguale "watchface-hook: Notification dopo Stop non cambia stato" "$(campo s1 1)" "Stop"
 hook PermissionRequest s1

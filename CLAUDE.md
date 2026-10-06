@@ -318,6 +318,79 @@ quel SessionStart azzerava gli aiutanti, che dopo un compact automatico sono
 ancora al lavoro. Per gli altri lavori «non conversazione» gli hook non danno
 segnali distinguibili. Chi aggiorna deve reinstallare gli hook (la pagina
 dice «Installati in parte»).
+
+**Da Claude Code 2.1.291 una sessione non è più un terminale.** Per il lavoro
+in background Claude avvia **processi `claude` figli**, e il demone ne tiene di
+riserva già accesi (`claude bg-spare`). Ognuno ha un `session_id` suo, quindi
+l'hook gli scrive il suo file di stato e il pannello li mostrava come sessioni
+a sé: un terminale solo compariva come tre righe con lo stesso nome di
+progetto, che si leggono come tre copie. Segnalato dall'uso il 2026-10-06 e
+verificato sull'albero dei processi — i pid 2312568, 2312569 e 2312570 erano
+tutti discendenti del 1861003, che era la sessione aperta in un terminale.
+`parentela()` in `watchface.js` dice, per ogni sessione, chi l'ha avviata e se
+è impianto: le riserve spariscono dall'elenco (i loro aiutanti no, si contano a
+chi le ha avviate), le altre si annidano sotto la madre con `ordinaAlbero()`.
+Il padre è **il primo antenato che è una sessione vera**, così un nipote si
+attacca al nonno quando in mezzo c'è solo impianto, senza una regola a parte.
+**La parentela si legge dai processi, che però muoiono.** Una figlia finita
+lascia la sua riga (visibile fino a `VISIBILE_S`) ma non ha più antenati da
+interrogare, e tornerebbe a galla come doppione: misurato sui dati veri, di tre
+figlie dello stesso terminale una sola si annidava ancora. `ricordaPadri()`
+tiene quello che si è capito finché la riga c'è, e pota da sé.
+
+**Gli aiutanti si contano per id, ma gli id vanno fatti scadere.** Il
+2026-10-06 una sessione ne mostrava **sette**, fermi dalle 11:52 e ancora
+contati alle 15:40: le trascrizioni in `subagents/` dicevano che avevano finito
+da quattro ore. La causa è la stessa di sopra — gli aiutanti in background
+girano nei processi figli, con un `session_id` loro, quindi lo `SubagentStart`
+finisce nel file del padre e lo `SubagentStop` in quello del figlio, dove la
+rimozione cerca un id che lì non c'è. `<sessione>.aiutanti` ora tiene
+`id <TAB> epoca` e si pota a **ogni** evento, non solo ai `Subagent*`: una
+sessione al lavoro ne manda di continuo, così il numero scende da sé. Il prezzo
+è dichiarato: un aiutante che lavora davvero più di un'ora smette di essere
+contato — meglio uno in meno che sette che non esistono. Le righe del formato
+vecchio, senza epoca, si buttano.
+**Due cause sono state escluse con la prova, non a naso**: venti
+`SubagentStart` e venti `SubagentStop` in parallelo danno 20 e poi 0, quindi
+non è contesa sul lock; e il rapporto finale di un aiutante pesa 1,5 KB, quindi
+non era lui a sfondare la testa letta. **Il troncamento però esisteva**: con
+`agent_id` oltre gli 8192 byte lo Stop non toglieva niente, riprodotto con un
+payload da 9 KB. Per i soli eventi `Subagent*` l'hook ora legge 256 KB.
+
+**Il clic sulla mascotte guarda dove finisce il dito, non se si è mosso.**
+Bastavano sei pixel di tremolio durante la pressione perché il rilascio valesse
+come trascinamento: la mascotte si spostava di un'inezia e il terminale non si
+apriva mai. Segnalato dall'uso il 2026-10-06. Ora se il rilascio cade entro
+`SOGLIA_TRASCINA` dal punto di partenza è un clic, e la mascotte torna dov'era.
+Resta senza prova automatica: nella shell annidata il puntatore virtuale non
+centra la finestra.
+
+**Niente lampeggia per abitudine.** Il respiro del disco (`_pulsa()`) è stato
+tolto da tutti gli stati su richiesta dell'utente: una cosa che respira sempre
+diventa fondale e smette di dire qualcosa. Al suo posto un **segno** che
+compare solo quando serve e lampeggia lui — due punti interrogativi sul disco
+quando Claude aspetta te, due esclamativi quando si è inceppato, una lampadina
+sopra la testa quando c'è lavoro in corso (suo o dei suoi aiutanti). A
+lampeggiare è il segno, mai la faccia: una faccia che sbiadisce si legge
+peggio. `segnoStato()` decide, `grafica/mascotte.py` disegna. Niente lampeggio
+con le animazioni di GNOME spente, come prima.
+
+**Lo stato «aiutanti».** Una sessione ferma su `Stop` con tre agenti in
+background diceva «ha finito» e non c'era modo di accorgersene:
+`statoSessione()` non guardava `s.aiutanti`. Ora la regola sta **fuori dai
+rami** — se lo stato proprio è tranquillo (`finito` o `dorme`) e ci sono
+aiutanti, lo stato è `aiutanti` — perché sono gli stati tranquilli a doverla
+sentire, e dirlo una volta sola evita di dimenticarne uno. L'icona è il
+robottino. Se Claude aspetta te, lavora o si è inceppato, quello viene prima:
+gli aiutanti non sono la notizia.
+
+**`grafica/mascotte.py` gira anche senza inkscape.** La conversione dei tratti
+in forme piene serve alle icone *-symbolic; senza lo strumento non si converte
+e non si finge di averlo fatto: un'icona già in posto resta quella, una nuova
+si scrive com'è e lo script lo dice. Un tratto non convertito tiene il grigio
+di ripiego invece del colore del tema — si vede, ma si legge su tutti e due i
+fondi, ed è meglio di un'icona che sparisce.
+
 **La mascotte fluttuante** (`fumetto.js`) usa la stessa decisione delle
 notifiche (`_avviso()` in `watchface.js`): le due non possono divergere. È
 **una sola, con l'elenco degli avvisi** (scelta dell'utente: «è il
@@ -459,8 +532,8 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              170 prove funzionali, sandbox con HOME dirottata
-    ./bin/prova-js.sh           60 prove sulle funzioni pure dei moduli JS
+    ./bin/prova.sh              174 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova-js.sh           82 prove sulle funzioni pure dei moduli JS
     ./bin/prova-shell.sh        carica l'estensione in una shell annidata (~1 min)
     ./bin/verifica-estensione.sh  controlli statici + le prove JS (gira dentro
                                   install e pack, che si fermano se qualcosa

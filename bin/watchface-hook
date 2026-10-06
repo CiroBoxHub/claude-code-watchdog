@@ -40,8 +40,15 @@ fi
 # La testa basta: session_id e cwd sono fra i primi campi. Un Write da
 # qualche MB porta il contenuto nel payload; si legge la testa e il resto si
 # scarta, ma va letto tutto, se no chi scrive riceve un EPIPE.
-IFS= read -r -d '' -N 8192 dati
-(( ${#dati} >= 8192 )) && cat >/dev/null
+#
+# Per gli eventi degli aiutanti la testa e' piu' lunga: se il rapporto finale
+# precede agent_id, l'id cade oltre gli 8 KB, non si trova, e la rimozione
+# fallisce in silenzio lasciando l'aiutante contato per sempre. Riprodotto il
+# 2026-10-06 con un payload da 9 KB: SubagentStop non toglieva niente.
+testa=8192
+[[ $evento == Subagent* ]] && testa=262144
+IFS= read -r -d '' -N $testa dati
+(( ${#dati} >= testa )) && cat >/dev/null
 
 # L'id finisce in un nome di file: solo lettere, cifre e trattini, cosi'
 # un «../» non porta fuori dalla cartella.
@@ -66,6 +73,10 @@ if [[ $evento == SessionEnd ]]; then
     rm -f -- "$f" "$f.aiutanti" "$f.lock"
     exit 0
 fi
+
+# Un aiutante piu' vecchio di cosi' si considera finito: vedi la potatura.
+AIUTANTE_SCADENZA_S=3600
+printf -v ora '%(%s)T' -1
 
 prima=Nessuno fallimenti=0 aiutanti=0
 [[ -f $f ]] && IFS=$'\t' read -r prima _ fallimenti aiutanti _ < "$f"
@@ -117,40 +128,75 @@ esac
 # in background manda Stop, poi Start di nuovo quando si risveglia (eventi
 # registrati il 2026-10-03). Senza agent_id — versioni vecchie — si torna a
 # contare: ogni Start aggiunge un «anonimo», ogni Stop ne toglie uno.
+# L'elenco degli aiutanti: una riga «id <TAB> epoca di avvio».
+#
+# L'epoca c'e' perche' un aiutante il cui SubagentStop non arriva qui
+# resterebbe contato per sempre. Succede, e non per colpa nostra: gli aiutanti
+# in background girano in processi `claude` figli, con un session_id loro, e
+# lo Stop finisce nel file del figlio mentre lo Start sta in quello del padre.
+# Il 2026-10-06 una sessione ne mostrava sette, fermi dalle 11:52, ancora
+# contati alle 15:40.
+# Si potano a ogni evento e non solo ai Subagent*: una sessione al lavoro
+# manda eventi di continuo, cosi' il numero scende da se'. Il prezzo e' che un
+# aiutante che lavora davvero per piu' di un'ora smette di essere contato:
+# meglio dire uno di meno che tenerne sette che non esistono.
+# Le righe senza epoca sono del formato vecchio: si buttano, e il conto si
+# rifa' dagli eventi nuovi.
 elenco_f=$f.aiutanti
+elenco=() letti=0
+if [[ -s $elenco_f ]]; then
+    while IFS=$'\t' read -r _aid _ep; do
+        (( letti++ ))
+        [[ $_ep =~ ^[0-9]+$ ]] || continue
+        (( ora - _ep < AIUTANTE_SCADENZA_S )) && elenco+=("$_aid"$'\t'"$_ep")
+    done < "$elenco_f"
+fi
+# L'elenco e' la fonte: il numero nella riga di stato si ricava da lui, mai il
+# contrario, se no i due divergono e vince quello sbagliato.
+aiutanti=${#elenco[@]}
+# Se la potatura ha tolto qualcosa il file va riscritto anche quando l'evento
+# non riguarda gli aiutanti, se no resta lungo per sempre.
+scrivi_elenco=0
+(( letti != aiutanti )) && scrivi_elenco=1
+
 case $evento in
     SubagentStart|SubagentStop)
         aid=anonimo
         [[ $dati =~ \"agent_id\"[[:space:]]*:[[:space:]]*\"([A-Za-z0-9_-]{1,64})\" ]] && aid=${BASH_REMATCH[1]}
-        elenco=()
-        [[ -f $elenco_f ]] && mapfile -t elenco < "$elenco_f"
         trovato=-1
         for i in "${!elenco[@]}"; do
-            [[ ${elenco[i]} == "$aid" ]] && { trovato=$i; break; }
+            [[ ${elenco[i]%%$'\t'*} == "$aid" ]] && { trovato=$i; break; }
         done
         if [[ $evento == SubagentStart ]]; then
-            (( trovato < 0 )) || [[ $aid == anonimo ]] && elenco+=("$aid")
+            (( trovato < 0 )) || [[ $aid == anonimo ]] && elenco+=("$aid"$'\t'"$ora")
         elif (( trovato >= 0 )); then
             unset 'elenco[trovato]'
         fi
-        if (( ${#elenco[@]} )); then
-            printf '%s\n' "${elenco[@]}" > "$elenco_f"
-        else
-            : > "$elenco_f"
-        fi
+        scrivi_elenco=1
         aiutanti=${#elenco[@]}
         ;;
     # Una sessione nuova o ripresa riparte senza aiutanti; dopo un compact
     # quelli in background sono ancora al lavoro.
-    SessionStart) (( riparte )) || { : > "$elenco_f"; aiutanti=0; } ;;
+    SessionStart)
+        if (( ! riparte )); then
+            elenco=()
+            scrivi_elenco=1
+            aiutanti=0
+        fi ;;
 esac
+if (( scrivi_elenco )); then
+    if (( ${#elenco[@]} )); then
+        printf '%s\n' "${elenco[@]}" > "$elenco_f"
+    else
+        : > "$elenco_f"
+    fi
+fi
 
 # Su un temporaneo e poi rinomina: chi legge vede la riga vecchia o la nuova,
-# mai un file troncato a meta'.
-# L'ora con un builtin anche dove EPOCHSECONDS non c'è (bash prima della 5.0):
-# un'epoca 0 farebbe sembrare la sessione vecchia di decenni, e il pannello
-# la cancellerebbe appena letta.
-printf -v ora '%(%s)T' -1
+# mai un file troncato a meta'. L'ora e' quella presa in cima, con un builtin
+# anche dove EPOCHSECONDS non c'e' (bash prima della 5.0): un'epoca 0 farebbe
+# sembrare la sessione vecchia di decenni, e il pannello la cancellerebbe
+# appena letta.
 pid=${CLAUDE_PID:-}
 [[ $pid =~ ^[0-9]{1,10}$ ]] || pid=
 printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$nuovo" "$ora" \
