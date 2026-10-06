@@ -45,7 +45,8 @@ eval(codice);
 // Watchface: le funzioni pure e le due tabelle che usano, dallo stesso modo.
 const testoWf = new TextDecoder().decode(imports.gi.GLib.file_get_contents(fileWf)[1]);
 let codiceWf = "";
-for (const nome of ["ORDINE_STATI", "TESTI", "MISURE_MASCOTTE"]) {
+for (const nome of ["ORDINE_STATI", "TESTI", "MISURE_MASCOTTE",
+                    "AIUTANTE_SCADENZA_S"]) {
     const m = new RegExp("^const " + nome + " = [\\s\\S]*?;$", "m").exec(testoWf);
     if (!m)
         throw new Error("costante non trovata in watchface.js: " + nome);
@@ -54,6 +55,7 @@ for (const nome of ["ORDINE_STATI", "TESTI", "MISURE_MASCOTTE"]) {
 for (const nome of ["leggiRigaWatchface", "statoSessione", "statoProprio", "approvazioneVista",
                      "piuUrgente", "iconaStato", "segnoStato", "testoStato", "misureMascotte",
                      "genitoreDaStat", "catenaPid", "parentela", "ricordaPadri", "ordinaAlbero",
+                     "contaAiutanti", "turnoOccupato",
                      "canaleAvviso"]) {
     const m = new RegExp("^function " + nome + "\\([^)]*\\) \\{[\\s\\S]*?^\\}", "m").exec(testoWf);
     if (!m)
@@ -256,6 +258,45 @@ const r4 = par([S("a", 70), S("b", 70)]);
 uguale("parentela: nessuno e padre di se stesso",
        leggi(r4, "a") + "|" + leggi(r4, "b"),
        "a:padre=null,impianto=false|b:padre=a,impianto=false");
+
+// --- Watchface: gli aiutanti vivi si contano dall elenco, non dalla riga.
+// L hook aggiorna il numero nella riga solo quando Claude manda un evento, e
+// una sessione che avvia lavoro in background e poi tace non ne manda piu:
+// il pannello deve ricontarli da se a ogni lettura.
+const ADESSO = 1000000;
+const el = righe => righe.join("\n");
+uguale("aiutanti: elenco vuoto", contaAiutanti("", ADESSO), "0");
+uguale("aiutanti: niente elenco", contaAiutanti(null, ADESSO), "0");
+uguale("aiutanti: due freschi contano due",
+       contaAiutanti(el(["a\t" + (ADESSO - 10), "b\t" + (ADESSO - 60)]), ADESSO), "2");
+uguale("aiutanti: uno vecchio di quattro ore non conta",
+       contaAiutanti(el(["a\t" + (ADESSO - 14400), "b\t" + (ADESSO - 60)]), ADESSO), "1");
+uguale("aiutanti: sul filo della scadenza non conta",
+       contaAiutanti("a\t" + (ADESSO - AIUTANTE_SCADENZA_S), ADESSO), "0");
+uguale("aiutanti: un attimo prima conta",
+       contaAiutanti("a\t" + (ADESSO - AIUTANTE_SCADENZA_S + 1), ADESSO), "1");
+uguale("aiutanti: le righe senza epoca (formato vecchio) non contano",
+       contaAiutanti(el(["a263612d89aecb2ef", "a780b916e6c0751be"]), ADESSO), "0");
+uguale("aiutanti: unepoca storta non conta",
+       contaAiutanti("a\tdomani", ADESSO), "0");
+// Un numero seguito da lettere e il caso che distingue la guardia dal caso
+// fortunato: parseInt("999abc") torna 999, quindi senza il controllo sulla
+// forma la riga conterebbe.
+uguale("aiutanti: unepoca con la coda sporca non conta",
+       contaAiutanti("a\t" + (ADESSO - 5) + "abc", ADESSO), "0");
+uguale("aiutanti: una riga vuota in fondo non conta",
+       contaAiutanti("a\t" + (ADESSO - 5) + "\n", ADESSO), "1");
+
+// --- Watchface: cosa vale come turno occupato per la notifica di fine lavoro.
+// Senza «aiutanti» qui dentro, un turno che avvia un agente passa
+// lavora -> aiutanti -> finito e la notifica «Claude ha finito» non scatta
+// mai: ne entrando in aiutanti, che non e finito, ne uscendone, perche lo
+// stato di prima non risultava occupato.
+uguale("turno: cosa conta come occupato",
+       ["lavora", "compatta", "aiutanti", "finito", "dorme", "aspetta", "errore"]
+           .map(s => s + "=" + turnoOccupato(s)).join(" "),
+       "lavora=true compatta=true aiutanti=true finito=false dorme=false " +
+       "aspetta=false errore=false");
 
 // --- Watchface: la parentela si ricorda quando il processo non c e piu.
 const mem = new Map();

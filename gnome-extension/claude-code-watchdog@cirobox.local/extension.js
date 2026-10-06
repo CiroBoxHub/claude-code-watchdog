@@ -933,7 +933,9 @@ class Indicatore extends PanelMenu.Button {
             if (s.aiutanti > 0) {
                 const aiuto = new St.BoxLayout({style_class: 'fw-wf-aiuto',
                                                 y_align: Clutter.ActorAlign.CENTER});
-                if (mascotte)
+                // Nello stato «aiutanti» la faccia della riga è già il
+                // robottino: due di fila sarebbero un doppione.
+                if (mascotte && iconaStato(s.stato) !== 'fw-robot')
                     aiuto.add_child(icona('fw-robot', misure.robot, 'fw-wf-robot'));
                 aiuto.add_child(new St.Label({
                     text: s.aiutanti === 1 ? '1 aiutante' : `${s.aiutanti} aiutanti`,

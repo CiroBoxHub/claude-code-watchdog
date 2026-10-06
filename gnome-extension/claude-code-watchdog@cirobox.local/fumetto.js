@@ -234,6 +234,7 @@ class Fumetto {
         // In fondo: il robottino, se servono, e la faccina col suo contatore.
         const sotto = new St.BoxLayout({style_class: 'fw-fumetto-sotto',
                                         x_align: Clutter.ActorAlign.END});
+        this._sotto = sotto;
         this._robot = new St.BoxLayout({style_class: 'fw-fumetto-robot',
                                         y_align: Clutter.ActorAlign.END, visible: false});
         this._robot.add_child(new St.Icon({
@@ -275,6 +276,19 @@ class Fumetto {
         this._esterno?.destroy();
         this._esterno = null;
         this._carta = null;
+        // Gli attori figli muoiono insieme all'esterno: tenerne il
+        // riferimento vuol dire toccare un oggetto distrutto al primo evento
+        // che arriva prima del rimontaggio. `_disegna()` rimonta da sé quando
+        // `_esterno` manca, ma `_ritira()` tocca il segno **prima** di
+        // guardare la carta.
+        // Il vecchio `_pulsa()` non ne soffriva per caso — usciva subito
+        // quando lo stato chiesto era già quello — e la sostituzione ha
+        // scoperto il difetto che c'era sotto. Lo ha preso la shell annidata,
+        // a tratti: i controlli statici non lo vedono.
+        for (const n of ['_faccia', '_segno', '_sotto', '_robot', '_robotConto',
+                         '_conto', '_nuvola', '_coda'])
+            this[n] = null;
+        this._segnoOra = null;
     }
 
     _riga(a) {
@@ -381,7 +395,9 @@ class Fumetto {
         const [, largo] = this._conto.get_preferred_width(-1);
         this._conto.set_position(Math.round(lato - largo + 4), -4);
         this._mostraSegno(stato, lato);
-        this._robot.visible = aiutanti > 0;
+        // Nello stato «aiutanti» la faccia è già il robottino: ripeterlo di
+        // fianco col contatore ne mostrava due affiancati.
+        this._robot.visible = aiutanti > 0 && iconaStato(stato) !== 'fw-robot';
         this._robotConto.text = aiutanti > 1 ? `×${aiutanti}` : '';
         this._coda.queue_repaint();
 
@@ -417,6 +433,8 @@ class Fumetto {
         if (!nome) {
             this._segno.visible = false;
             this._segnoOra = null;
+            if (this._sotto)
+                this._sotto.style = null;
             return;
         }
         if (nome !== this._segnoOra) {
@@ -427,10 +445,20 @@ class Fumetto {
         // Posizioni calcolate e non allineamenti, come per il contatore: in
         // un BinLayout finirebbe in mezzo alla faccia.
         const s = this._segno.icon_size;
-        if (nome === 'fw-segno-lampadina')
-            this._segno.set_position(Math.round((lato - s) / 2), Math.round(-s * 0.8));
-        else
+        // La lampadina sporge sopra la testa, quindi va lasciato lo spazio —
+        // ricavato dalla misura e non fisso nel CSS: con la mascotte grande
+        // sporge il doppio che con la piccola, e un valore fisso la faceva
+        // finire sulla punta della nuvoletta. E si lascia **solo quando c'è**,
+        // se no resta un buco fra la punta e la faccia in tutti gli altri
+        // stati. Rilevato da /code-review il 2026-10-06.
+        if (nome === 'fw-segno-lampadina') {
+            const sporge = Math.round(s * 0.8);
+            this._segno.set_position(Math.round((lato - s) / 2), -sporge);
+            this._sotto.style = `padding-top: ${sporge + 2}px`;
+        } else {
             this._segno.set_position(Math.round(lato - s * 0.7), Math.round(lato - s * 0.95));
+            this._sotto.style = null;
+        }
         this._segno.visible = true;
         if (St.Settings.get().enable_animations) {
             this._segno.ease({opacity: 70, duration: 620, repeatCount: -1,

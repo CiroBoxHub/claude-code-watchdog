@@ -21,7 +21,8 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 
 export {leggiRigaWatchface, statoSessione, statoProprio, approvazioneVista, piuUrgente,
         iconaStato, segnoStato, testoStato, misureMascotte, genitoreDaStat, catenaPid,
-        parentela, ricordaPadri, ordinaAlbero, canaleAvviso, ORDINE_STATI, Watchface};
+        parentela, ricordaPadri, ordinaAlbero, contaAiutanti, turnoOccupato,
+        canaleAvviso, ORDINE_STATI, Watchface};
 
 /* Dal più urgente al più tranquillo: con più sessioni vince il primo. */
 /* «compatta» dopo «lavora»: è lavoro anche lui, solo non una risposta. */
@@ -72,6 +73,41 @@ function catenaPid(pid, genitore, massimo = 40) {
     for (let p = pid; p > 1 && catena.length < massimo && !catena.includes(p); p = genitore(p))
         catena.push(p);
     return catena;
+}
+
+/* Gli aiutanti vivi, contati dall'elenco «id <TAB> epoca» che scrive l'hook.
+
+   Il numero nella riga di stato non basta: l'hook lo aggiorna solo quando
+   Claude manda un evento, e una sessione che avvia del lavoro in background e
+   poi tace non ne manda più nessuno — cioè proprio il caso da cui è partito
+   tutto. Quel numero resterebbe fermo per ore, e adesso che accende lo stato
+   «aiutanti» terrebbe accesa la riga, l'ordinamento e il timer del pannello
+   fino a dodici ore dopo. Qui si ricontano a ogni lettura, che avviene anche
+   da sola.
+
+   Una riga senza epoca è del formato vecchio e non si conta: il conto si rifà
+   dagli eventi nuovi, come fa l'hook. */
+function contaAiutanti(testo, adesso) {
+    let vivi = 0;
+    for (const riga of (testo ?? '').split('\n')) {
+        const campi = riga.split('\t');
+        if (campi.length < 2 || !/^\d+$/.test(campi[1]))
+            continue;
+        if (adesso - parseInt(campi[1], 10) < AIUTANTE_SCADENZA_S)
+            vivi++;
+    }
+    return vivi;
+}
+
+/* Un turno «occupato» ai fini della notifica di fine lavoro. Gli aiutanti ci
+   stanno dentro: senza, un turno che ne avvia uno passa `lavora → aiutanti →
+   finito`, e il passaggio che fa scattare «Claude ha finito» non avviene mai
+   — né entrando in `aiutanti`, che non è `finito`, né uscendone, perché lo
+   stato di prima non risultava occupato. Risultato: nessuna notifica proprio
+   nei turni lunghi, che sono quelli per cui la notifica esiste.
+   Trovato da /code-review il 2026-10-06, dentro la correzione del giorno. */
+function turnoOccupato(stato) {
+    return stato === 'lavora' || stato === 'compatta' || stato === 'aiutanti';
 }
 
 /* Chi ha avviato chi, e cosa è impianto.
@@ -273,6 +309,12 @@ const VISIBILE_S = 12 * 3600;
    risposta veloce, e l'hai vista arrivare. */
 const TURNO_LUNGO_S = 30;
 
+/* Un aiutante più vecchio di così si considera finito. **Deve valere quanto
+   AIUTANTE_SCADENZA_S in bin/watchface-hook**: lo controlla
+   verifica-estensione.sh, perché due copie che divergono qui vorrebbero dire
+   due conteggi diversi per lo stesso elenco. */
+const AIUTANTE_SCADENZA_S = 3600;
+
 /* Il testo di un file di /proc: vuoto se il processo è finito o /proc non si
    legge. Chi chiama tratta il vuoto come «non so», mai come «no». */
 function leggiProc(percorso) {
@@ -441,6 +483,11 @@ class Watchface {
                 }
                 s.approvato = s.evento === 'PermissionRequest' &&
                               this._approvati.get(id) === s.epoca;
+                // Il conto si rifà dall'elenco, che porta le epoche: quello
+                // nella riga lo aggiorna solo un evento, e qui gli eventi
+                // possono mancare da ore.
+                s.aiutanti = contaAiutanti(
+                    leggiProc(GLib.build_filenamev([CARTELLA, `${id}.aiutanti`])), adesso);
                 sessioni.push({id, ...s,
                                progetto: GLib.path_get_basename(s.cwd || '?')});
             }
@@ -542,7 +589,7 @@ class Watchface {
         this._statiPrima = new Map(sessioni.map(s => [s.id, s.stato]));
         // Il compact è lavoro: un compact automatico non spezza il turno, e
         // quello a mano, se dura, finisce con «ha finito» come un turno.
-        const occupato = st => st === 'lavora' || st === 'compatta';
+        const occupato = turnoOccupato;
         for (const s of sessioni) {
             const vecchio = prima?.get(s.id);
             if (occupato(s.stato) && !occupato(vecchio))

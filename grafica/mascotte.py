@@ -199,8 +199,12 @@ def tutte() -> dict[str, str]:
     out["fw-limone.svg"] = svg(limone(colore=True), 64)
     out["fw-robot-symbolic.svg"] = svg(robot())
     out["fw-robot.svg"] = svg(robot(colore=True), 64)
+    # Solo a colori: i segni si disegnano sulla mascotte, che usa le icone a
+    # colori. Una *-symbolic in piu' sarebbe un file che nessuno guarda e che
+    # senza inkscape uscirebbe coi tratti, quindi grigia fissa invece di
+    # seguire il colore del tema — una trappola armata per il giorno che
+    # qualcuno la usasse. Rilevato da /code-review il 2026-10-06.
     for s in ("domanda", "errore", "lampadina"):
-        out[f"fw-segno-{s}-symbolic.svg"] = svg(segno(s))
         out[f"fw-segno-{s}.svg"] = svg(segno(s, colore=True), 64)
     return out
 

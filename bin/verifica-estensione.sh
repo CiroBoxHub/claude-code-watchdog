@@ -109,6 +109,19 @@ for x in $_s; do
 done
 if [[ -z "$_manca" ]]; then echo "ok ($(echo "$_s" | wc -w))"; else echo "✗$_manca"; ko=1; fi
 
+# La scadenza degli aiutanti è scritta in due posti che non possono leggersi
+# a vicenda: l'hook è bash e deve restare veloce, watchface.js gira dentro la
+# shell. Due copie sono tollerate solo se qualcuno controlla che siano uguali —
+# se divergono, l'hook e il pannello contano lo stesso elenco in modo diverso.
+printf '  %-34s ' "scadenza aiutanti: hook e pannello"
+_sh=$(grep -oP '^AIUTANTE_SCADENZA_S=\K[0-9]+' "$WD_ROOT/bin/watchface-hook" | head -1)
+_js=$(grep -oP '^const AIUTANTE_SCADENZA_S = \K[0-9]+' "$SRC/watchface.js" | head -1)
+if [[ -n "$_sh" && "$_sh" == "$_js" ]]; then
+  echo "ok (${_sh}s)"
+else
+  echo "✗ hook=${_sh:-?} watchface.js=${_js:-?}"; ko=1
+fi
+
 # Gli script bundled si chiamano anche fra loro: reclaim.py ha bisogno di
 # trash-scaduti.py, collect-metrics.py di claude-sessions.py. Chi arriva
 # dentro l'estensione senza le sue dipendenze fallisce solo a pulsante

@@ -753,6 +753,16 @@
     border-color: #3584E4;
 }
 
+/* Gli aiutanti al lavoro mentre la sessione tace. Senza questa regola il
+   bordo restava quello di serie, cioe' lo stesso verde di «ha finito» —
+   proprio lo stato da cui si vuole distinguere. verifica-estensione.sh non
+   poteva prenderlo: raccoglie solo i nomi di classe scritti per esteso, non
+   quelli composti. Rilevato da /code-review il 2026-10-06. */
+.fw-fumetto-aiutanti .fw-fumetto-nuvola,
+.fw-fumetto-aiutanti .fw-fumetto-faccia {
+    border-color: #8676B8;
+}
+
 .fw-fumetto-dorme .fw-fumetto-faccia {
     border-color: #9A9A9A;
 }
@@ -788,9 +798,10 @@
 
 .fw-fumetto-sotto {
     spacing: 4px;
-    /* Spazio per la lampadina, che sporge sopra la testa: senza, finirebbe
-       sulla punta della nuvoletta quando c'e' un avviso da leggere. */
-    padding-top: 22px;
+    /* Lo spazio per la lampadina lo mette _mostraSegno(), ricavato dalla
+       misura della mascotte e solo mentre la lampadina c'e': un valore fisso
+       qui non bastava alla grande e lasciava un buco in tutti gli altri
+       stati. */
 }
 
 /* Capelli e barba sono quasi neri: su un desktop scuro sparivano (visto nella

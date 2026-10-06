@@ -184,12 +184,19 @@ case $evento in
             aiutanti=0
         fi ;;
 esac
+# Su un temporaneo e poi rinomina, come la riga di stato: il pannello legge
+# questo file **senza prendere il lock**, e fra il troncamento e la scrittura
+# resterebbe vuoto per un istante. Una lettura che ci cadesse dentro
+# conterebbe zero aiutanti, e con una sessione ferma su Stop farebbe scattare
+# un «Claude ha finito» che non e' vero. Rilevato da /code-review il
+# 2026-10-06, nel secondo giro sulla correzione del primo.
 if (( scrivi_elenco )); then
     if (( ${#elenco[@]} )); then
-        printf '%s\n' "${elenco[@]}" > "$elenco_f"
+        printf '%s\n' "${elenco[@]}" > "$elenco_f.$$"
     else
-        : > "$elenco_f"
+        : > "$elenco_f.$$"
     fi
+    mv -f -- "$elenco_f.$$" "$elenco_f"
 fi
 
 # Su un temporaneo e poi rinomina: chi legge vede la riga vecchia o la nuova,
