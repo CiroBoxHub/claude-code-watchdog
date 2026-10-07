@@ -8,7 +8,7 @@
 # Scrive una riga per sessione in $XDG_RUNTIME_DIR, che sta in memoria: il
 # pannello la legge quando cambia, senza interrogare niente a intervalli.
 #
-#   evento <TAB> epoca <TAB> fallimenti di fila <TAB> aiutanti <TAB> cwd <TAB> pid
+#   evento <TAB> epoca <TAB> fallimenti <TAB> aiutanti <TAB> cwd <TAB> pid <TAB> riserva
 #
 # Il pid è quello del processo `claude` (CLAUDE_PID, che Claude Code passa ai
 # suoi hook): da lì il pannello risale al terminale e ne porta davanti la
@@ -78,8 +78,26 @@ fi
 AIUTANTE_SCADENZA_S=3600
 printf -v ora '%(%s)T' -1
 
-prima=Nessuno fallimenti=0 aiutanti=0
-[[ -f $f ]] && IFS=$'\t' read -r prima _ fallimenti aiutanti _ < "$f"
+prima=Nessuno fallimenti=0 aiutanti=0 riserva=
+# I campi si spezzano a mano, non con IFS=TAB: la tabulazione e' uno dei
+# separatori «bianchi» di bash, quindi `read` fonde due tabulazioni di fila e
+# salta i campi vuoti. Con il pid vuoto — Claude Code non sempre lo passa — la
+# riga di sette campi ne dava sei, tutti quelli dopo slittavano di uno e la
+# riserva andava persa. Preso da una prova, non a occhio.
+if [[ -f $f ]]; then
+    IFS= read -r _riga < "$f"
+    _campi=()
+    while [[ $_riga == *$'\t'* ]]; do
+        _campi+=("${_riga%%$'\t'*}")
+        _riga=${_riga#*$'\t'}
+    done
+    _campi+=("$_riga")
+    prima=${_campi[0]:-Nessuno}
+    fallimenti=${_campi[2]:-0}
+    aiutanti=${_campi[3]:-0}
+    riserva=${_campi[6]:-}
+fi
+[[ $riserva == 1 ]] || riserva=
 [[ $fallimenti =~ ^[0-9]+$ ]] || fallimenti=0
 [[ $aiutanti =~ ^[0-9]+$ ]] || aiutanti=0
 
@@ -206,6 +224,15 @@ fi
 # appena letta.
 pid=${CLAUDE_PID:-}
 [[ $pid =~ ^[0-9]{1,10}$ ]] || pid=
-printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$nuovo" "$ora" \
-    "$fallimenti" "$aiutanti" "$cwd" "$pid" > "$f.$$" && mv -f -- "$f.$$" "$f"
+# Una riserva del demone (`claude bg-spare`) non e' una sessione di nessuno: il
+# pannello la nasconde. Lo dice la riga di comando del processo, che pero'
+# sparisce insieme al processo mentre la riga resta visibile per ore — e dopo
+# un riavvio della shell la riserva morta ricompariva come riga doppia, cioe'
+# il difetto che si stava correggendo. Si stabilisce una volta, all'avvio della
+# sessione, e da li' in poi sta scritta. Rilevato da /code-review il 2026-10-06.
+if [[ -z $riserva && $evento == SessionStart && -n $pid ]]; then
+    [[ $(tr -d '\0' < "/proc/$pid/cmdline" 2>/dev/null) == *bg-spare* ]] && riserva=1
+fi
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$nuovo" "$ora" \
+    "$fallimenti" "$aiutanti" "$cwd" "$pid" "$riserva" > "$f.$$" && mv -f -- "$f.$$" "$f"
 exit 0

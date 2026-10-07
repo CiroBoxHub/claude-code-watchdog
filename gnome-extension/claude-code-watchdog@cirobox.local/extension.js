@@ -869,7 +869,20 @@ class Indicatore extends PanelMenu.Button {
             }
         }
         this._disegnaSessioniClaude();
-        this._fumetto?.aggiorna(this._watchface?.sessioni ?? []);
+        // La mascotte è un accessorio: se inciampa deve mancare lei, non
+        // fermare l'aggiornamento del pannello. È la stessa rete che protegge
+        // la sua costruzione in enable().
+        // Serve anche per una ragione precisa: nella shell annidata è comparso
+        // uno schianto dentro questa chiamata, circa un giro su quattro, che
+        // **non si è riusciti a riprodurre** — dieci esecuzioni col log tenuto
+        // non l'hanno ripreso. Questa non è la spiegazione, è il contenimento:
+        // finché non si trova, l'errore finisce nel journal invece di
+        // interrompere il giro di aggiornamento.
+        try {
+            this._fumetto?.aggiorna(this._watchface?.sessioni ?? []);
+        } catch (e) {
+            logError(e, 'claude-code-watchdog: aggiornamento della mascotte non riuscito');
+        }
     }
 
     /* La sezione «Claude adesso» in cima al popup. Si rifà solo quando cambia
@@ -881,7 +894,14 @@ class Indicatore extends PanelMenu.Button {
         // Le figlie sotto la madre, rientrate: da Claude Code 2.1.291 una
         // sessione ne avvia altre per il lavoro in background, e tre righe
         // con lo stesso nome di progetto si leggevano come tre copie.
-        const sessioni = ordinaAlbero(this._watchface?.sessioni ?? []).slice(0, 5);
+        // **Prima si taglia, poi si annida.** Annidando per prime, le figlie
+        // di una sessione in cima venivano tirate su subito sotto la madre e
+        // mangiavano i posti a sessioni più urgenti: con quattro figlie
+        // addormentate sotto la prima riga, una sessione in errore spariva
+        // dall'elenco. Le cinque più urgenti restano le cinque mostrate, e
+        // una figlia rimasta senza madre torna radice da sé.
+        // Rilevato da /code-review il 2026-10-06.
+        const sessioni = ordinaAlbero((this._watchface?.sessioni ?? []).slice(0, 5));
         const mascotte = this._settings.get_boolean('watchface-mascot-popup');
         const misure = misureMascotte(this._settings.get_string('watchface-size'));
         const firma = JSON.stringify([mascotte, misure, sessioni.map(

@@ -918,6 +918,19 @@ _zeppa=$(head -c 9000 /dev/zero | tr '\0' 'x')
 printf '{"session_id":"s7","cwd":"/lavoro/prog","result":"%s","agent_id":"lungo"}' "$_zeppa" \
   | "$WD_ROOT/bin/watchface-hook" SubagentStop
 uguale "watchface-hook: uno Stop con un rapporto lungo toglie l'aiutante" "$(campo s7 4)" "0"
+# Il campo «riserva» (settimo): lo scrive l'hook una volta sola, all'avvio
+# della sessione, leggendo la riga di comando del processo. Serve perche' il
+# processo muore mentre la riga resta visibile per ore, e una riserva morta
+# ricompariva nel pannello come riga doppia. Qui si prova che, una volta
+# scritto, resta: il riconoscimento vero vuole un /proc finto.
+hook SessionStart s8
+uguale "watchface-hook: una sessione normale non e' una riserva" "$(campo s8 7)" ""
+printf 'PreToolUse\t%s\t0\t0\t/lavoro/prog\t0\t1\n' "$(date +%s)" > "$WF/s8"
+hook PostToolUse s8
+uguale "watchface-hook: il campo riserva sopravvive agli eventi" "$(campo s8 7)" "1"
+hook Stop s8; hook PreToolUse s8
+uguale "watchface-hook: e non si perde nemmeno dopo uno Stop" "$(campo s8 7)" "1"
+
 hook Stop s1; hook Notification s1
 uguale "watchface-hook: Notification dopo Stop non cambia stato" "$(campo s1 1)" "Stop"
 hook PermissionRequest s1

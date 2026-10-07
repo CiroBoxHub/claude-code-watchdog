@@ -53,7 +53,11 @@ function leggiRigaWatchface(testo) {
     }
     return {evento: campi[0], epoca: numero(campi[1]),
             fallimenti: numero(campi[2]), aiutanti: numero(campi[3]), cwd,
-            pid: numero(campi[5] ?? '')};
+            pid: numero(campi[5] ?? ''),
+            // Scritto dall'hook all'avvio della sessione: sopravvive al
+            // processo, e quindi a un riavvio della shell. Manca nelle righe
+            // delle versioni precedenti, e lì si ricade sulla riga di comando.
+            riserva: (campi[6] ?? '') === '1'};
 }
 
 /* Il genitore di un processo da /proc/<pid>/stat. Il nome del programma sta
@@ -128,16 +132,22 @@ function parentela(sessioni, antenati, comando) {
     const impianto = new Map();
     const diPid = new Map();
     for (const s of sessioni) {
-        impianto.set(s.id, /\bbg-spare\b/.test(comando(s.pid) ?? ''));
-        // Due sessioni con lo stesso pid non dovrebbero esistere; se capita
-        // vince la prima, così il risultato non dipende dall'ordine del disco.
-        if (s.pid > 0 && !diPid.has(s.pid))
-            diPid.set(s.pid, s.id);
+        // Prima quello che c'è scritto nella riga, poi la riga di comando:
+        // la seconda vale solo finché il processo è vivo.
+        impianto.set(s.id, s.riserva === true || /\bbg-spare\b/.test(comando(s.pid) ?? ''));
+        // Due sessioni con lo stesso pid non dovrebbero esistere, ma il
+        // sistema riusa i pid e una riga sopravvive alla sua sessione fino a
+        // VISIBILE_S: in dodici ore il pid di una finita può toccare a una
+        // nuova. Vince **la più recente**, non la prima letta — le sessioni
+        // arrivano qui nell'ordine in cui le elenca il disco, quindi «la
+        // prima» voleva dire «a caso». Rilevato da /code-review il 2026-10-06.
+        if (s.pid > 0 && (!diPid.has(s.pid) || s.epoca > diPid.get(s.pid).epoca))
+            diPid.set(s.pid, {id: s.id, epoca: s.epoca});
     }
     return sessioni.map(s => {
         let padre = null;
         for (const pid of s.pid > 0 ? antenati(s.pid) : []) {
-            const id = diPid.get(pid);
+            const id = diPid.get(pid)?.id;
             if (!id || id === s.id || impianto.get(id))
                 continue;
             padre = id;

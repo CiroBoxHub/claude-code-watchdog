@@ -357,6 +357,65 @@ non era lui a sfondare la testa letta. **Il troncamento però esisteva**: con
 `agent_id` oltre gli 8192 byte lo Stop non toglieva niente, riprodotto con un
 payload da 9 KB. Per i soli eventi `Subagent*` l'hook ora legge 256 KB.
 
+**`read` con `IFS=$'\t'` fonde i campi vuoti, e questo ha un prezzo.** La
+tabulazione è uno dei separatori «bianchi» di bash: due di fila contano come
+una, e un campo vuoto in mezzo sparisce. La riga di stato di Watchface ha il
+pid vuoto quando Claude Code non lo passa, quindi sette campi ne davano sei e
+tutto ciò che veniva dopo slittava di uno — il campo `riserva` andava perso a
+ogni evento. Finché si leggevano solo i primi cinque campi non si vedeva. Ora i
+campi si spezzano a mano con `${riga%%$'\t'*}`, che non fonde niente e non
+forka. **Preso da una prova**, non a occhio: la prova che controllava la
+persistenza del campo è diventata rossa al primo giro.
+
+**Due giri di `/code-review` sulla stessa giornata, sei rilievi, cinque dentro
+le correzioni del giro prima.** Vale la pena elencarli perché sono tutti della
+stessa famiglia — una regola nuova che non si guarda attorno:
+1. lo stato `aiutanti` spezzava la sequenza che fa scattare «Claude ha finito»
+   (`lavora → aiutanti → finito` non passa mai dal confronto), e la notifica
+   spariva proprio nei turni lunghi, che sono quelli per cui esiste;
+2. la potatura degli aiutanti girava solo all'arrivo di un evento, cioè mai in
+   una sessione ferma — il caso da cui era partito tutto. Ora li conta il
+   pannello (`contaAiutanti`) rileggendo le epoche a ogni giro;
+3. l'elenco si scriveva con un troncamento mentre il pannello lo legge **senza
+   lock**: una lettura caduta in quell'istante avrebbe fatto scattare un «ha
+   finito» falso. Temporaneo più rinomina, come la riga di stato;
+4. il taglio a cinque righe avveniva **dopo** l'annidamento, quindi le figlie
+   di una sessione in cima mangiavano i posti a sessioni più urgenti. Prima si
+   taglia, poi si annida;
+5. lo stato `aiutanti` non aveva la sua regola CSS e prendeva lo stesso verde
+   di `finito`, cioè proprio quello da cui deve distinguersi.
+   `verifica-estensione.sh` non può prenderlo: raccoglie i nomi di classe
+   scritti per esteso, non quelli composti;
+6. il pareggio fra due righe con lo stesso pid diceva «vince la prima», ma le
+   righe arrivano nell'ordine del disco: «la prima» voleva dire «a caso». Il
+   sistema riusa i pid e una riga sopravvive dodici ore, quindi il caso è
+   raggiungibile: ora vince la più recente.
+
+**La riserva si dichiara nella riga, non si deduce dal processo.** `bg-spare`
+si riconosce dalla riga di comando, che sparisce col processo mentre la riga
+resta visibile per ore: dopo un riavvio della shell una riserva morta
+ricompariva come riga doppia — il difetto che si stava correggendo.
+L'hook lo scrive una volta, all'avvio della sessione, nel settimo campo.
+`ricordaPadri()` copre il caso dentro la stessa sessione della shell, il campo
+copre il riavvio.
+
+**Limite noto, non corretto**: se gli aiutanti finiscono senza che nessun
+evento raggiunga la sessione padre, allo scadere dell'ora lo stato passa da
+`aiutanti` direttamente a `dorme` — `statoProprio` dà `finito` solo entro dieci
+minuti — e la notifica «Claude ha finito» non arriva. Notificare un'ora dopo
+sarebbe comunque rumore più che informazione, quindi si è scelto di lasciarlo
+così e scriverlo qui.
+
+**Uno schianto nella mascotte che non si riproduce.** Nella shell annidata è
+comparso, circa un giro su quattro, uno stack dentro `Fumetto.aggiorna`. La
+prima ipotesi — i riferimenti agli attori non azzerati in `_smonta()`, che
+`_pulsa()` si salvava per caso con un'uscita anticipata e `_mostraSegno()` no —
+era un difetto vero ed è stata corretta, ma non era quella: dieci esecuzioni
+col log tenuto non l'hanno ripreso. La chiamata è ora sotto `try`, con
+`logError`: **non è la spiegazione, è il contenimento**, e finché non si trova
+l'errore finisce nel journal invece di interrompere il giro di aggiornamento.
+Chi ci torna: serve il log della shell annidata nel momento in cui succede.
+
 **Il clic sulla mascotte guarda dove finisce il dito, non se si è mosso.**
 Bastavano sei pixel di tremolio durante la pressione perché il rilascio valesse
 come trascinamento: la mascotte si spostava di un'inezia e il terminale non si
@@ -532,8 +591,8 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              174 prove funzionali, sandbox con HOME dirottata
-    ./bin/prova-js.sh           82 prove sulle funzioni pure dei moduli JS
+    ./bin/prova.sh              177 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova-js.sh           98 prove sulle funzioni pure dei moduli JS
     ./bin/prova-shell.sh        carica l'estensione in una shell annidata (~1 min)
     ./bin/verifica-estensione.sh  controlli statici + le prove JS (gira dentro
                                   install e pack, che si fermano se qualcosa

@@ -230,7 +230,7 @@ const comandiFinti = {10: "claude", 20: "claude bg-spare --bg-spare /tmp/s.sock"
                       30: "claude", 40: "claude", 50: "claude --resume",
                       60: "claude", 70: "claude"};
 const par = sessioni => parentela(sessioni, antenatiFinti, pid => comandiFinti[pid] ?? "");
-const S = (id, pid) => ({id, pid});
+const S = (id, pid, epoca = 0) => ({id, pid, epoca});
 // La madre non ha padre; la figlia diretta lo ha; il nipote salta la riserva
 // in mezzo e si attacca alla nonna.
 const r1 = par([S("madre", 10), S("riserva", 20), S("nipote", 30)]);
@@ -240,6 +240,16 @@ const leggi = (r, id) => {
 };
 uguale("parentela: la madre non ha padre", leggi(r1, "madre"), "madre:padre=null,impianto=false");
 uguale("parentela: bg-spare e impianto", leggi(r1, "riserva"), "riserva:padre=madre,impianto=true");
+// La riga di comando sparisce col processo, la riga di stato no: una riserva
+// gia morta deve restare impianto anche quando /proc non dice piu niente,
+// se no dopo un riavvio della shell ricompare come riga doppia.
+const r1b = parentela([{id: "morta", pid: 999, epoca: 1, riserva: true}],
+                      antenatiFinti, () => "");
+uguale("parentela: la riserva dichiarata vale senza riga di comando",
+       r1b[0].impianto, "true");
+uguale("parentela: senza dichiarazione e senza processo non e impianto",
+       parentela([{id: "boh", pid: 999, epoca: 1}], antenatiFinti, () => "")[0].impianto,
+       "false");
 uguale("parentela: il nipote salta limpianto e si attacca alla nonna",
        leggi(r1, "nipote"), "nipote:padre=madre,impianto=false");
 // Il padre e il piu vicino, non il piu lontano.
@@ -255,6 +265,15 @@ uguale("parentela: senza pid non si indovina",
        leggi(r3, "senzapid"), "senzapid:padre=null,impianto=false");
 // Nessuno e padre di se stesso, nemmeno con la stessa riga due volte.
 const r4 = par([S("a", 70), S("b", 70)]);
+// Il sistema riusa i pid, e una riga sopravvive alla sua sessione fino a
+// dodici ore: se due righe portano lo stesso pid vince la piu recente, non
+// quella che il disco ha elencato per prima.
+const r5 = par([S("vecchia", 10, 100), S("nuova", 10, 900), S("figlia", 30, 500)]);
+uguale("parentela: con un pid riusato vince la sessione piu recente",
+       leggi(r5, "figlia"), "figlia:padre=nuova,impianto=false");
+const r6 = par([S("nuova", 10, 900), S("vecchia", 10, 100), S("figlia", 30, 500)]);
+uguale("parentela: e non dipende dall ordine di lettura",
+       leggi(r6, "figlia"), "figlia:padre=nuova,impianto=false");
 uguale("parentela: nessuno e padre di se stesso",
        leggi(r4, "a") + "|" + leggi(r4, "b"),
        "a:padre=null,impianto=false|b:padre=a,impianto=false");
@@ -400,6 +419,10 @@ uguale("watchface: il permesso si dice", testoStato({stato: "aspetta", evento: "
 uguale("watchface: gli altri stati hanno il loro testo", testoStato({stato: "lavora"}), "sta lavorando");
 uguale("watchface: legge il pid di claude, e la cartella resta la cartella",
        ((r) => r.pid + "|" + r.cwd)(leggiRigaWatchface("Stop\t1\t0\t0\t/x\t4321")), "4321|/x");
+uguale("watchface: la riserva si legge dal settimo campo",
+       leggiRigaWatchface("Stop\t1\t0\t0\t/x\t42\t1").riserva + "," +
+       leggiRigaWatchface("Stop\t1\t0\t0\t/x\t42\t").riserva + "," +
+       leggiRigaWatchface("Stop\t1\t0\t0\t/x\t42").riserva, "true,false,false");
 uguale("watchface: una riga senza pid (versione vecchia) vale zero",
        leggiRigaWatchface("Stop\t1\t0\t0\t/x").pid + "|" + leggiRigaWatchface("Stop\t1\t0\t0\t/x").cwd, "0|/x");
 uguale("watchface: il genitore si legge dopo la parentesi finale",
