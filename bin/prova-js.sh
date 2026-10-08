@@ -54,7 +54,8 @@ for (const nome of ["ORDINE_STATI", "TESTI", "MISURE_MASCOTTE",
 }
 for (const nome of ["leggiRigaWatchface", "statoSessione", "statoProprio", "approvazioneVista",
                      "piuUrgente", "iconaStato", "segnoStato", "testoStato", "misureMascotte",
-                     "genitoreDaStat", "catenaPid", "parentela", "ricordaPadri", "ordinaAlbero",
+                     "genitoreDaStat", "catenaPid", "cartellaDelDemone", "parentela",
+                     "ricordaPadri", "ordinaAlbero",
                      "contaAiutanti", "turnoOccupato",
                      "canaleAvviso"]) {
     const m = new RegExp("^function " + nome + "\\([^)]*\\) \\{[\\s\\S]*?^\\}", "m").exec(testoWf);
@@ -250,6 +251,23 @@ uguale("parentela: la riserva dichiarata vale senza riga di comando",
 uguale("parentela: senza dichiarazione e senza processo non e impianto",
        parentela([{id: "boh", pid: 999, epoca: 1}], antenatiFinti, () => "")[0].impianto,
        "false");
+// Una riserva CEDUTA a una sessione vera resta `claude bg-spare` nella riga di
+// comando: il 2026-10-08 il pid 3152601 ospitava una conversazione con
+// trentuno prompt scritti a mano ed era nascosto come tubatura. Quello che la
+// distingue da una riserva libera e la cartella di lavoro.
+const conCwd = (id, cwd, extra = {}) => ({id, pid: 20, epoca: 1, cwd, ...extra});
+const imp = s => parentela([s], antenatiFinti, pid => comandiFinti[pid] ?? "")[0].impianto;
+uguale("parentela: una riserva ceduta a una sessione vera non e impianto",
+       imp(conCwd("ceduta", "/home/x/progetto")), "false");
+uguale("parentela: una riserva libera sta nella cartella del demone",
+       imp(conCwd("libera", "/tmp/cc-daemon-1000/41f0c96d/spare")), "true");
+// Il processo vivo sa anche se la riserva e stata ceduta, quindi batte la
+// dichiarazione nella riga: se no una sessione ceduta resterebbe nascosta fino
+// al suo evento successivo, che in una sessione ferma non arriva mai.
+uguale("parentela: il processo vivo smentisce la dichiarazione",
+       imp(conCwd("dichiarata", "/home/x/progetto", {riserva: true})), "false");
+uguale("parentela: una riga senza cartella si tratta come riserva libera",
+       imp({id: "senzacwd", pid: 20, epoca: 1}), "true");
 uguale("parentela: il nipote salta limpianto e si attacca alla nonna",
        leggi(r1, "nipote"), "nipote:padre=madre,impianto=false");
 // Il padre e il piu vicino, non il piu lontano.

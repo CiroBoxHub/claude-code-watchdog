@@ -228,10 +228,37 @@ pid=${CLAUDE_PID:-}
 # pannello la nasconde. Lo dice la riga di comando del processo, che pero'
 # sparisce insieme al processo mentre la riga resta visibile per ore — e dopo
 # un riavvio della shell la riserva morta ricompariva come riga doppia, cioe'
-# il difetto che si stava correggendo. Si stabilisce una volta, all'avvio della
-# sessione, e da li' in poi sta scritta. Rilevato da /code-review il 2026-10-06.
-if [[ -z $riserva && $evento == SessionStart && -n $pid ]]; then
-    [[ $(tr -d '\0' < "/proc/$pid/cmdline" 2>/dev/null) == *bg-spare* ]] && riserva=1
+# il difetto che si stava correggendo. Si stabilisce all'avvio della sessione,
+# e da li' in poi sta scritta. Rilevato da /code-review il 2026-10-06.
+#
+# **La riga di comando da sola non basta.** Quando il demone cede una riserva a
+# una sessione vera il processo resta `claude bg-spare`: il 2026-10-08 il pid
+# 3152601 era ancora `claude bg-spare --bg-spare .../e5387224.claim.sock` e
+# ospitava la conversazione 71e45a0a di koratyn-tech-tool-to-odoo, trentuno
+# prompt scritti a mano. Il pannello la nascondeva come tubatura, e il
+# progetto sembrava non esistere — segnalato dall'uso il 2026-10-08.
+# Quello che cambia alla cessione e' la **cartella di lavoro**: una riserva
+# libera sta in quella del demone (/tmp/cc-daemon-<uid>/<id>/spare, verificato
+# sul pid 3529221), una ceduta sta nella cartella del progetto. L'ambiente non
+# distingue: CLAUDE_CODE_SESSION_KIND=bg in tutte e due, verificato.
+# Percio' riserva vuol dire bg-spare **e** cartella del demone, e la
+# dichiarazione si **ritira** al primo evento che mostra una cartella vera: se
+# il SessionStart arrivasse prima del cambio di cartella, la riga si corregge
+# da se'. Cartella sconosciuta e riga di comando bg-spare: resta riserva, come
+# prima. Processo morto: /proc non dice niente e la riga non si tocca, che e'
+# il caso per cui il campo esiste.
+# Il prezzo sono due fork, e si pagano solo all'avvio di una sessione o finche'
+# una riserva resta dichiarata: una sessione normale non li paga mai.
+if [[ -n $pid && ( $evento == SessionStart || $riserva == 1 ) ]]; then
+    _cmd=$(tr -d '\0' < "/proc/$pid/cmdline" 2>/dev/null)
+    if [[ -n $_cmd ]]; then
+        _cwdp=$(readlink -- "/proc/$pid/cwd" 2>/dev/null)
+        if [[ $_cmd == *bg-spare* && ( -z $_cwdp || $_cwdp == */cc-daemon-* ) ]]; then
+            riserva=1
+        else
+            riserva=
+        fi
+    fi
 fi
 printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$nuovo" "$ora" \
     "$fallimenti" "$aiutanti" "$cwd" "$pid" "$riserva" > "$f.$$" && mv -f -- "$f.$$" "$f"

@@ -930,6 +930,45 @@ hook PostToolUse s8
 uguale "watchface-hook: il campo riserva sopravvive agli eventi" "$(campo s8 7)" "1"
 hook Stop s8; hook PreToolUse s8
 uguale "watchface-hook: e non si perde nemmeno dopo uno Stop" "$(campo s8 7)" "1"
+# Il riconoscimento vero, con processi veri invece di un /proc finto: la riga
+# di comando si fa con `exec -a`, la cartella con un `cd`. Serve perche' la
+# riga di comando da sola non distingue una riserva libera da una **ceduta** a
+# una sessione di una persona — l'8 ott 2026 il pid 3152601 era ancora
+# `claude bg-spare` e ospitava una conversazione vera, e il pannello la
+# nascondeva come tubatura.
+_spare_dir="$SANDBOX/cc-daemon-1000/41f0c96d/spare"
+mkdir -p "$_spare_dir" "$SANDBOX/lavoro-vero"
+( cd "$_spare_dir" && exec -a 'claude bg-spare --bg-spare x.claim.sock' sleep 30 ) &
+_pid_libera=$!
+( cd "$SANDBOX/lavoro-vero" && exec -a 'claude bg-spare --bg-spare x.claim.sock' sleep 30 ) &
+_pid_ceduta=$!
+# Il processo deve esistere in /proc prima che l'hook lo guardi.
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  [[ -r /proc/$_pid_libera/cmdline && -r /proc/$_pid_ceduta/cmdline ]] && break
+  sleep 0.05
+done
+CLAUDE_PID=$_pid_libera hook SessionStart s9
+uguale "watchface-hook: una riserva nella cartella del demone si dichiara" "$(campo s9 7)" "1"
+CLAUDE_PID=$_pid_ceduta hook SessionStart s10
+uguale "watchface-hook: una riserva ceduta a una sessione vera non si dichiara" \
+  "$(campo s10 7)" ""
+# E se il SessionStart arrivasse prima del cambio di cartella, la riga si
+# corregge al primo evento che vede la cartella vera.
+printf 'PreToolUse\t%s\t0\t0\t/lavoro/prog\t%s\t1\n' "$(date +%s)" "$_pid_ceduta" > "$WF/s11"
+CLAUDE_PID=$_pid_ceduta hook PostToolUse s11
+uguale "watchface-hook: la dichiarazione si ritira quando la riserva risulta ceduta" \
+  "$(campo s11 7)" ""
+# Una sessione normale, con un processo che non e' una riserva, non si dichiara
+# e non si corregge.
+CLAUDE_PID=$$ hook SessionStart s12
+uguale "watchface-hook: un processo che non e' una riserva non si dichiara" "$(campo s12 7)" ""
+kill "$_pid_libera" "$_pid_ceduta" 2>/dev/null
+wait "$_pid_libera" "$_pid_ceduta" 2>/dev/null
+# Processo morto: /proc non dice piu' niente e la dichiarazione resta, che e'
+# il caso per cui il settimo campo esiste.
+printf 'PreToolUse\t%s\t0\t0\t/lavoro/prog\t%s\t1\n' "$(date +%s)" "$_pid_libera" > "$WF/s13"
+CLAUDE_PID=$_pid_libera hook PostToolUse s13
+uguale "watchface-hook: con il processo morto la dichiarazione resta" "$(campo s13 7)" "1"
 
 hook Stop s1; hook Notification s1
 uguale "watchface-hook: Notification dopo Stop non cambia stato" "$(campo s1 1)" "Stop"

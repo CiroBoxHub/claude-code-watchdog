@@ -128,13 +128,31 @@ function turnoOccupato(stato) {
    di comando. Il padre è **il primo antenato che è una sessione vera**: così
    un nipote si attacca al nonno quando in mezzo c'è solo impianto, senza
    bisogno di una regola a parte per quel caso. */
+/* Una riserva **libera**: `claude bg-spare` che sta ancora nella cartella del
+   demone. Quando il demone la cede a una sessione vera la riga di comando non
+   cambia — il 2026-10-08 il pid 3152601 era ancora `claude bg-spare` e
+   ospitava una conversazione con trentuno prompt scritti a mano — ma la
+   cartella di lavoro sì: `/tmp/cc-daemon-<uid>/<id>/spare` quando è libera,
+   quella del progetto quando è ceduta. Senza questa distinzione una sessione
+   in background spariva dal pannello come se fosse tubatura, e il progetto
+   sembrava non esistere: segnalato dall'uso il 2026-10-08.
+   Cartella sconosciuta — le righe senza quel campo — si tratta come libera,
+   che era il comportamento di prima. */
+function cartellaDelDemone(cwd) {
+    return !cwd || cwd.includes('/cc-daemon-');
+}
+
 function parentela(sessioni, antenati, comando) {
     const impianto = new Map();
     const diPid = new Map();
     for (const s of sessioni) {
-        // Prima quello che c'è scritto nella riga, poi la riga di comando:
-        // la seconda vale solo finché il processo è vivo.
-        impianto.set(s.id, s.riserva === true || /\bbg-spare\b/.test(comando(s.pid) ?? ''));
+        // Finché il processo è vivo decide lui, perché sa anche se la riserva
+        // è stata ceduta; quando non c'è più vale quello che l'hook ha
+        // scritto nella riga, che è il motivo per cui quel campo esiste.
+        const vivo = comando(s.pid) ?? '';
+        impianto.set(s.id, vivo
+            ? /\bbg-spare\b/.test(vivo) && cartellaDelDemone(s.cwd)
+            : s.riserva === true);
         // Due sessioni con lo stesso pid non dovrebbero esistere, ma il
         // sistema riusa i pid e una riga sopravvive alla sua sessione fino a
         // VISIBILE_S: in dodici ore il pid di una finita può toccare a una

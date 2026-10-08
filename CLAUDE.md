@@ -399,6 +399,36 @@ L'hook lo scrive una volta, all'avvio della sessione, nel settimo campo.
 `ricordaPadri()` copre il caso dentro la stessa sessione della shell, il campo
 copre il riavvio.
 
+**Una riserva ceduta e' una sessione vera, e la riga di comando non lo dice.**
+Il 2026-10-08 il progetto `koratyn-tech-tool-to-odoo` non compariva nel
+pannello mentre era aperto — segnalato dall'uso. Il pid 3152601 era ancora
+`claude bg-spare --bg-spare .../e5387224.claim.sock` e ospitava la
+conversazione `71e45a0a`, trentuno prompt scritti a mano: quando il demone
+cede una riserva a una sessione il processo resta quello, con la sua riga di
+comando, e noi la nascondevamo come tubatura. **L'ambiente non distingue**:
+`CLAUDE_CODE_SESSION_KIND=bg` e `CLAUDE_BG_BACKEND=daemon` erano identici
+nella riserva libera (pid 3529221) e in quella ceduta. **Gli antenati nemmeno**:
+entrambe risalgono a `bg-pty-host` e poi a `systemd --user`, non al terminale,
+quindi `parentela()` non poteva cavarsela con la catena dei pid.
+Quello che cambia e' la **cartella di lavoro**: `/tmp/cc-daemon-<uid>/<id>/spare`
+finche' la riserva e' libera, la cartella del progetto appena e' ceduta.
+Percio' riserva vuol dire `bg-spare` **e** `cartellaDelDemone(cwd)`, nell'hook
+e nel pannello. Due conseguenze volute:
+- **finche' il processo e' vivo decide lui**, perche' sa anche se la riserva e'
+  stata ceduta; la dichiarazione nel settimo campo vale quando il processo non
+  c'e' piu', che e' il motivo per cui quel campo esiste. Senza questo una
+  sessione ferma — nessun evento in arrivo — sarebbe rimasta nascosta per ore
+  anche dopo la correzione;
+- **l'hook ritira la dichiarazione** al primo evento che mostra una cartella
+  vera, nel caso il `SessionStart` arrivi prima del cambio di cartella. Costa
+  due fork, pagati solo all'avvio di una sessione o finche' una riserva resta
+  dichiarata.
+Provato con processi veri (`exec -a` per la riga di comando, un `cd` per la
+cartella) e non con un `/proc` finto: cinque prove in `prova.sh`, quattro in
+`prova-js.sh`. E verificato sui dati veri di quel momento — le stesse righe di
+stato e lo stesso `/proc` davano `impianto=true` col codice di prima e
+`impianto=false` con quello nuovo.
+
 **Limite noto, non corretto**: se gli aiutanti finiscono senza che nessun
 evento raggiunga la sessione padre, allo scadere dell'ora lo stato passa da
 `aiutanti` direttamente a `dorme` — `statoProprio` dà `finito` solo entro dieci
