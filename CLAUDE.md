@@ -50,6 +50,7 @@ il dry-run, mostra l'elenco, chiedi. Anche quando la risposta sembra ovvia.
     bin/pack-extension.sh   crea lo zip distribuibile in dist/
     bin/lib.sh              funzioni condivise
     config/watchdog.conf    soglie e retention: si modifica qui, non negli script
+    mods/watchdog/          mod di Claude Code: quota e aiutanti dal motore
     gnome-extension/        sorgente dell'estensione di pannello
     reports/                report datati, per confrontare due momenti
 
@@ -429,6 +430,97 @@ cartella) e non con un `/proc` finto: cinque prove in `prova.sh`, quattro in
 stato e lo stesso `/proc` davano `impianto=true` col codice di prima e
 `impianto=false` con quello nuovo.
 
+**Un mod di Claude Code, perche' due cose da fuori non si vedono.**
+`mods/watchdog/` e' un plugin di hook-funzione che gira **dentro** il processo
+di Claude Code. Non sostituisce l'hook: scrive **gli stessi file** (`usage.json`
+e `<sessione>.aiutanti`), quindi il pannello non cambia di una riga e senza il
+mod si torna esattamente a prima. Si attiva scrivendo la sua cartella in
+`env.CLAUDE_CODE_PLUGIN_DIRS` di `~/.claude/settings.json` — lo stesso file
+degli hook, e lo stesso pulsante: per chi installa e' una cosa sola. Misurato
+prima di scegliere la forma: funzionano sia `--plugin-dir` sulla cartella del
+plugin sia sulla cartella che lo contiene, e `CLAUDE_CODE_PLUGIN_DIRS` e'
+documentato proprio per le sessioni dove non si puo' passare un flag, cioe'
+quelle che avvia l'app desktop. `mod-attiva` e `mod-disattiva` ci sono perche'
+gli hook sono la base e il mod il miglioramento: se un giorno fosse lui a dare
+problemi si torna alla base senza restare al buio. Vale per le sessioni
+avviate **dopo**, come gli hook.
+
+**La quota non si sa all'avvio della sessione.** Misurato: in un `claude -p`
+`$.session.usage().rateLimits` torna `[]` a `session.start`, e si popola solo
+con la prima risposta del modello — `session.measure` scatta con
+`changed=["context","rateLimits","cost"]` e i limiti dentro. Quindi il mod non
+rende inutile `collect-usage.py`: lo rende **l'eccezione**. Una sessione appena
+aperta che non ha ancora parlato non ha quota da pubblicare, il file invecchia,
+e `_tictac` fa ripartire la CLI da se' — la condizione c'era gia'
+(`eta > secondi`), quindi le due strade si compongono **senza toccare
+l'estensione**. Con una sessione che lavora, quei 2,57 s e 323 MB ogni mezz'ora
+non si pagano piu'. I numeri sono stati verificati contro la CLI nello stesso
+minuto: settimanale 39 in entrambi, azzeramenti uguali al secondo
+(17:29:59.95 contro 17:30:00).
+**Il vocabolario non coincide**: il motore dice `five_hour` e `seven_day`, la
+trascrizione di `/usage` diceva `session` e `weekly_all`. La traduzione sta in
+una funzione sola (`voci()` in `mods/watchdog/hooks/quota.ts`) perche' e'
+l'unico posto dove avviene. `spend_limit` si scarta: e' il tetto di spesa di un
+gateway, non una finestra di quota.
+**Prezzo dichiarato**: il motore espone solo quelle due finestre, quindi un
+`weekly_opus` — che la CLI vedeva — il mod non lo scrive. Il campo
+`fonte: "mod"` nel file dice chi l'ha scritto, se no un limite mancante
+sembrerebbe sparito senza motivo. Su questo account non c'e'; il giorno che ci
+fosse, si rimette la CLI a cadenza lunga.
+
+**Gli aiutanti: il mod corregge l'elenco, non lo sostituisce.** L'hook tiene
+`id <TAB> epoca` e li fa scadere a un'ora perche' lo `SubagentStop` di un
+aiutante in background finisce nel file del processo figlio. Il mod sta nel
+ciclo del padre e puo' chiedere `$.agent.list()`, che da' lo stato di ogni
+agente:
+- un id che il motore dice `completed`/`failed`/`killed` si toglie **subito**,
+  non dopo un'ora: e' il difetto del 2026-10-06;
+- un id vivo tiene l'epoca fresca, quindi **il prezzo dichiarato della
+  scadenza sparisce**: un aiutante che lavora davvero due ore resta contato;
+- un id vivo che manca dall'elenco si aggiunge;
+- un id che il motore **non nomina non si tocca**: resta dell'hook, con la sua
+  scadenza. Correggere non vuol dire sostituire, e questa e' la riga che tiene
+  il mod e l'hook dalla stessa parte invece di farli divergere.
+`idle` non conta: e' un compagno di squadra fra due turni, e l'hook non lo
+contava nemmeno (un aiutante che aspetta manda `SubagentStop`).
+**Due scrittori sullo stesso file, e il mod non prende il lock dell'hook.**
+Scrivono entrambi su temporaneo e rinomina, quindi nessun lettore vede un file
+a meta' — era il difetto da cui veniva il «Claude ha finito» falso — e un
+aggiornamento perso torna al giro dopo, dieci secondi. Prendere il lock
+vorrebbe dire un fork per giro, che e' il costo che si sta togliendo.
+
+**Tre cose imparate scrivendo un mod, che non erano ovvie:**
+1. **il motore rifiuta `$` passato a una funzione dichiarata dentro
+   `register`**: l'aiutante deve stare in cima al file. Lo dice
+   `claude plugin validate` con il numero di riga, e non e' un dettaglio di
+   stile — senza, il modulo non carica;
+2. `agent.spawn` e' un hook che **puo' negare**: un inciampo nostro
+   impedirebbe l'avvio di un aiutante. Un osservatore la' dentro vuole
+   `.catch(($, e, next) => next(e))`, se no un difetto in una riga di
+   contabilita' blocca il lavoro;
+3. **`$.fs.write` non sa dare un modo ai file.** La cartella dati nasce 700 e
+   i file 600 perche' contengono i nomi dei progetti, cioe' dei clienti
+   (regola 5). Il mod quindi **non crea nessuna cartella**: se non c'e'
+   ancora, sta zitto. Le creano il pannello e l'hook. E scrive con un
+   `sh -c` che fa `chmod` e `mv`, un fork per cambiamento vero — niente
+   cambia, niente si scrive.
+
+**La regola delle mutazioni vale anche qui.** `claude plugin test` esegue le
+`*.test.ts` contro il motore vero: quattordici mutazioni, ognuna fa rossa la
+prova giusta. Una prova passava col difetto rimesso — una voce senza `id` con
+stato `completed` non toglie niente comunque, serviva uno stato **vivo** per
+vedere la riga `undefined` comparire nel file. E due prove di `prova.sh`
+passavano su un **traceback** invece che su un rifiuto: «il file e' rimasto
+com'era» lo lascia anche un programma che muore prima di scrivere, quindi ora
+si controlla il messaggio. E' la terza volta che questo tranello costa una
+prova inutile in questo progetto.
+
+**Non c'e' prova automatica del cancello.** Il mod si ferma sulle sessioni non
+interattive (`isInteractive`), la stessa regola dell'hook per `sdk-*`, e un
+`claude -p` e' per definizione non interattivo: il percorso completo si e'
+misurato togliendo quel cancello in una copia nella sandbox, e il cancello
+stesso resta verificato solo a occhio. Stessa famiglia di `_leggiQuota`.
+
 **Limite noto, non corretto**: se gli aiutanti finiscono senza che nessun
 evento raggiunga la sessione padre, allo scadere dell'ora lo stato passa da
 `aiutanti` direttamente a `dorme` — `statoProprio` dà `finito` solo entro dieci
@@ -539,6 +631,7 @@ percorso della quota non parte mai, nemmeno togliendo il dato o invecchiandolo
 
     raccolta metriche    0,10 s ogni   60 s   0,17% di una CPU  (mediana di 9)
     lettura quota        2,57 s ogni 1800 s   0,14%  (picco 323 MB)
+                         — con il mod attivo e una sessione aperta: zero
                                               ----
                                               0,31%
 
@@ -621,8 +714,10 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              177 prove funzionali, sandbox con HOME dirottata
-    ./bin/prova-js.sh           98 prove sulle funzioni pure dei moduli JS
+    ./bin/prova.sh              195 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova-js.sh           102 prove sulle funzioni pure dei moduli JS
+    claude plugin test mods/watchdog  le funzioni pure del mod (gira dentro
+                                      verifica-estensione.sh)
     ./bin/prova-shell.sh        carica l'estensione in una shell annidata (~1 min)
     ./bin/verifica-estensione.sh  controlli statici + le prove JS (gira dentro
                                   install e pack, che si fermano se qualcosa

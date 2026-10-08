@@ -33,6 +33,13 @@ for s in claude-sessions.py collect-metrics.py collect-usage.py session-purge.py
   chmod +x "$DST/$s"
 done
 
+# Il mod di Claude Code viaggia con l'estensione come gli script: e'
+# watchface-hooks.py a scriverne il percorso in settings.json, e quello
+# dev'essere un percorso che resta dov'e' anche se il progetto si sposta.
+if [[ -d "$WD_ROOT/mods" ]]; then
+  cp -a "$WD_ROOT/mods" "$DST/mods"
+fi
+
 # Gli schemi GSettings vanno compilati nella destinazione: senza
 # gschemas.compiled l'estensione non parte proprio.
 # La configurazione: un collegamento, non una copia, cosi' una soglia cambiata

@@ -417,6 +417,19 @@ voce:
   la finestra muore prima del processo.
 - **Si controlla con `bin/fotografa-preferenze.sh`**, tutte le pagine in chiaro e
   scuro: nella shell annidata il clic non arriva alla finestra.
+- **Il mod sta nel gruppo degli hook, non in uno suo** (2026-10-08): per chi
+  installa è una cosa sola, e una pagina — o un gruppo — con una riga sola era
+  il rumore che il ridisegno aveva tolto. Il suo pulsante «Attiva» esiste
+  **anche a hook già installati**: quella riga lì è l'unica strada per chi
+  aggiorna, perché la riga degli hook il pulsante non lo mostra più quando sono
+  tutti a posto. «Disattiva» chiama `mod-disattiva` e non `rimuovi`: gli hook
+  sono la base, il mod il miglioramento, e spegnere il secondo non deve
+  lasciare al buio.
+- **La guida va aggiornata quando cambia il comportamento, non solo il codice.**
+  Il 2026-10-08 due testi parlavano ancora del disco che «respira piano»,
+  tolto il 2026-10-06 insieme a `_pulsa()`: uno nella guida delle preferenze e
+  uno nel README. Nessun controllo statico vede un testo che mente, e
+  `fotografa-preferenze.sh` fotografa quello che c'è scritto, non se è vero.
 
 ## Il terminale di «Riprendi»
 

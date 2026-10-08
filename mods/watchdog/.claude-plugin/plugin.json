@@ -1,0 +1,6 @@
+{
+  "name": "watchdog",
+  "version": "1.0.0",
+  "description": "Quota e aiutanti di Watchface, letti da dentro Claude Code invece che indovinati da fuori",
+  "author": { "name": "CiroBoxHub" }
+}

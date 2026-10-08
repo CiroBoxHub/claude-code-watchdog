@@ -365,8 +365,24 @@ export default class WatchdogPreferences extends ExtensionPreferences {
              'La nuvoletta elenca gli avvisi di tutte le sessioni, col numero sul ' +
              'disco della faccina; quello evidenziato dà il colore a tutto, e un ' +
              'clic su un’altra riga lo cambia. Un clic sulla faccina porta al ' +
-             'terminale di quella evidenziata. Mentre Claude ti aspetta, si ' +
-             'inceppa o lavora, il disco respira piano.');
+             'terminale di quella evidenziata.');
+        voce(wf, 'I segni che lampeggiano',
+             'Niente lampeggia per abitudine: una cosa che si muove sempre ' +
+             'diventa fondale. Compare un segno solo quando serve, ed è lui a ' +
+             'lampeggiare: due punti interrogativi sul disco quando Claude ' +
+             'aspetta te, due esclamativi sul limone quando si è inceppato, una ' +
+             'lampadina sopra la testa quando c’è lavoro in corso, suo o dei suoi ' +
+             'aiutanti. Con le animazioni di GNOME spente, niente lampeggia.');
+        voce(wf, 'Il mod',
+             'Il pulsante «Installa» attiva anche un mod: un pezzo di programma ' +
+             'che gira dentro Claude Code e gli chiede le due cose che da fuori si ' +
+             'possono solo dedurre. La quota, che Claude Code conosce già: senza ' +
+             'il mod va chiesta accendendo una copia della sua riga di comando ' +
+             'ogni mezz’ora. E quali aiutanti stanno ancora lavorando: senza il ' +
+             'mod chi finisce in background resta contato fino a un’ora, perché il ' +
+             'suo segnale di fine arriva a un altro processo. Scrive gli stessi ' +
+             'file del resto di Watchface, quindi si può spegnere da solo e tutto ' +
+             'torna come prima. Vale per le sessioni di Claude aperte da lì in poi.');
         voce(wf, 'Quando se ne va',
              'Ogni riga si toglie da sola quando la sua sessione riparte. «Ha ' +
              'finito» dopo i secondi che scegli (0: resta finché non la chiudi); ' +
@@ -770,6 +786,44 @@ export default class WatchdogPreferences extends ExtensionPreferences {
                     'Rimuovi', () => this._azioneHook(['rimuovi']))));
             }
             aggiungi(this._gruppoHook, riga);
+
+            /* Il mod: gli hook dicono cosa sta facendo Claude, il mod aggiunge
+               le due cose che da fuori si indovinano — la quota (che il motore
+               ha in casa, senza accendere una CLI ogni mezz'ora) e quali
+               aiutanti sono ancora al lavoro. Sta in questo gruppo e non in
+               uno suo perché per chi installa è una cosa sola; il pulsante
+               esiste anche a hook già installati, se no chi aggiorna non
+               avrebbe modo di attivarlo. */
+            const rigaMod = new Adw.ActionRow({
+                title: !st.modPresente ? 'Mod non disponibile'
+                    : st.modInstallato ? 'Mod attivo' : 'Mod non attivo',
+                subtitle: !st.modPresente
+                    ? 'Non è nel pacchetto di questa estensione'
+                    : st.modInstallato
+                        ? 'Quota e aiutanti letti da dentro Claude Code · vale ' +
+                          'per le sessioni aperte da qui in poi'
+                        : 'Senza, la quota costa una CLI ogni mezz\'ora e gli ' +
+                          'aiutanti si contano a scadenza',
+            });
+            rigaMod.set_subtitle_lines(2);
+            rigaMod.add_prefix(!st.modPresente
+                ? this._tessera('system-run-symbolic', 'grigio')
+                : st.modInstallato
+                    ? this._tessera('object-select-symbolic', 'verde')
+                    : this._tessera('dialog-information-symbolic', 'ambra'));
+            if (st.modPresente && !st.modInstallato) {
+                rigaMod.add_suffix(this._bottone('Attiva', 'suggested-action',
+                    () => this._azioneHook(['mod-attiva'])));
+            }
+            if (st.modPresente && st.modInstallato) {
+                rigaMod.add_suffix(this._bottone('Disattiva', null, () => this._conferma(
+                    'Disattivare il mod?',
+                    'Gli hook restano: Watchface continua a funzionare come ' +
+                    'prima del mod. Torna a leggere la quota con una CLI ogni ' +
+                    'mezz\'ora e a far scadere gli aiutanti dopo un\'ora.',
+                    'Disattiva', () => this._azioneHook(['mod-disattiva']))));
+            }
+            aggiungi(this._gruppoHook, rigaMod);
 
             this._gruppoAltri.visible = st.altri.length > 0;
             for (const a of st.altri) {

@@ -4,8 +4,10 @@
 """Mette e toglie gli hook di Watchface in ~/.claude/settings.json.
 
     watchface-hooks.py stato [--json]       cosa c'e' adesso
-    watchface-hooks.py installa             aggiunge i nostri hook
-    watchface-hooks.py rimuovi              toglie i nostri hook
+    watchface-hooks.py installa             aggiunge i nostri hook e il mod
+    watchface-hooks.py rimuovi              toglie i nostri hook e il mod
+    watchface-hooks.py mod-attiva           solo il mod
+    watchface-hooks.py mod-disattiva        solo il mod
     watchface-hooks.py rimuovi-altro NOME   toglie gli hook del programma NOME
     watchface-hooks.py ripristina FILE      rimette un backup
 
@@ -15,6 +17,19 @@ settings.json contiene anche le impostazioni dell'utente, quindi:
 - un file che non e' JSON valido non si riscrive mai: si esce con errore.
 Le preferenze dell'estensione chiamano questo script; la logica sta qui, in
 Python, perche' qui si puo' provare.
+
+**Il mod va insieme agli hook, non accanto.** Dalla versione 2.1.29x Claude
+Code carica dei «mod»: plugin di hook-funzione che girano dentro il suo
+processo e sanno due cose che da fuori si indovinano — la quota (che il motore
+ha in casa) e quali aiutanti sono ancora al lavoro. Si attivano scrivendo la
+loro cartella in `env.CLAUDE_CODE_PLUGIN_DIRS`, lo stesso file degli hook, ed
+e' documentato proprio per le sessioni dove non si puo' passare un flag: quelle
+che avvia l'app desktop. Un pulsante solo, perche' per chi installa e' una cosa
+sola; `installa` e `rimuovi` fanno entrambi.
+`mod-attiva` e `mod-disattiva` ci sono per spegnere il mod **senza** togliere
+gli hook: gli hook sono la base, il mod il miglioramento, e se un giorno fosse
+lui a dare problemi si vuole poter tornare alla base senza restare al buio.
+Vale per le sessioni avviate **dopo**, come gli hook.
 """
 import json, os, re, sys
 from datetime import datetime
@@ -27,6 +42,14 @@ BACKUP = (Path(os.environ.get("XDG_DATA_HOME") or (HOME / ".local/share"))
 BACKUP_DA_TENERE = 10
 HOOK = Path(__file__).resolve().parent / "watchface-hook"
 MARCA = "/watchface-hook'"
+
+# Il mod sta in `mods/watchdog`: accanto allo script nella copia installata
+# dentro l'estensione, un piano sopra quando si lavora dal progetto (bin/).
+CHIAVE_MOD = "CLAUDE_CODE_PLUGIN_DIRS"
+_QUI = Path(__file__).resolve().parent
+MOD = next((p for p in (_QUI / "mods" / "watchdog",
+                        _QUI.parent / "mods" / "watchdog") if p.is_dir()),
+           _QUI / "mods" / "watchdog")
 
 # Gli eventi che servono a dire cosa sta facendo Claude: gli stessi che
 # coucou ascoltava, perche' sono quelli che cambiano lo stato visibile, piu'
@@ -54,6 +77,12 @@ def leggi() -> dict:
     # indovinare cosa intendeva chi l'ha scritta.
     if "hooks" in d and not isinstance(d["hooks"], dict):
         raise Illeggibile(f"in {SETTINGS} «hooks» non e' un oggetto: non lo modifico")
+    if "env" in d and not isinstance(d["env"], dict):
+        raise Illeggibile(f"in {SETTINGS} «env» non e' un oggetto: non lo modifico")
+    env = d.get("env") or {}
+    if CHIAVE_MOD in env and not isinstance(env[CHIAVE_MOD], str):
+        raise Illeggibile(
+            f"in {SETTINGS} «env.{CHIAVE_MOD}» non e' una stringa: non lo modifico")
     return d
 
 
@@ -67,6 +96,60 @@ def comando(evento: str) -> str:
 
 def nostro(h: dict) -> bool:
     return MARCA in str(h.get("command", ""))
+
+
+def voci_mod(valore: str) -> list[str]:
+    """Le cartelle di CLAUDE_CODE_PLUGIN_DIRS, separate come fa il sistema.
+
+    Le vuote si buttano: un separatore di troppo e' un errore di battitura,
+    non una cartella.
+    """
+    return [v for v in (valore or "").split(os.pathsep) if v]
+
+
+def mod_installa(d: dict, percorso: str) -> bool:
+    """Aggiunge la nostra cartella in coda. Torna False se c'era gia'.
+
+    In coda e non in testa: chi ha messo i suoi plugin prima di noi li ha
+    messi in quell'ordine, e non siamo noi a cambiarlo.
+    """
+    env = d.setdefault("env", {})
+    voci = voci_mod(env.get(CHIAVE_MOD, ""))
+    if percorso in voci:
+        return False
+    voci.append(percorso)
+    env[CHIAVE_MOD] = os.pathsep.join(voci)
+    return True
+
+
+def mod_rimuovi(d: dict, percorso: str) -> bool:
+    """Toglie solo la nostra cartella. Torna False se non c'era.
+
+    La chiave sparisce se restava solo la nostra, e `env` se non resta niente:
+    una chiave vuota e' una riga che qualcuno un giorno prendera' per una
+    scelta.
+    """
+    env = d.get("env")
+    if not isinstance(env, dict) or CHIAVE_MOD not in env:
+        return False
+    voci = voci_mod(env.get(CHIAVE_MOD, ""))
+    restano = [v for v in voci if v != percorso]
+    if len(restano) == len(voci):
+        return False
+    if restano:
+        env[CHIAVE_MOD] = os.pathsep.join(restano)
+    else:
+        del env[CHIAVE_MOD]
+    if not env:
+        del d["env"]
+    return True
+
+
+def mod_installato(d: dict, percorso: str) -> bool:
+    env = d.get("env")
+    if not isinstance(env, dict):
+        return False
+    return percorso in voci_mod(env.get(CHIAVE_MOD, ""))
 
 
 # Interpreti e lanciatori: il programma vero e' lo script che segue. Senza
@@ -193,12 +276,38 @@ def stato() -> dict:
                                            "percorso": chi, "comando": cmd,
                                            "eventi": []})
                 a["eventi"].append(ev)
+    env = d.get("env") if isinstance(d.get("env"), dict) else {}
+    cartelle = voci_mod(env.get(CHIAVE_MOD, ""))
     return {"settings": str(SETTINGS), "hook": str(HOOK),
             "hookPresente": HOOK.is_file(),
             "installati": sorted(set(installati)),
             "mancanti": [e for e in EVENTI if e not in installati],
             "altri": list(altri.values()),
-            "backup": [str(p) for p in elenco_backup()]}
+            "backup": [str(p) for p in elenco_backup()],
+            "mod": str(MOD),
+            "modPresente": (MOD / ".claude-plugin" / "plugin.json").is_file(),
+            "modInstallato": str(MOD) in cartelle,
+            # Le cartelle di plugin degli altri: si mostrano, non si toccano.
+            "modAltri": [c for c in cartelle if c != str(MOD)]}
+
+
+def messaggio_mod(d: dict, metti: bool) -> str:
+    """Mette o toglie il mod in `d` e dice cosa e' successo, in una riga.
+
+    Il separatore dentro il percorso lo renderebbe due cartelle: non si
+    scrive, e lo si dice. Capita con una cartella che contiene «:», che su
+    Linux e' lecita in un nome di file.
+    """
+    percorso = str(MOD)
+    if metti:
+        if os.pathsep in percorso:
+            return (f"mod non attivato: «{os.pathsep}» nel percorso {percorso}")
+        if not (MOD / ".claude-plugin" / "plugin.json").is_file():
+            return f"mod non trovato in {MOD}: non attivato"
+        return ("mod attivato (vale per le sessioni nuove)"
+                if mod_installa(d, percorso) else "mod gia' attivo")
+    return ("mod disattivato" if mod_rimuovi(d, percorso)
+            else "mod non era attivo")
 
 
 def main() -> int:
@@ -240,8 +349,13 @@ def main() -> int:
                     hooks[ev].append(
                         {"hooks": [{"type": "command", "command": comando(ev),
                                     "timeout": 5}]})
+            # Il mod va con gli hook: per chi installa e' una cosa sola.
+            # Se manca o non si puo' scrivere il percorso, gli hook si
+            # installano comunque — meglio meta' che niente.
+            esito_mod = messaggio_mod(d, metti=True)
             scrivi(d)
             print(f"installati {len(EVENTI) - len(saltati)} hook")
+            print(esito_mod)
             if saltati:
                 print("saltati, forma che non conosco: " + ", ".join(saltati),
                       file=sys.stderr)
@@ -251,8 +365,18 @@ def main() -> int:
             d = leggi()
             backup()
             n = togli(d, nostro)
+            esito_mod = messaggio_mod(d, metti=False)
             scrivi(d)
             print(f"tolti {n} hook")
+            print(esito_mod)
+            return 0
+
+        if azione in ("mod-attiva", "mod-disattiva"):
+            d = leggi()
+            backup()
+            esito = messaggio_mod(d, metti=azione == "mod-attiva")
+            scrivi(d)
+            print(esito)
             return 0
 
         if azione == "rimuovi-altro":

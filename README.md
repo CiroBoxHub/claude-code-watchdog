@@ -104,6 +104,7 @@ era non lasciare un ripensamento possibile su dati che non si ricostruiscono.
 | Script Python | **Python 3.10** o superiore |
 | Cestino | `gio` (arriva con GLib, c'è già su ogni desktop GNOME) |
 | Lettura della quota | CLI `claude` nel `PATH` |
+| Mod di Watchface (facoltativo) | Claude Code che carica i plugin di hook-funzione; senza, Watchface funziona come prima |
 | `scan-system.sh`, target di sistema di `clean.sh` | Fedora (`dnf5`, `rpm`) e systemd |
 
 L'estensione non dipende da nessuna di queste ultime: gli script che si porta
@@ -132,6 +133,12 @@ gli hook all'avvio: le sessioni già aperte non li vedono, quelle nuove sì.
 Dopo un aggiornamento che aggiunge un evento (la 4 ha aggiunto `PreCompact`,
 per il /compact) la pagina dice «Installati in parte»: basta **Reinstalla**.
 
+Lo stesso pulsante attiva anche il **mod**, se la tua versione di Claude Code
+lo regge: un plugin che gira dentro Claude Code e gli chiede direttamente la
+quota e quali aiutanti sono ancora al lavoro, invece di dedurle da fuori.
+La pagina lo mostra come riga a sé e si può spegnere da solo, lasciando gli
+hook al loro posto. Anche questo vale per le sessioni aperte da lì in poi.
+
 Gli script da terminale non vanno installati: si usano dove sono.
 
 ### Su un altro PC
@@ -152,6 +159,9 @@ Prima gli hook, poi l'estensione: in quest'ordine `settings.json` non resta con
 hook che puntano a un file sparito.
 
     python3 ~/.local/share/gnome-shell/extensions/claude-code-watchdog@cirobox.local/watchface-hooks.py rimuovi
+
+Togliere gli hook toglie anche il mod: la riga che lo attivava in
+`settings.json` se ne va con loro, e se `env` resta vuoto sparisce anche quello.
     gnome-extensions uninstall claude-code-watchdog@cirobox.local
 
 Se l'ordine si inverte non succede niente di grave: ogni hook finisce con
@@ -200,10 +210,12 @@ numero sul disco della faccina. L'avviso evidenziato dà il colore a tutto;
 un clic su un'altra riga lo cambia, un clic sulla faccina porta al terminale.
 Ogni riga se ne va quando la sua sessione riparte, e senza righe la mascotte
 si ritira — oppure, se la vuoi **sempre visibile**, resta sopra le finestre e
-la sua faccia segue Claude come quella della barra. Mentre Claude ti aspetta,
-si inceppa o lavora il disco della faccina respira piano (non se le
-animazioni di GNOME sono spente). Si trascina dove vuoi, e sopra le finestre
-a schermo intero non compare.
+la sua faccia segue Claude come quella della barra. Niente lampeggia per
+abitudine: compare un **segno** solo quando serve, e lampeggia lui — due punti
+interrogativi quando Claude ti aspetta, due esclamativi quando si è inceppato,
+una lampadina sopra la testa quando c'è lavoro in corso (suo o dei suoi
+aiutanti). Non con le animazioni di GNOME spente. Si trascina dove vuoi, e
+sopra le finestre a schermo intero non compare.
 
 **Come funziona.** Claude Code avvisa `watchface-hook` a ogni evento. È uno
 script Bash da circa 3 ms che scrive una riga per sessione in
@@ -216,6 +228,16 @@ con 0: non approva, non rifiuta, non blocca.
 `~/.claude/settings.json`, con un backup prima di ogni modifica, e sa togliere
 anche gli hook di altri programmi che facciano lo stesso lavoro. Un
 `settings.json` che non è JSON valido non viene mai riscritto.
+
+**Il mod**, se attivo, corregge le due cose che da fuori si possono solo
+dedurre. La quota: Claude Code la conosce già, quindi non serve accendere una
+CLI ogni mezz'ora per chiederla — il mod la scrive quando cambia, e la lettura
+con la CLI resta solo per le sessioni che non hanno ancora parlato. Gli
+aiutanti: l'hook li fa scadere a un'ora perché il segnale di fine di un
+aiutante in background finisce in un altro processo, mentre il mod sta dentro
+quello giusto e chiede a Claude Code chi sta ancora lavorando — chi ha finito
+sparisce subito, chi lavora davvero non scade più. Scrive gli stessi file
+dell'hook, non dei suoi: spegnerlo riporta tutto come prima.
 
 ## Il pannello
 

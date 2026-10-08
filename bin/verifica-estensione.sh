@@ -122,6 +122,41 @@ else
   echo "✗ hook=${_sh:-?} watchface.js=${_js:-?}"; ko=1
 fi
 
+# Il mod di Claude Code: deve esistere, dichiarare i moduli che ha davvero, e
+# viaggiare dentro l'estensione — se non lo copiano install e pack,
+# watchface-hooks.py scrive in settings.json il percorso di una cartella che
+# sull'altro PC non c'e', e Claude Code non carica niente senza dirlo.
+printf '  %-34s ' "mod: presente, dichiarato, copiato"
+_mod="$WD_ROOT/mods/watchdog"
+_manca=
+[[ -f "$_mod/.claude-plugin/plugin.json" ]] || _manca="$_manca plugin.json"
+[[ -f "$_mod/hooks/hooks.json" ]] || _manca="$_manca hooks.json"
+if [[ -f "$_mod/hooks/hooks.json" ]]; then
+  for _m in $(grep -oE '"\./[A-Za-z0-9_.-]+"' "$_mod/hooks/hooks.json" | tr -d '"'); do
+    [[ -f "$_mod/hooks/${_m#./}" ]] || _manca="$_manca ${_m}(dichiarato, assente)"
+  done
+fi
+grep -q 'mods' "$WD_ROOT/bin/install-extension.sh" || _manca="$_manca non-installato"
+grep -q 'extra-source=mods' "$WD_ROOT/bin/pack-extension.sh" || _manca="$_manca non-impacchettato"
+if [[ -z "$_manca" ]]; then echo "ok"; else echo "✗$_manca"; ko=1; fi
+
+# E le sue prove girano: sono funzioni pure (la traduzione del vocabolario
+# della quota, la correzione dell'elenco degli aiutanti) e il motore sa
+# eseguirle da sé. Senza `claude` nel PATH si salta e lo si dice: su un PC
+# che impacchetta l'estensione senza averlo, non e' un guasto.
+printf '  %-34s ' "mod: prove delle funzioni pure"
+if command -v claude >/dev/null 2>&1; then
+  _out=$(cd "$WD_ROOT" && timeout 180 claude plugin test mods/watchdog 2>&1)
+  _n=$(printf '%s' "$_out" | grep -oE '^ *[0-9]+ pass' | grep -oE '[0-9]+' | head -1)
+  if printf '%s' "$_out" | grep -qE '^ *0 fail' && [[ -n "$_n" ]]; then
+    echo "ok ($_n)"
+  else
+    echo "✗ $(printf '%s' "$_out" | grep -E '^\(fail\)' | head -3 | paste -sd'; ')"; ko=1
+  fi
+else
+  echo "saltate (claude non nel PATH)"
+fi
+
 # Gli script bundled si chiamano anche fra loro: reclaim.py ha bisogno di
 # trash-scaduti.py, collect-metrics.py di claude-sessions.py. Chi arriva
 # dentro l'estensione senza le sue dipendenze fallisce solo a pulsante

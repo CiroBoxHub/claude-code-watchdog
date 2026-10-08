@@ -25,6 +25,12 @@ gnome-extension/*/watchface-hook
 # Foto di prova della barra e del popup (bin/fotografa-pannello.sh)
 grafica/foto/
 grafica/foto-icone.png
+# E quelle delle preferenze (bin/fotografa-preferenze.sh): si rigenerano.
+grafica/foto-preferenze/
 
 # La copia di config/watchdog.conf che pack-extension.sh mette nel pacchetto.
 gnome-extension/*/watchdog.conf
+
+# Il mod di Claude Code dentro l'estensione: la copia la mettono
+# install-extension.sh e pack-extension.sh da mods/, come gli script.
+gnome-extension/*/mods/

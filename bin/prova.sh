@@ -1028,6 +1028,12 @@ hook SessionEnd s1
 hook SessionEnd s4
 uguale "watchface-hook: SessionEnd toglie il file" \
   "$([[ -e $WF/s1 || -e $WF/s1.lock || -e $WF/s4.aiutanti ]] && echo c-e || echo tolto)" "tolto"
+# Il temporaneo del mod: se una rinomina fallisse resterebbe in RAM per sempre,
+# perche' il nome ha un punto e il pannello salta tutto quello che ne ha uno.
+: > "$WF/s7.aiutanti.mod.tmp"; printf 'Stop\t%s\t0\t0\t/x\t\t\n' "$(date +%s)" > "$WF/s7"
+hook SessionEnd s7
+uguale "watchface-hook: SessionEnd toglie anche il temporaneo del mod" \
+  "$([[ -e $WF/s7.aiutanti.mod.tmp ]] && echo c-e || echo tolto)" "tolto"
 unset XDG_RUNTIME_DIR
 
 # ---------------------------------------------------- watchface-hooks.py ---
@@ -1106,6 +1112,93 @@ uguale "watchface-hooks: una forma sconosciuta non blocca gli altri eventi" \
 echo '{"hooks": []}' > "$S"
 uguale "watchface-hooks: «hooks» che non e' un oggetto: rifiuta senza toccare" \
   "$("$WH" installa >/dev/null 2>&1; echo $?)|$(cat "$S")" '1|{"hooks": []}'
+
+# Il mod va insieme agli hook: una cartella in env.CLAUDE_CODE_PLUGIN_DIRS.
+# Tabella dei casi: env assente, env senza la chiave, chiave con le cartelle
+# di altri, la nostra due volte, la rimozione in ognuno di quei casi, e le due
+# forme che non si toccano.
+prepara
+S="$HOME/.claude/settings.json"
+echo '{"theme": "dark"}' > "$S"
+MODP="$WD_ROOT/mods/watchdog"
+"$WH" installa >/dev/null 2>&1
+uguale "mod: installa lo attiva, env nasce con la nostra cartella" \
+  "$(python3 -c "import json;d=json.load(open('$S'));print(d['env']['CLAUDE_CODE_PLUGIN_DIRS'])")" "$MODP"
+uguale "mod: lo stato lo dice" "$(stato 'd["modPresente"], d["modInstallato"], d["modAltri"]')" \
+  "True True []"
+"$WH" installa >/dev/null 2>&1
+uguale "mod: installare due volte non duplica la cartella" \
+  "$(python3 -c "import json,os;d=json.load(open('$S'));print(d['env']['CLAUDE_CODE_PLUGIN_DIRS'].count(os.pathsep))")" "0"
+"$WH" rimuovi >/dev/null 2>&1
+uguale "mod: rimuovi toglie la chiave, e «env» che resta vuoto sparisce" \
+  "$(python3 -c "import json;d=json.load(open('$S'));print('env' in d, d['theme'])")" "False dark"
+
+# Con le cartelle di altri dentro: la nostra si aggiunge in coda e si toglie
+# da sola, le loro non si toccano mai.
+prepara
+S="$HOME/.claude/settings.json"
+python3 - "$S" <<'PY2'
+import json, sys
+json.dump({"env": {"ALTRO": "1",
+                   "CLAUDE_CODE_PLUGIN_DIRS": "/opt/suo:/opt/altro-suo"}},
+          open(sys.argv[1], "w"), indent=2)
+PY2
+"$WH" installa >/dev/null 2>&1
+uguale "mod: si aggiunge in coda alle cartelle di plugin degli altri" \
+  "$(python3 -c "import json;d=json.load(open('$S'));print(d['env']['CLAUDE_CODE_PLUGIN_DIRS'])")" \
+  "/opt/suo:/opt/altro-suo:$MODP"
+uguale "mod: lo stato elenca le cartelle degli altri senza confonderle" \
+  "$(stato 'd["modInstallato"], d["modAltri"]')" "True ['/opt/suo', '/opt/altro-suo']"
+"$WH" rimuovi >/dev/null 2>&1
+uguale "mod: rimuovi lascia le cartelle degli altri e l'altra variabile" \
+  "$(python3 -c "import json;d=json.load(open('$S'));print(d['env']['CLAUDE_CODE_PLUGIN_DIRS'], d['env']['ALTRO'])")" \
+  "/opt/suo:/opt/altro-suo 1"
+
+# L'interruttore del solo mod: gli hook sono la base e devono restare anche
+# quando si spegne il miglioramento.
+prepara
+S="$HOME/.claude/settings.json"
+echo '{}' > "$S"
+"$WH" installa >/dev/null 2>&1
+"$WH" mod-disattiva >/dev/null 2>&1
+uguale "mod: disattivarlo da solo lascia tutti gli hook" \
+  "$(stato 'len(d["installati"]), d["modInstallato"]')" "13 False"
+"$WH" mod-attiva >/dev/null 2>&1
+uguale "mod: riattivarlo da solo non tocca gli hook" \
+  "$(stato 'len(d["installati"]), d["modInstallato"]')" "13 True"
+
+# Le due forme che non si capiscono: non si riscrivono, come per «hooks».
+prepara
+S="$HOME/.claude/settings.json"
+# **Si controlla il messaggio, non solo che il file sia intatto.** Un file
+# «rimasto com'era» lo lascia anche un programma che muore prima di scrivere:
+# togliendo il controllo da leggi() queste due prove passavano su un
+# traceback invece che su un rifiuto (mutazione, 2026-10-08).
+rifiuto() {
+  local err; err=$("$WH" installa 2>&1 >/dev/null)
+  if [[ $err == *Traceback* ]]; then echo schianta
+  elif [[ $err == *"non lo modifico"* ]]; then echo rifiuta
+  else echo muto; fi
+}
+echo '{"env": []}' > "$S"
+uguale "mod: «env» che non e' un oggetto: rifiuta senza toccare" \
+  "$("$WH" installa >/dev/null 2>&1; echo $?)|$(rifiuto)|$(cat "$S")" \
+  '1|rifiuta|{"env": []}'
+echo '{"env": {"CLAUDE_CODE_PLUGIN_DIRS": ["/opt/suo"]}}' > "$S"
+uguale "mod: una cartella che non e' una stringa: rifiuta senza toccare" \
+  "$("$WH" installa >/dev/null 2>&1; echo $?)|$(rifiuto)|$(grep -c 'opt/suo' "$S")" \
+  "1|rifiuta|1"
+
+# Il mod che non c'e' non deve impedire gli hook: meta' e' meglio di niente.
+prepara
+S="$HOME/.claude/settings.json"
+echo '{}' > "$S"
+mkdir -p "$SANDBOX/senza-mod"
+cp "$WD_ROOT/bin/watchface-hooks.py" "$SANDBOX/senza-mod/"
+cp "$WD_ROOT/bin/watchface-hook" "$SANDBOX/senza-mod/"
+"$SANDBOX/senza-mod/watchface-hooks.py" installa >/dev/null 2>&1
+uguale "mod: se manca, gli hook si installano comunque" \
+  "$(python3 -c "import json;d=json.load(open('$S'));print(len(d['hooks']), 'env' in d)")" "13 False"
 
 # Un settings.json che e' un collegamento resta un collegamento.
 prepara

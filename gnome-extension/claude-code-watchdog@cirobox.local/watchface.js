@@ -505,7 +505,8 @@ class Watchface {
                 if (adesso - s.epoca > VISIBILE_S) {
                     // Finita senza SessionEnd: il file si toglie, se no lo si
                     // rilegge a ogni evento di ogni altra sessione.
-                    for (const nome of [id, `${id}.aiutanti`, `${id}.lock`])
+                    for (const nome of [id, `${id}.aiutanti`, `${id}.lock`,
+                                        `${id}.aiutanti.mod.tmp`])
                         GLib.unlink(GLib.build_filenamev([CARTELLA, nome]));
                     continue;
                 }

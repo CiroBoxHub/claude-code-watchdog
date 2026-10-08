@@ -33,6 +33,11 @@ done
 # Nel pacchetto una copia vera: sull'altro PC il progetto non c'e'.
 cp "$WD_ROOT/config/watchdog.conf" "$SRC/watchdog.conf"
 
+# Il mod di Claude Code: lo attiva watchface-hooks.py scrivendone il percorso
+# in settings.json, quindi deve stare dentro l'estensione installata.
+rm -rf "$SRC/mods"
+[[ -d "$WD_ROOT/mods" ]] && cp -a "$WD_ROOT/mods" "$SRC/mods"
+
 mkdir -p "$DIST"
 rm -f "$DIST/$UUID.shell-extension.zip"
 
@@ -49,6 +54,7 @@ for f in "$SRC"/*.js; do
 done
 [[ -f "$SRC/watchdog.conf" ]] && EXTRA+=(--extra-source=watchdog.conf)
 [[ -f "$SRC/watchface-hook" ]] && EXTRA+=(--extra-source=watchface-hook)
+[[ -d "$SRC/mods" ]] && EXTRA+=(--extra-source=mods)
 
 gnome-extensions pack "$SRC" --force --out-dir="$DIST" "${EXTRA[@]}"
 
