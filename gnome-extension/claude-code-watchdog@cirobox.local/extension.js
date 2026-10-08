@@ -1080,7 +1080,7 @@ class Indicatore extends PanelMenu.Button {
                                                           icon_size: 14})});
         btnAgg.connect('clicked', () => {
             this._raccogli();
-            this._leggiQuota();
+            this._leggiQuota({forza: true});
         });
         testa.add_child(btnAgg);
         c.add_child(testa);
@@ -1553,14 +1553,26 @@ class Indicatore extends PanelMenu.Button {
         });
         // Se il dato su disco è più vecchio dell'intervallo si parte subito,
         // invece di mostrare un valore stantio per un ciclo intero.
-        const eta = this._dati?.quota?.etaSecondi;
-        if (eta === undefined || eta === null || eta > secondi)
-            this._leggiQuota();
+        this._leggiQuota();
     }
 
-    _leggiQuota() {
+    /* `forza` solo per il pulsante «Aggiorna»: l'ha chiesto l'utente.
+       Altrimenti, se il dato su disco è più giovane dell'intervallo non si
+       accende niente — la CLI costa 2,5 s e 323 MB, e con il mod attivo il
+       file lo tiene fresco Claude Code stesso. Finché nessuna sessione
+       parla, il file invecchia e la lettura riparte da sé.
+       **Il controllo stava solo nella riprogrammazione**, cioè nel colpo
+       iniziale, mentre il timer periodico chiamava comunque: il risparmio
+       annunciato non c'era. Rilevato da /code-review il 2026-10-08. */
+    _leggiQuota({forza = false} = {}) {
         if (!this._settings.get_boolean('usage-enabled'))
             return;
+        if (!forza) {
+            const letta = Date.parse(this._dati?.quota?.letteIl ?? '');
+            const eta = Number.isNaN(letta) ? null : (Date.now() - letta) / 1000;
+            if (eta !== null && eta < this._settings.get_int('usage-interval-seconds'))
+                return;
+        }
         if (this._quotaInCorso && !this._lucchettoScaduto(this._quotaInCorsoDa))
             return;
         const script = this._percorsoScript('collect-usage.py');

@@ -1,7 +1,8 @@
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import { correggi } from './aiutanti'
 import { contenuto, voci } from './quota'
+import { fineTurno } from './riga'
 
 /* Watchface da dentro Claude Code.
  *
@@ -29,6 +30,16 @@ let sessione: string | null = null
 let dirStato: string | null = null
 let dirDati: string | null = null
 let ultimiAiutanti: string | null = null
+let ultimaRiga: string | null = null
+let battito: Timer | null = null
+
+/* Il temporaneo porta un suffisso unico per processo. Con un nome fisso,
+   `usage.json.mod.tmp` era **lo stesso file per tutte le sessioni di Claude**:
+   la quota e' dell'account, quindi `session.measure` scatta in tutte quasi
+   insieme, e una riscriveva il temporaneo mentre l'altra lo rinominava —
+   usage.json a meta' e il pannello che tiene il dato vecchio. L'hook usa `$$`
+   per la stessa ragione. Rilevato da /code-review il 2026-10-08. */
+const UNICO = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
 let ultimaQuota: string | null = null
 
 /** Temporaneo e poi rinomina, come fanno l'hook e collect-usage.py: il
@@ -38,16 +49,29 @@ let ultimaQuota: string | null = null
     Un fork per cambiamento vero, non per giro: niente cambia, niente si
     scrive. `sh` riceve i percorsi come argomenti, non dentro il testo. */
 async function scriviAtomico($: EngineInterface, dest: string, testo: string,
-                             modo: string | null): Promise<boolean> {
-    const tmp = `${dest}.mod.tmp`
+                             modo: string | null,
+                             lucchetto: string | null = null): Promise<boolean> {
+    const tmp = `${dest}.${UNICO}.mod.tmp`
     try {
         await $.fs.write(tmp, testo)
-        const script = modo
-            ? 'chmod "$1" "$2" && mv -f "$2" "$3"'
-            : 'mv -f "$2" "$3"'
+        // Il lucchetto e' quello dell'hook (`<sessione>.lock`), perche' su
+        // quei due file scriviamo in due. Senza, un evento arrivato fra la
+        // nostra lettura e la nostra rinomina andava perso — e sulla riga di
+        // stato non c'e' un giro dopo che lo rimetta a posto.
+        // Due secondi come l'hook: meglio perdere un aggiornamento che
+        // tenere occupato il motore.
+        const mossa = modo ? 'chmod "$1" "$2" && mv -f "$2" "$3"' : 'mv -f "$2" "$3"'
+        const script = lucchetto
+            ? `exec 9>"$4" || exit 1; flock -w 2 9 || exit 1; ${mossa}`
+            : mossa
         const r = await $.process.run(
-            ['sh', '-c', script, 'sh', modo ?? '600', tmp, dest])
-        return r.exitCode === 0
+            ['sh', '-c', script, 'sh', modo ?? '600', tmp, dest, lucchetto ?? ''])
+        if (r.exitCode === 0) return true
+        // Il lucchetto occupato, o un disco pieno: il temporaneo resta, e
+        // nessuno lo toglierebbe piu' — quello della quota non sta in RAM ma
+        // nella cartella dati, dove non passa nessuna potatura.
+        await $.process.run(['rm', '-f', tmp])
+        return false
     } catch {
         return false
     }
@@ -88,8 +112,28 @@ async function aggiornaAiutanti($: EngineInterface): Promise<void> {
     }
     const nuovo = correggi(testo, agenti, Math.floor(Date.now() / 1000))
     if (nuovo === null || nuovo === ultimiAiutanti) return
-    if (await scriviAtomico($, f, nuovo, null)) ultimiAiutanti = nuovo
+    if (await scriviAtomico($, f, nuovo, null, `${dirStato}/${sessione}.lock`))
+        ultimiAiutanti = nuovo
   } catch { /* resta l'elenco dell'hook, con la sua scadenza */ }
+}
+
+/** La fine del turno, che l'hook non riceve quando non e' una risposta. */
+async function segnaFineTurno($: EngineInterface,
+                             motivo?: string): Promise<void> {
+  try {
+    if (!dirStato || !sessione) return
+    const f = `${dirStato}/${sessione}`
+    let testo = ''
+    try {
+        if (!(await $.fs.exists(f))) return   // l'hook non ha ancora scritto
+        testo = await $.fs.read(f)
+    } catch {
+        return
+    }
+    const nuova = fineTurno(testo, Math.floor(Date.now() / 1000), motivo)
+    if (nuova === null || nuova === ultimaRiga) return
+    if (await scriviAtomico($, f, nuova, null, `${f}.lock`)) ultimaRiga = nuova
+  } catch { /* resta la riga dell'hook */ }
 }
 
 export const register: Register = on => {
@@ -110,13 +154,34 @@ export const register: Register = on => {
             const radice = dati || (home ? `${home}/.local/share` : null)
             dirDati = radice && (await $.fs.exists(`${radice}/${DIR_DATI}`))
                 ? `${radice}/${DIR_DATI}` : null
-            await aggiornaQuota($, (await $.session.usage()).rateLimits)
-            await aggiornaAiutanti($)
-            $.clock.every(CADENZA_MS, () => aggiornaAiutanti($))
+            // Il modulo resta caricato fra una sessione e l'altra (resume,
+            // /clear): quello che ricordiamo della sessione di prima non vale
+            // piu', e scambiarlo per nostro vorrebbe dire non riscrivere.
+            ultimaQuota = ultimiAiutanti = ultimaRiga = null
         } catch (errore) {
-            // Un mod che si inceppa non deve disturbare la sessione: il
-            // pannello torna a quello che sapeva l'hook.
+            // Senza i percorsi non c'e' niente da fare, e un mod che si
+            // inceppa non deve disturbare la sessione: il pannello torna a
+            // quello che sapeva l'hook.
             $.ui.log(`watchdog: avvio non riuscito: ${errore}`, {to: 'debug'})
+            return esito
+        }
+        // Le due metà si armano da sole. Con un `try` solo, una quota che
+        // inciampa lasciava gli aiutanti senza battito per tutta la sessione:
+        // un accessorio che non parte deve mancare da solo.
+        try {
+            await aggiornaQuota($, (await $.session.usage()).rateLimits)
+        } catch (errore) {
+            $.ui.log(`watchdog: quota all'avvio: ${errore}`, {to: 'debug'})
+        }
+        try {
+            await aggiornaAiutanti($)
+            // Un battito solo per processo: un secondo `session.start` ne
+            // avviava un altro, e si accumulavano scrivendo tutti per la
+            // sessione corrente. Rilevato da /code-review il 2026-10-08.
+            battito?.cancel()
+            battito = $.clock.every(CADENZA_MS, () => aggiornaAiutanti($))
+        } catch (errore) {
+            $.ui.log(`watchdog: aiutanti all'avvio: ${errore}`, {to: 'debug'})
         }
         return esito
     })
@@ -138,13 +203,29 @@ export const register: Register = on => {
         return esito
     }).catch(($, e, next) => next(e))
 
+    /* Qui sta la correzione della reattivita': `turn.complete` scatta
+       comunque — risposta, Esc, rifiuto, errore — mentre `Stop` arriva solo
+       per la risposta. Senza, dopo un Esc la faccina diceva «lavora» per
+       un'ora. */
     on('turn.complete', async ($, e, next) => {
+        await segnaFineTurno($, e.reason)
         await aggiornaAiutanti($)
         return next(e)
     })
 
+    /* L'hook ha riscritto la riga durante il turno: il ricordo di cosa
+       abbiamo scritto noi non vale piu', se no un secondo Esc non scriverebbe
+       niente perche' la riga «e' gia' quella». */
+    on('turn.start', async ($, e, next) => {
+        ultimaRiga = null
+        return next(e)
+    })
+
     on('session.end', async ($, e, next) => {
+        battito?.cancel()
+        battito = null
         sessione = null
+        ultimaRiga = null
         return next(e)
     })
 }

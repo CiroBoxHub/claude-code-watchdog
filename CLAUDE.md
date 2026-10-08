@@ -451,12 +451,17 @@ con la prima risposta del modello — `session.measure` scatta con
 `changed=["context","rateLimits","cost"]` e i limiti dentro. Quindi il mod non
 rende inutile `collect-usage.py`: lo rende **l'eccezione**. Una sessione appena
 aperta che non ha ancora parlato non ha quota da pubblicare, il file invecchia,
-e `_tictac` fa ripartire la CLI da se' — la condizione c'era gia'
-(`eta > secondi`), quindi le due strade si compongono **senza toccare
-l'estensione**. Con una sessione che lavora, quei 2,57 s e 323 MB ogni mezz'ora
-non si pagano piu'. I numeri sono stati verificati contro la CLI nello stesso
-minuto: settimanale 39 in entrambi, azzeramenti uguali al secondo
-(17:29:59.95 contro 17:30:00).
+e la lettura con la CLI riparte da se'. I numeri sono stati verificati contro
+la CLI nello stesso minuto: settimanale 39 in entrambi, azzeramenti uguali al
+secondo (17:29:59.95 contro 17:30:00).
+**Il risparmio pero' non c'era, e la prima versione di questa riga mentiva.**
+Il controllo sull'eta' stava solo in `_riprogrammaQuota`, cioe' nel colpo
+iniziale; il timer periodico chiamava `_leggiQuota()` comunque, quindi la CLI
+si accendeva ogni mezz'ora anche col file fresco. Ora la condizione sta
+**dentro `_leggiQuota`**, dove passano tutti, e il pulsante «Aggiorna» la
+scavalca con `{forza: true}` perche' l'ha chiesto l'utente. Rilevato da
+`/code-review` il 2026-10-08: una funzione nuova che promette un risparmio va
+verificata sul chiamante che conta, non su quello che si e' appena scritto.
 **Il vocabolario non coincide**: il motore dice `five_hour` e `seven_day`, la
 trascrizione di `/usage` diceva `session` e `weekly_all`. La traduzione sta in
 una funzione sola (`voci()` in `mods/watchdog/hooks/quota.ts`) perche' e'
@@ -520,6 +525,49 @@ interattive (`isInteractive`), la stessa regola dell'hook per `sdk-*`, e un
 `claude -p` e' per definizione non interattivo: il percorso completo si e'
 misurato togliendo quel cancello in una copia nella sandbox, e il cancello
 stesso resta verificato solo a occhio. Stessa famiglia di `_leggiQuota`.
+
+**La faccina era lenta perche' Claude Code tace, non perche' il pannello
+dorma.** Segnalato dall'uso il 2026-10-08. Misurato prima di toccare
+qualcosa, e il percorso normale e' gia' veloce: il monitor della cartella si
+sveglia in **0 ms** (misurato su una raffica di cinque scritture: cinquanta
+risvegli, attesa zero dopo ognuna, e il `rate-limit` di GIO non morde), l'hook
+scrive il file **entro 14-62 ms** dall'evento (misurato sulla sessione vera,
+confrontando l'ora dei comandi con quella delle scritture), e il pannello
+aspetta 150 ms per non rileggere a ogni evento di una raffica. Due decimi di
+secondo in tutto: non e' li'.
+La lentezza sta dove **non arriva nessun evento**, e sono tre casi:
+1. **interrompi con Esc**: Claude Code non manda niente, l'ultimo evento resta
+   `PreToolUse` e `statoProprio` lo legge «lavora» **per un'ora**;
+2. **neghi un permesso**: restava `PermissionRequest`, cioe' «aspetta te» per
+   un'ora, dopo che avevi gia' risposto;
+3. il modello rifiuta o la chiamata va in errore: come il primo.
+Il secondo si chiude con l'hook: `PermissionDenied` esiste fra gli eventi di
+Claude Code ed e' entrato nell'elenco (chi aggiorna deve reinstallare: la
+pagina dice «Installati in parte»). Il primo e il terzo no — da fuori quel
+momento non esiste — e li chiude il mod: `turn.complete` scatta **comunque**,
+e `reason` dice perche' (`answer`, `aborted`, `refusal`, `error`). Il mod
+riscrive la riga come l'avrebbe scritta l'hook: `Stop`, epoca adesso,
+fallimenti a zero, **e tutto il resto intatto** — cwd, pid, riserva e il numero
+degli aiutanti sono suoi.
+**Il motivo si conserva**: `error` scrive `StopFailure`, non `Stop`. Una prima
+versione li schiacciava tutti su `Stop`, e un turno finito in errore diventava
+la faccina verde «ha finito» invece del limone — con l'aggravante che quale
+delle due vincesse dipendeva da chi scriveva per ultimo. Rilevato da
+`/code-review` lo stesso giorno.
+**E qui il lucchetto serve.** Sull'elenco degli aiutanti un aggiornamento
+perso torna al giro dopo, dieci secondi; sulla riga di stato no — `turn.complete`
+scatta una volta sola, e se l'hook riscrive dopo di noi la riga torna «lavora»
+per l'ora intera, cioe' esattamente il difetto che si sta correggendo. Il mod
+prende `<sessione>.lock`, lo stesso dell'hook, dentro lo `sh -c` che fa gia' la
+rinomina: nessun fork in piu'.
+
+**I backup di settings.json sono tre, e si possono buttare** (chiesto dall'uso
+il 2026-10-08). Erano dieci: un backup serve a tornare indietro di un passo,
+non a tenere l'archivio di una configurazione che non c'e' piu'. La rotazione
+e il pulsante **cestinano**, non cancellano — la regola non negoziabile vale
+anche per un file scritto da noi, e `gio` che fallisce lascia il file dov'e'
+invece di ripiegare su `unlink`. `elimina` ha la stessa rete di `ripristina`:
+solo file della cartella dei backup, perche' lo chiama un pulsante.
 
 **Limite noto, non corretto**: se gli aiutanti finiscono senza che nessun
 evento raggiunga la sessione padre, allo scadere dell'ora lo stato passa da
@@ -714,8 +762,8 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              195 prove funzionali, sandbox con HOME dirottata
-    ./bin/prova-js.sh           102 prove sulle funzioni pure dei moduli JS
+    ./bin/prova.sh              204 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova-js.sh           106 prove sulle funzioni pure dei moduli JS
     claude plugin test mods/watchdog  le funzioni pure del mod (gira dentro
                                       verifica-estensione.sh)
     ./bin/prova-shell.sh        carica l'estensione in una shell annidata (~1 min)

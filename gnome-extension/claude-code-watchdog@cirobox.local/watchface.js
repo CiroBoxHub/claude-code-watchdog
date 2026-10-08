@@ -79,6 +79,28 @@ function catenaPid(pid, genitore, massimo = 40) {
     return catena;
 }
 
+/* Via la riga di una sessione e tutto quello che le sta accanto.
+   Un elenco a mano dimentica: il temporaneo del mod porta un suffisso unico
+   per processo, e uno rimasto per una rinomina fallita sarebbe restato in RAM
+   per sempre, perche' il nome ha un punto e qui si salta tutto quello che ne
+   ha uno. Rilevato da /code-review il 2026-10-08. */
+function pulisciSessione(id) {
+    GLib.unlink(GLib.build_filenamev([CARTELLA, id]));
+    try {
+        const elenco = Gio.File.new_for_path(CARTELLA).enumerate_children(
+            'standard::name', Gio.FileQueryInfoFlags.NONE, null);
+        let info;
+        while ((info = elenco.next_file(null))) {
+            const nome = info.get_name();
+            if (nome.startsWith(`${id}.`))
+                GLib.unlink(GLib.build_filenamev([CARTELLA, nome]));
+        }
+        elenco.close(null);
+    } catch (e) {
+        // La cartella e' sparita: non c'e' piu' niente da pulire.
+    }
+}
+
 /* Gli aiutanti vivi, contati dall'elenco «id <TAB> epoca» che scrive l'hook.
 
    Il numero nella riga di stato non basta: l'hook lo aggiorna solo quando
@@ -138,8 +160,13 @@ function turnoOccupato(stato) {
    sembrava non esistere: segnalato dall'uso il 2026-10-08.
    Cartella sconosciuta — le righe senza quel campo — si tratta come libera,
    che era il comportamento di prima. */
+/* La cartella di una riserva libera. **Solo quando la cartella si sa**: una
+   riga senza cwd non e una riserva, e un cwd vuoto qui valeva «si», quindi una
+   riserva ceduta — cioe una sessione vera — tornava nascosta appena l'hook non
+   trovava il cwd nei primi 8 KB del payload. E il difetto del 2026-10-08,
+   rientrato dalla finestra. Rilevato da /code-review lo stesso giorno. */
 function cartellaDelDemone(cwd) {
-    return !cwd || cwd.includes('/cc-daemon-');
+    return (cwd ?? '').includes('/cc-daemon-');
 }
 
 function parentela(sessioni, antenati, comando) {
@@ -149,8 +176,13 @@ function parentela(sessioni, antenati, comando) {
         // Finché il processo è vivo decide lui, perché sa anche se la riserva
         // è stata ceduta; quando non c'è più vale quello che l'hook ha
         // scritto nella riga, che è il motivo per cui quel campo esiste.
+        // Il processo vivo decide **se sappiamo anche la cartella**: e quella
+        // che distingue una riserva libera da una ceduta. Senza processo o
+        // senza cartella non si indovina — vale quello che l'hook ha scritto
+        // nella riga, che lui lo decide leggendo `/proc/<pid>/cwd` e lo
+        // ritira appena vede una cartella vera.
         const vivo = comando(s.pid) ?? '';
-        impianto.set(s.id, vivo
+        impianto.set(s.id, vivo && s.cwd
             ? /\bbg-spare\b/.test(vivo) && cartellaDelDemone(s.cwd)
             : s.riserva === true);
         // Due sessioni con lo stesso pid non dovrebbero esistere, ma il
@@ -505,9 +537,11 @@ class Watchface {
                 if (adesso - s.epoca > VISIBILE_S) {
                     // Finita senza SessionEnd: il file si toglie, se no lo si
                     // rilegge a ogni evento di ogni altra sessione.
-                    for (const nome of [id, `${id}.aiutanti`, `${id}.lock`,
-                                        `${id}.aiutanti.mod.tmp`])
-                        GLib.unlink(GLib.build_filenamev([CARTELLA, nome]));
+                    // Tutto quello che porta il suo nome: la riga, l'elenco
+                    // degli aiutanti, il lucchetto e i temporanei del mod, che
+                    // hanno un suffisso unico per processo e non si possono
+                    // elencare a mano.
+                    pulisciSessione(id);
                     continue;
                 }
                 s.approvato = s.evento === 'PermissionRequest' &&

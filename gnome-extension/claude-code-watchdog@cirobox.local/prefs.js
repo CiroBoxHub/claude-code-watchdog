@@ -380,7 +380,11 @@ export default class WatchdogPreferences extends ExtensionPreferences {
              'il mod va chiesta accendendo una copia della sua riga di comando ' +
              'ogni mezz’ora. E quali aiutanti stanno ancora lavorando: senza il ' +
              'mod chi finisce in background resta contato fino a un’ora, perché il ' +
-             'suo segnale di fine arriva a un altro processo. Scrive gli stessi ' +
+             'suo segnale di fine arriva a un altro processo. E quando il turno ' +
+             'finisce senza una risposta — lo interrompi con Esc, il modello ' +
+             'rifiuta, la chiamata va in errore — Claude Code non manda nessun ' +
+             'segnale e la faccina restava su «sta lavorando»: il mod quel ' +
+             'momento lo vede. Scrive gli stessi ' +
              'file del resto di Watchface, quindi si può spegnere da solo e tutto ' +
              'torna come prima. Vale per le sessioni di Claude aperte da lì in poi.');
         voce(wf, 'Quando se ne va',
@@ -682,7 +686,7 @@ export default class WatchdogPreferences extends ExtensionPreferences {
                                          'Se uno fa lo stesso lavoro, si può togliere.',
                                          'watchface');
         this._gruppoBackup = this._gruppo(pagina, 'Backup di settings.json',
-                                          'Uno per modifica; ripristinare ne fa un altro.',
+                                          'Uno per modifica; si tengono gli ultimi tre.',
                                           'watchface');
         this._righeHook = [];
         this._aggiornaHook();
@@ -856,7 +860,30 @@ export default class WatchdogPreferences extends ExtensionPreferences {
                     'settings.json torna com’era in quel momento, hook e ' +
                     'impostazioni compresi. Prima si fa un backup di quello attuale.',
                     'Ripristina', () => this._azioneHook(['ripristina', f]))));
+                // Va nel cestino, non cancellato: è la regola della casa, e
+                // vale anche per un file che abbiamo scritto noi.
+                r.add_suffix(this._bottone('Elimina', 'destructive-action',
+                    () => this._conferma(
+                        'Eliminare questo backup?',
+                        'Finisce nel cestino, da dove si può ancora recuperare. ' +
+                        'Gli altri backup restano.',
+                        'Elimina', () => this._azioneHook(['elimina', f]))));
                 aggiungi(this._gruppoBackup, r);
+            }
+            if (st.backup.length > 1) {
+                const tutti = new Adw.ActionRow({
+                    title: 'Elimina tutti i backup',
+                    subtitle: `${st.backup.length} file · vanno nel cestino`,
+                });
+                tutti.add_prefix(this._tessera('user-trash-symbolic', 'rosso'));
+                tutti.add_suffix(this._bottone('Elimina tutti', 'destructive-action',
+                    () => this._conferma(
+                        'Eliminare tutti i backup?',
+                        'Vanno nel cestino, da dove si possono ancora recuperare. ' +
+                        'Senza backup, un ripristino non è più possibile finché ' +
+                        'non se ne fa un altro — e se ne fa uno a ogni modifica.',
+                        'Elimina tutti', () => this._azioneHook(['elimina', '--tutti']))));
+                aggiungi(this._gruppoBackup, tutti);
             }
         });
     }

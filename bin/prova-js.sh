@@ -230,11 +230,20 @@ const antenatiFinti = pid => {
 const comandiFinti = {10: "claude", 20: "claude bg-spare --bg-spare /tmp/s.sock",
                       30: "claude", 40: "claude", 50: "claude --resume",
                       60: "claude", 70: "claude"};
+// La regola della cartella, da sola: `parentela` la chiama solo quando il cwd
+// si sa, quindi senza queste tre righe un «vuoto vale libera» rimesso dentro
+// non farebbe fallire niente. E quella era la forma che nascondeva le sessioni.
+uguale("cartellaDelDemone: la cartella del demone", cartellaDelDemone("/tmp/cc-daemon-1000/aa/spare"), "true");
+uguale("cartellaDelDemone: una cartella di lavoro vera", cartellaDelDemone("/home/x/progetto"), "false");
+uguale("cartellaDelDemone: una cartella che non si sa non e del demone", cartellaDelDemone(""), "false");
 const par = sessioni => parentela(sessioni, antenatiFinti, pid => comandiFinti[pid] ?? "");
-const S = (id, pid, epoca = 0) => ({id, pid, epoca});
+const S = (id, pid, epoca = 0) => ({id, pid, epoca, cwd: "/home/x/progetto"});
 // La madre non ha padre; la figlia diretta lo ha; il nipote salta la riserva
-// in mezzo e si attacca alla nonna.
-const r1 = par([S("madre", 10), S("riserva", 20), S("nipote", 30)]);
+// in mezzo e si attacca alla nonna. La riserva ha la cartella del demone:
+// e quella, non la sola riga di comando, a dire che e libera.
+const r1 = par([S("madre", 10),
+                {...S("riserva", 20), cwd: "/tmp/cc-daemon-1000/aa/spare"},
+                S("nipote", 30)]);
 const leggi = (r, id) => {
     const s = r.find(x => x.id === id);
     return s.id + ":padre=" + s.padre + ",impianto=" + s.impianto;
@@ -266,8 +275,14 @@ uguale("parentela: una riserva libera sta nella cartella del demone",
 // al suo evento successivo, che in una sessione ferma non arriva mai.
 uguale("parentela: il processo vivo smentisce la dichiarazione",
        imp(conCwd("dichiarata", "/home/x/progetto", {riserva: true})), "false");
-uguale("parentela: una riga senza cartella si tratta come riserva libera",
-       imp({id: "senzacwd", pid: 20, epoca: 1}), "true");
+// Senza cartella non si indovina: vale la dichiarazione scritta dallo hook,
+// che la decide leggendo /proc. Prima un cwd vuoto valeva «riserva libera», e
+// una sessione vera il cui payload non portava il cwd nei primi 8 KB spariva
+// dal pannello: il difetto del 2026-10-08 rientrato dalla finestra.
+uguale("parentela: senza cartella vale la dichiarazione, non si indovina",
+       imp({id: "senzacwd", pid: 20, epoca: 1}), "false");
+uguale("parentela: senza cartella ma dichiarata riserva, resta impianto",
+       imp({id: "senzacwd2", pid: 20, epoca: 1, riserva: true}), "true");
 uguale("parentela: il nipote salta limpianto e si attacca alla nonna",
        leggi(r1, "nipote"), "nipote:padre=madre,impianto=false");
 // Il padre e il piu vicino, non il piu lontano.

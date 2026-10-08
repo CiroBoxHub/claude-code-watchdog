@@ -10,6 +10,8 @@
     watchface-hooks.py mod-disattiva        solo il mod
     watchface-hooks.py rimuovi-altro NOME   toglie gli hook del programma NOME
     watchface-hooks.py ripristina FILE      rimette un backup
+    watchface-hooks.py elimina FILE         cestina un backup
+    watchface-hooks.py elimina --tutti      cestina tutti i backup
 
 settings.json contiene anche le impostazioni dell'utente, quindi:
 - prima di ogni modifica se ne fa un backup, e i backup si elencano;
@@ -31,7 +33,7 @@ gli hook: gli hook sono la base, il mod il miglioramento, e se un giorno fosse
 lui a dare problemi si vuole poter tornare alla base senza restare al buio.
 Vale per le sessioni avviate **dopo**, come gli hook.
 """
-import json, os, re, sys
+import json, os, re, subprocess, sys
 from datetime import datetime
 from pathlib import Path
 
@@ -39,7 +41,10 @@ HOME = Path.home()
 SETTINGS = HOME / ".claude" / "settings.json"
 BACKUP = (Path(os.environ.get("XDG_DATA_HOME") or (HOME / ".local/share"))
           / "claude-code-watchdog" / "backup-settings")
-BACKUP_DA_TENERE = 10
+# Tre, non dieci: chiesto dall'uso il 2026-10-08. Un backup serve a tornare
+# indietro di un passo o due, non a tenere l'archivio di settings.json — e
+# quelli vecchi sono copie di una configurazione che non c'e' piu'.
+BACKUP_DA_TENERE = 3
 HOOK = Path(__file__).resolve().parent / "watchface-hook"
 MARCA = "/watchface-hook'"
 
@@ -54,10 +59,14 @@ MOD = next((p for p in (_QUI / "mods" / "watchdog",
 # Gli eventi che servono a dire cosa sta facendo Claude: gli stessi che
 # coucou ascoltava, perche' sono quelli che cambiano lo stato visibile, piu'
 # PreCompact per il limone del /compact (dalla versione 4).
+# `PermissionDenied` dalla versione 6: quando neghi un permesso Claude Code
+# non manda nient'altro, e l'ultimo evento restava `PermissionRequest` — cioe'
+# «aspetta te» per un'ora, dopo che avevi gia' risposto. Segnalato dall'uso il
+# 2026-10-08 come faccina poco reattiva.
 EVENTI = ["SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse",
           "PostToolUse", "PostToolUseFailure", "PermissionRequest",
-          "Notification", "Stop", "StopFailure", "SubagentStart",
-          "SubagentStop", "PreCompact"]
+          "PermissionDenied", "Notification", "Stop", "StopFailure",
+          "SubagentStart", "SubagentStop", "PreCompact"]
 
 
 class Illeggibile(Exception):
@@ -77,13 +86,25 @@ def leggi() -> dict:
     # indovinare cosa intendeva chi l'ha scritta.
     if "hooks" in d and not isinstance(d["hooks"], dict):
         raise Illeggibile(f"in {SETTINGS} «hooks» non e' un oggetto: non lo modifico")
-    if "env" in d and not isinstance(d["env"], dict):
-        raise Illeggibile(f"in {SETTINGS} «env» non e' un oggetto: non lo modifico")
-    env = d.get("env") or {}
-    if CHIAVE_MOD in env and not isinstance(env[CHIAVE_MOD], str):
-        raise Illeggibile(
-            f"in {SETTINGS} «env.{CHIAVE_MOD}» non e' una stringa: non lo modifico")
     return d
+
+
+def env_leggibile(d: dict) -> bool:
+    """Se `env` ha una forma che conosciamo.
+
+    **Non e' un motivo per rifiutare tutto.** Il controllo stava in `leggi()`
+    e faceva fallire anche `rimuovi`, cioe' proprio il comando che serve
+    quando qualcosa e' andato storto: gli hook si toglievano solo dopo aver
+    sistemato a mano una chiave che non c'entra niente con loro. Stessa regola
+    degli eventi di forma ignota — si salta quel pezzo e si fa il resto.
+    Rilevato da /code-review il 2026-10-08.
+    """
+    env = d.get("env")
+    if env is None:
+        return True
+    if not isinstance(env, dict):
+        return False
+    return CHIAVE_MOD not in env or isinstance(env[CHIAVE_MOD], str)
 
 
 def comando(evento: str) -> str:
@@ -107,16 +128,30 @@ def voci_mod(valore: str) -> list[str]:
     return [v for v in (valore or "").split(os.pathsep) if v]
 
 
+# Il nostro mod, qualunque copia lo installi: dal progetto e'
+# `<progetto>/mods/watchdog`, dall'estensione installata e' un'altra cartella.
+# Installando da tutte e due, Claude Code caricava lo stesso plugin due volte.
+SUFFISSO_MOD = os.path.join("mods", "watchdog")
+
+
+def nostra_cartella(c: str) -> bool:
+    return c.rstrip("/").endswith(os.sep + SUFFISSO_MOD)
+
+
 def mod_installa(d: dict, percorso: str) -> bool:
-    """Aggiunge la nostra cartella in coda. Torna False se c'era gia'.
+    """Aggiunge la nostra cartella in coda. Torna False se c'era gia' quella.
 
     In coda e non in testa: chi ha messo i suoi plugin prima di noi li ha
-    messi in quell'ordine, e non siamo noi a cambiarlo.
+    messi in quell'ordine, e non siamo noi a cambiarlo. Una **altra** copia
+    dello stesso mod si toglie: due percorsi diversi che portano allo stesso
+    plugin lo fanno caricare due volte, e il pannello vedrebbe due scrittori.
+    Rilevato da /code-review il 2026-10-08.
     """
     env = d.setdefault("env", {})
     voci = voci_mod(env.get(CHIAVE_MOD, ""))
-    if percorso in voci:
+    if voci == [v for v in voci if not nostra_cartella(v)] + [percorso]:
         return False
+    voci = [v for v in voci if not nostra_cartella(v)]
     voci.append(percorso)
     env[CHIAVE_MOD] = os.pathsep.join(voci)
     return True
@@ -189,8 +224,26 @@ def backup() -> Path | None:
     with os.fdopen(fd, "wb") as fh:
         fh.write(SETTINGS.read_bytes())
     for vecchio in elenco_backup()[:-BACKUP_DA_TENERE]:
-        vecchio.unlink(missing_ok=True)
+        nel_cestino(vecchio)
     return nome
+
+
+def nel_cestino(f: Path) -> bool:
+    """Nel cestino, non cancellato — la regola non negoziabile del progetto.
+
+    `gio` manca o fallisce (niente sessione grafica, niente GIO): si lascia il
+    file dov'e'. Un backup di troppo non ha mai fatto male a nessuno, e
+    `unlink` come ripiego sarebbe proprio il pattern che il 2026-09-17 e'
+    costato due conversazioni.
+    """
+    if not f.exists():
+        return False
+    try:
+        r = subprocess.run(["gio", "trash", str(f)], capture_output=True,
+                           text=True, timeout=30)
+        return r.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
 
 
 def elenco_backup() -> list[Path]:
@@ -276,8 +329,10 @@ def stato() -> dict:
                                            "percorso": chi, "comando": cmd,
                                            "eventi": []})
                 a["eventi"].append(ev)
+    leggibile = env_leggibile(d)
     env = d.get("env") if isinstance(d.get("env"), dict) else {}
-    cartelle = voci_mod(env.get(CHIAVE_MOD, ""))
+    valore = env.get(CHIAVE_MOD, "")
+    cartelle = voci_mod(valore) if isinstance(valore, str) else []
     return {"settings": str(SETTINGS), "hook": str(HOOK),
             "hookPresente": HOOK.is_file(),
             "installati": sorted(set(installati)),
@@ -287,11 +342,12 @@ def stato() -> dict:
             "mod": str(MOD),
             "modPresente": (MOD / ".claude-plugin" / "plugin.json").is_file(),
             "modInstallato": str(MOD) in cartelle,
+            "modEnvLeggibile": leggibile,
             # Le cartelle di plugin degli altri: si mostrano, non si toccano.
             "modAltri": [c for c in cartelle if c != str(MOD)]}
 
 
-def messaggio_mod(d: dict, metti: bool) -> str:
+def messaggio_mod(d: dict, metti: bool) -> tuple[str, bool]:
     """Mette o toglie il mod in `d` e dice cosa e' successo, in una riga.
 
     Il separatore dentro il percorso lo renderebbe due cartelle: non si
@@ -299,15 +355,19 @@ def messaggio_mod(d: dict, metti: bool) -> str:
     Linux e' lecita in un nome di file.
     """
     percorso = str(MOD)
+    if not env_leggibile(d):
+        return (f"mod non toccato: in {SETTINGS} «env» ha una forma che non "
+                "conosco", False)
     if metti:
         if os.pathsep in percorso:
-            return (f"mod non attivato: «{os.pathsep}» nel percorso {percorso}")
+            return (f"mod non attivato: «{os.pathsep}» nel percorso {percorso}",
+                    False)
         if not (MOD / ".claude-plugin" / "plugin.json").is_file():
-            return f"mod non trovato in {MOD}: non attivato"
-        return ("mod attivato (vale per le sessioni nuove)"
-                if mod_installa(d, percorso) else "mod gia' attivo")
-    return ("mod disattivato" if mod_rimuovi(d, percorso)
-            else "mod non era attivo")
+            return (f"mod non trovato in {MOD}: non attivato", False)
+        return (("mod attivato (vale per le sessioni nuove)"
+                 if mod_installa(d, percorso) else "mod gia' attivo"), True)
+    return (("mod disattivato" if mod_rimuovi(d, percorso)
+             else "mod non era attivo"), True)
 
 
 def main() -> int:
@@ -352,7 +412,7 @@ def main() -> int:
             # Il mod va con gli hook: per chi installa e' una cosa sola.
             # Se manca o non si puo' scrivere il percorso, gli hook si
             # installano comunque — meglio meta' che niente.
-            esito_mod = messaggio_mod(d, metti=True)
+            esito_mod, _ = messaggio_mod(d, metti=True)
             scrivi(d)
             print(f"installati {len(EVENTI) - len(saltati)} hook")
             print(esito_mod)
@@ -365,7 +425,7 @@ def main() -> int:
             d = leggi()
             backup()
             n = togli(d, nostro)
-            esito_mod = messaggio_mod(d, metti=False)
+            esito_mod, _ = messaggio_mod(d, metti=False)
             scrivi(d)
             print(f"tolti {n} hook")
             print(esito_mod)
@@ -374,7 +434,10 @@ def main() -> int:
         if azione in ("mod-attiva", "mod-disattiva"):
             d = leggi()
             backup()
-            esito = messaggio_mod(d, metti=azione == "mod-attiva")
+            esito, ok = messaggio_mod(d, metti=azione == "mod-attiva")
+            if not ok:
+                print(esito, file=sys.stderr)
+                return 1
             scrivi(d)
             print(esito)
             return 0
@@ -392,6 +455,35 @@ def main() -> int:
                       and programma(str(h.get("command", ""))) == chi)
             scrivi(d)
             print(f"tolti {n} hook di {Path(chi).name}")
+            return 0
+
+        if azione == "elimina":
+            # Stessa rete di «ripristina»: solo file della cartella dei
+            # backup. Questo comando lo chiama un pulsante, e un percorso
+            # qualsiasi diventerebbe un file cestinato a caso.
+            if len(resto) != 1:
+                print("serve il file di backup, oppure --tutti", file=sys.stderr)
+                return 2
+            if resto[0] == "--tutti":
+                quali = elenco_backup()
+            else:
+                f = Path(resto[0]).resolve()
+                if f.parent != BACKUP.resolve() or not f.is_file():
+                    print("non e' un backup di watchface-hooks", file=sys.stderr)
+                    return 1
+                quali = [f]
+            if not quali:
+                print("nessun backup da eliminare")
+                return 0
+            # Non si fa un backup prima di cestinare un backup: aggiungerne
+            # uno mentre se ne tolgono e' un giro che non finisce.
+            fatti = sum(1 for q in quali if nel_cestino(q))
+            if fatti < len(quali):
+                print(f"cestinati {fatti} backup su {len(quali)}: "
+                      "«gio» non ha potuto, restano dove sono", file=sys.stderr)
+                return 1
+            print(f"cestinati {fatti} backup" if fatti != 1
+                  else "cestinato 1 backup")
             return 0
 
         if azione == "ripristina":

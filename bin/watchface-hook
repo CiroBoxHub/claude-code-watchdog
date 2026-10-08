@@ -70,9 +70,11 @@ f=$dir/$sid
 exec 9>"$f.lock" && flock -w 2 9 || exit 0
 
 if [[ $evento == SessionEnd ]]; then
-    # Anche il temporaneo del mod: se una rinomina fosse fallita resterebbe
-    # in $XDG_RUNTIME_DIR, che sta in RAM.
-    rm -f -- "$f" "$f.aiutanti" "$f.lock" "$f.aiutanti.mod.tmp"
+    # Anche i temporanei del mod: se una rinomina fosse fallita resterebbero
+    # in $XDG_RUNTIME_DIR, che sta in RAM. Il nome porta un suffisso unico per
+    # processo, quindi si prendono con un glob; se non ce ne sono, `rm -f` si
+    # prende il modello letterale e tace.
+    rm -f -- "$f" "$f.aiutanti" "$f.lock" "$f".*.mod.tmp "$f.aiutanti".*.mod.tmp
     exit 0
 fi
 

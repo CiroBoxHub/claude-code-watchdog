@@ -1054,7 +1054,7 @@ chmod 600 "$S"
 WH="$WD_ROOT/bin/watchface-hooks.py"
 stato() { "$WH" stato --json 2>/dev/null | python3 -c "import json,sys;d=json.load(sys.stdin);print($1)"; }
 "$WH" installa >/dev/null 2>&1
-uguale "watchface-hooks: installa i tredici eventi" "$(stato 'len(d["installati"])')" "13"
+uguale "watchface-hooks: installa i quattordici eventi" "$(stato 'len(d["installati"])')" "14"
 uguale "watchface-hooks: lascia gli hook degli altri" \
   "$(stato '[(a["programma"], len(a["eventi"])) for a in d["altri"]]')" "[('coucou-hook', 3)]"
 uguale "watchface-hooks: lascia le altre impostazioni" \
@@ -1108,7 +1108,7 @@ uguale "watchface-hooks: le forme che non conosce restano com'erano" \
   "{'strano': True} {'matcher': 'Bash', 'senza_hooks': 1}"
 # E non e' un modo di dire «non ho fatto niente»: gli altri undici ci sono.
 uguale "watchface-hooks: una forma sconosciuta non blocca gli altri eventi" \
-  "$(stato 'len(d["installati"])')" "12"
+  "$(stato 'len(d["installati"])')" "13"
 echo '{"hooks": []}' > "$S"
 uguale "watchface-hooks: «hooks» che non e' un oggetto: rifiuta senza toccare" \
   "$("$WH" installa >/dev/null 2>&1; echo $?)|$(cat "$S")" '1|{"hooks": []}'
@@ -1162,32 +1162,53 @@ echo '{}' > "$S"
 "$WH" installa >/dev/null 2>&1
 "$WH" mod-disattiva >/dev/null 2>&1
 uguale "mod: disattivarlo da solo lascia tutti gli hook" \
-  "$(stato 'len(d["installati"]), d["modInstallato"]')" "13 False"
+  "$(stato 'len(d["installati"]), d["modInstallato"]')" "14 False"
 "$WH" mod-attiva >/dev/null 2>&1
 uguale "mod: riattivarlo da solo non tocca gli hook" \
-  "$(stato 'len(d["installati"]), d["modInstallato"]')" "13 True"
+  "$(stato 'len(d["installati"]), d["modInstallato"]')" "14 True"
 
 # Le due forme che non si capiscono: non si riscrivono, come per «hooks».
 prepara
 S="$HOME/.claude/settings.json"
-# **Si controlla il messaggio, non solo che il file sia intatto.** Un file
-# «rimasto com'era» lo lascia anche un programma che muore prima di scrivere:
-# togliendo il controllo da leggi() queste due prove passavano su un
-# traceback invece che su un rifiuto (mutazione, 2026-10-08).
-rifiuto() {
-  local err; err=$("$WH" installa 2>&1 >/dev/null)
-  if [[ $err == *Traceback* ]]; then echo schianta
-  elif [[ $err == *"non lo modifico"* ]]; then echo rifiuta
-  else echo muto; fi
-}
+# Una forma di «env» che non si capisce **non blocca gli hook**: si salta
+# quel pezzo e si fa il resto, come per gli eventi di forma ignota. Il
+# controllo stava in leggi() e faceva fallire anche «rimuovi», cioe' proprio
+# il comando che serve quando qualcosa e' andato storto.
+# **E si controlla il messaggio, non solo che il file sia intatto**: un file
+# «rimasto com'era» lo lascia anche un programma che muore prima di scrivere
+# (mutazione, 2026-10-08).
+schianta() { [[ $("$WH" "$@" 2>&1 >/dev/null) == *Traceback* ]] && echo si || echo no; }
 echo '{"env": []}' > "$S"
-uguale "mod: «env» che non e' un oggetto: rifiuta senza toccare" \
-  "$("$WH" installa >/dev/null 2>&1; echo $?)|$(rifiuto)|$(cat "$S")" \
-  '1|rifiuta|{"env": []}'
+"$WH" installa >/dev/null 2>&1
+uguale "mod: «env» di forma ignota non blocca gli hook" \
+  "$(stato 'len(d["installati"]), d["modInstallato"], d["modEnvLeggibile"]')|$(schianta installa)" \
+  "14 False False|no"
+uguale "mod: e «env» resta com'era" \
+  "$(python3 -c "import json;print(json.load(open('$S'))['env'])")" "[]"
+uguale "mod: con «env» di forma ignota «rimuovi» funziona lo stesso" \
+  "$("$WH" rimuovi >/dev/null 2>&1; echo $?)|$(stato 'len(d["installati"])')" "0|0"
+uguale "mod: ma «mod-attiva» dice di no, perche' quello e' il suo lavoro" \
+  "$("$WH" mod-attiva >/dev/null 2>&1; echo $?)|$(schianta mod-attiva)" "1|no"
+
 echo '{"env": {"CLAUDE_CODE_PLUGIN_DIRS": ["/opt/suo"]}}' > "$S"
-uguale "mod: una cartella che non e' una stringa: rifiuta senza toccare" \
-  "$("$WH" installa >/dev/null 2>&1; echo $?)|$(rifiuto)|$(grep -c 'opt/suo' "$S")" \
-  "1|rifiuta|1"
+"$WH" installa >/dev/null 2>&1
+uguale "mod: una cartella che non e' una stringa non si tocca" \
+  "$(stato 'len(d["installati"]), d["modEnvLeggibile"]')|$(grep -c 'opt/suo' "$S")" "14 False|1"
+
+# Due copie dello stesso mod (dal progetto e dall'estensione) caricherebbero
+# il plugin due volte: la nostra resta una sola.
+prepara
+S="$HOME/.claude/settings.json"
+python3 - "$S" <<'PY2'
+import json, sys
+json.dump({"env": {"CLAUDE_CODE_PLUGIN_DIRS":
+                   "/opt/suo:/altra/copia/mods/watchdog"}},
+          open(sys.argv[1], "w"), indent=2)
+PY2
+"$WH" mod-attiva >/dev/null 2>&1
+uguale "mod: un'altra copia dello stesso mod viene sostituita, non aggiunta" \
+  "$(python3 -c "import json;print(json.load(open('$S'))['env']['CLAUDE_CODE_PLUGIN_DIRS'])")" \
+  "/opt/suo:$MODP"
 
 # Il mod che non c'e' non deve impedire gli hook: meta' e' meglio di niente.
 prepara
@@ -1198,7 +1219,7 @@ cp "$WD_ROOT/bin/watchface-hooks.py" "$SANDBOX/senza-mod/"
 cp "$WD_ROOT/bin/watchface-hook" "$SANDBOX/senza-mod/"
 "$SANDBOX/senza-mod/watchface-hooks.py" installa >/dev/null 2>&1
 uguale "mod: se manca, gli hook si installano comunque" \
-  "$(python3 -c "import json;d=json.load(open('$S'));print(len(d['hooks']), 'env' in d)")" "13 False"
+  "$(python3 -c "import json;d=json.load(open('$S'));print(len(d['hooks']), 'env' in d)")" "14 False"
 
 # Un settings.json che e' un collegamento resta un collegamento.
 prepara
@@ -1207,20 +1228,45 @@ echo '{"theme": "dark"}' > "$HOME/dotfiles/settings.json"
 ln -sf "$HOME/dotfiles/settings.json" "$HOME/.claude/settings.json"
 "$WD_ROOT/bin/watchface-hooks.py" installa >/dev/null 2>&1
 uguale "watchface-hooks: scrive attraverso un collegamento senza sostituirlo" \
-  "$([[ -L $HOME/.claude/settings.json ]] && echo link || echo file)|$(grep -c watchface-hook "$HOME/dotfiles/settings.json")" "link|13"
+  "$([[ -L $HOME/.claude/settings.json ]] && echo link || echo file)|$(grep -c watchface-hook "$HOME/dotfiles/settings.json")" "link|14"
 
-# Ripristinare il backup piu' vecchio quando sono gia' dieci: prima lo si
-# cancellava potando, e poi non c'era piu' niente da copiare.
+# Ripristinare il backup piu' vecchio quando la rotazione sta per toglierlo:
+# prima lo si cancellava potando, e poi non c'era piu' niente da copiare.
 prepara
 echo '{"theme": "primo"}' > "$HOME/.claude/settings.json"
-for i in $(seq 11); do "$WD_ROOT/bin/watchface-hooks.py" rimuovi >/dev/null 2>&1; done
+for i in $(seq 4); do "$WD_ROOT/bin/watchface-hooks.py" rimuovi >/dev/null 2>&1; done
 vecchio=$("$WD_ROOT/bin/watchface-hooks.py" stato --json | python3 -c "import json,sys;print(json.load(sys.stdin)['backup'][0])")
 echo '{"theme": "ultimo"}' > "$HOME/.claude/settings.json"
 "$WD_ROOT/bin/watchface-hooks.py" ripristina "$vecchio" >/dev/null 2>&1
 uguale "watchface-hooks: ripristina anche il backup piu' vecchio" \
   "$(python3 -c "import json;print(json.load(open('$HOME/.claude/settings.json'))['theme'])")" "primo"
-uguale "watchface-hooks: i backup restano dieci e in ordine" \
-  "$("$WD_ROOT/bin/watchface-hooks.py" stato --json | python3 -c "import json,sys;b=json.load(sys.stdin)['backup'];print(len(b), b==sorted(b))")" "10 True"
+# Tre, chiesto dall'uso il 2026-10-08: un backup serve a tornare indietro di
+# un passo, non a tenere l'archivio di settings.json.
+uguale "watchface-hooks: i backup restano tre e in ordine" \
+  "$("$WD_ROOT/bin/watchface-hooks.py" stato --json | python3 -c "import json,sys;b=json.load(sys.stdin)['backup'];print(len(b), b==sorted(b))")" "3 True"
+
+# La rotazione e l'eliminazione, con i numeri in chiaro: cinque modifiche
+# fanno cinque backup, se ne tengono tre, due vanno **nel cestino** — la
+# regola non negoziabile vale anche per un file scritto da noi.
+prepara
+echo '{"theme": "primo"}' > "$HOME/.claude/settings.json"
+cestinati() { ls "$HOME/.local/share/Trash/files" 2>/dev/null | grep -c '^settings-'; }
+quanti() { "$WD_ROOT/bin/watchface-hooks.py" stato --json \
+  | python3 -c "import json,sys;print(len(json.load(sys.stdin)['backup']))"; }
+for i in $(seq 5); do "$WD_ROOT/bin/watchface-hooks.py" rimuovi >/dev/null 2>&1; done
+uguale "watchface-hooks: cinque modifiche, tre backup, due cestinati" \
+  "$(quanti)|$(cestinati)" "3|2"
+uno=$("$WD_ROOT/bin/watchface-hooks.py" stato --json | python3 -c "import json,sys;print(json.load(sys.stdin)['backup'][0])")
+"$WD_ROOT/bin/watchface-hooks.py" elimina "$uno" >/dev/null 2>&1
+uguale "watchface-hooks: elimina un backup solo, nel cestino" \
+  "$(quanti)|$(cestinati)" "2|3"
+uguale "watchface-hooks: non elimina un file fuori dai backup" \
+  "$("$WD_ROOT/bin/watchface-hooks.py" elimina "$HOME/.claude/settings.json" >/dev/null 2>&1; echo $?)|$([[ -f $HOME/.claude/settings.json ]] && echo c-e)" "1|c-e"
+"$WD_ROOT/bin/watchface-hooks.py" elimina --tutti >/dev/null 2>&1
+uguale "watchface-hooks: elimina tutti, e nessuno sparisce davvero" \
+  "$(quanti)|$(cestinati)" "0|5"
+uguale "watchface-hooks: eliminare quando non ce n'e' nessuno non e' un errore" \
+  "$("$WD_ROOT/bin/watchface-hooks.py" elimina --tutti >/dev/null 2>&1; echo $?)" "0"
 
 # La quota alta colora la sua barra: un avviso testuale in piu' era un doppione.
 prepara

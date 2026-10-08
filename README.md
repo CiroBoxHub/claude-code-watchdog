@@ -128,7 +128,9 @@ dell'estensione, pagina *Watchface*, pulsante **Installa**. Oppure da terminale:
 
     python3 ~/.local/share/gnome-shell/extensions/claude-code-watchdog@cirobox.local/watchface-hooks.py installa
 
-Prima di toccare `~/.claude/settings.json` ne fa un backup. Claude Code legge
+Prima di toccare `~/.claude/settings.json` ne fa un backup: se ne tengono i
+**tre più recenti**, e dalle preferenze si possono anche buttare — nel cestino,
+da dove si recuperano. Claude Code legge
 gli hook all'avvio: le sessioni già aperte non li vedono, quelle nuove sì.
 Dopo un aggiornamento che aggiunge un evento (la 4 ha aggiunto `PreCompact`,
 per il /compact) la pagina dice «Installati in parte»: basta **Reinstalla**.
@@ -229,15 +231,18 @@ con 0: non approva, non rifiuta, non blocca.
 anche gli hook di altri programmi che facciano lo stesso lavoro. Un
 `settings.json` che non è JSON valido non viene mai riscritto.
 
-**Il mod**, se attivo, corregge le due cose che da fuori si possono solo
+**Il mod**, se attivo, corregge le tre cose che da fuori si possono solo
 dedurre. La quota: Claude Code la conosce già, quindi non serve accendere una
 CLI ogni mezz'ora per chiederla — il mod la scrive quando cambia, e la lettura
 con la CLI resta solo per le sessioni che non hanno ancora parlato. Gli
 aiutanti: l'hook li fa scadere a un'ora perché il segnale di fine di un
 aiutante in background finisce in un altro processo, mentre il mod sta dentro
 quello giusto e chiede a Claude Code chi sta ancora lavorando — chi ha finito
-sparisce subito, chi lavora davvero non scade più. Scrive gli stessi file
-dell'hook, non dei suoi: spegnerlo riporta tutto come prima.
+sparisce subito, chi lavora davvero non scade più. E la **fine del turno**:
+quando interrompi con Esc, o il modello rifiuta, o la chiamata va in errore,
+Claude Code non manda nessun segnale e la faccina restava su «sta lavorando»
+fino a un'ora. Il mod quel momento lo vede. Scrive gli stessi file dell'hook,
+non dei suoi: spegnerlo riporta tutto come prima.
 
 ## Il pannello
 
