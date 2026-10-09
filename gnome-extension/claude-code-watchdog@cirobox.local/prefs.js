@@ -337,7 +337,8 @@ export default class WatchdogPreferences extends ExtensionPreferences {
              'Il limone prende il posto della faccina quando qualcosa si inceppa: ' +
              'la sessione si è fermata per un errore, oppure tre strumenti di fila ' +
              'sono falliti. Il robottino compare quando Claude ha mandato degli ' +
-             'aiutanti, con il loro numero.');
+             'aiutanti, con il loro numero; se Claude ha finito ma loro lavorano ' +
+             'ancora, prende il posto della faccina.');
         voce(wf, 'Il limone con gli occhi all’insù',
              'Compare durante un /compact, quando Claude riassume la conversazione ' +
              'per liberare spazio: lo chiedi tu, oppure lo fa da solo quando il ' +
@@ -349,7 +350,8 @@ export default class WatchdogPreferences extends ExtensionPreferences {
         voce(wf, 'Più sessioni insieme',
              'La faccina mostra la più urgente: prima chi aspetta te, poi gli ' +
              'errori, poi chi lavora, poi chi fa un /compact. In cima al popup, sotto «Claude adesso», ' +
-             'c’è una riga per ogni sessione aperta.');
+             'c’è una riga per ogni sessione aperta; quelle che Claude avvia in ' +
+             'background stanno rientrate sotto la sessione che le ha avviate.');
         voce(wf, 'Dalla riga al terminale',
              'Un clic su una sessione, nel popup, nella notifica o nella mascotte ' +
              'fluttuante, porta davanti la finestra del terminale in cui gira. Se ' +
@@ -411,8 +413,8 @@ export default class WatchdogPreferences extends ExtensionPreferences {
              'sempre nel terminale.');
         voce(wf, 'Hook e backup',
              'Gli hook stanno in ~/.claude/settings.json. Prima di ogni modifica ' +
-             'se ne fa un backup; gli ultimi si ripristinano dalla pagina ' +
-             '«Watchface», dove si possono anche togliere gli hook di altri ' +
+             'se ne fa un backup, e se ne tengono i tre più recenti: dalla pagina ' +
+             '«Watchface» si ripristinano o si buttano nel cestino, e si possono anche togliere gli hook di altri ' +
              'programmi che fanno lo stesso lavoro.');
 
         const popup = sezione('popup', 'Il popup', 'verde', 'view-list-symbolic',

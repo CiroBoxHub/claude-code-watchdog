@@ -9,5 +9,5 @@
   ],
   "url": "https://github.com/CiroBoxHub/claude-code-watchdog",
   "settings-schema": "org.gnome.shell.extensions.claude-code-watchdog",
-  "version": 4
+  "version": 5
 }

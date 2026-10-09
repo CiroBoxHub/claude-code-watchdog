@@ -6,7 +6,6 @@
   <img alt="GNOME 48 · 49 · 50" src="https://img.shields.io/badge/GNOME-48%20%C2%B7%2049%20%C2%B7%2050-4A86CF?logo=gnome&logoColor=white">
   <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white">
   <img alt="Licenza GPL-2.0-or-later" src="https://img.shields.io/badge/licenza-GPL--2.0--or--later-2F9284">
-  <img alt="170 prove" src="https://img.shields.io/badge/prove-170%20%2B%2060%20JS-8676B8">
 </p>
 
 <p align="center">
@@ -26,32 +25,18 @@
   </tr>
 </table>
 
-<p align="center"><sub>Foto vere della shell, con dati inventati: <code>bin/fotografa-pannello.sh --demo</code>.</sub></p>
-
 ## ✨ Cosa fa
 
-- 🙂 **Watchface** — una faccina nella barra che segue Claude Code: dorme, lavora, **ti aspetta** (un permesso, una risposta), fa un /compact o ha finito. Con le notifiche quando serve davvero.
-- 📊 **Quota** — sessione e settimana con l'ora esatta dell'azzeramento, e **consigli** su cosa la sta consumando: per progetto, non solo in percentuale.
-- 💾 **Spazio** — disco, conversazioni con la loro tendenza, cache di Claude, versioni vecchie: tutto quello che cresce senza che te ne accorga.
-- 📁 **Progetti** — uno per riga: apri la cartella, riprendi la conversazione nel terminale, ricollega un progetto spostato, creane uno nuovo con un clic.
+- 🙂 **Watchface** — una faccina nella barra che segue Claude Code: lavora, **ti aspetta**, si è inceppato, fa un /compact, ha finito. Avvisa con una notifica o con una mascotte fluttuante, e un clic ti porta al terminale giusto.
+- 📊 **Quota** — sessione e settimana con l'ora esatta dell'azzeramento, e **consigli** su cosa la sta consumando, progetto per progetto.
+- 💾 **Spazio** — disco, conversazioni con la loro tendenza, cache di Claude, versioni vecchie: quello che cresce senza che te ne accorga.
+- 📁 **Progetti** — uno per riga: apri la cartella, riprendi la conversazione, ricollega un progetto spostato, creane uno nuovo.
 - 🧹 **Pulizia** — «Libera spazio» elenca, tu scegli, e tutto finisce nel **cestino**. Mai un clic che cancella.
-- 📖 **Guida integrata** — ogni indicatore spiegato, direttamente nelle impostazioni.
+- 📖 **Guida integrata** — ogni indicatore spiegato, nelle impostazioni.
 
-### Watchface
+## 🚀 Installazione
 
-| | Stato | Quando |
-|:---:|---|---|
-| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-faccina-dorme.svg" width="44"> | **dorme** | nessuna sessione di Claude aperta |
-| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-faccina-lavora.svg" width="44"> | **lavora** | Claude sta eseguendo, pensando, usando strumenti |
-| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-faccina-aspetta.svg" width="44"> | **aspetta te** | un permesso o una risposta: il punto ambra |
-| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-faccina-finito.svg" width="44"> | **ha finito** | il turno è chiuso, tocca a te |
-| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-limone.svg" width="44"> | **si è inceppato** | un errore ha fermato la sessione, o tre strumenti di fila sono falliti |
-| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-limone-su.svg" width="44"> | **riordina la memoria** | un /compact, chiesto da te o automatico a contesto pieno: lavoro, ma non una risposta, quindi niente avvisi |
-| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-robot.svg" width="44"> | **aiutanti** | nel popup, quando Claude ha mandato dei subagenti |
-
-## 🚀 Installazione rapida
-
-**Con lo zip**, senza clonare niente: scarica
+**Con lo zip**: scarica
 [`claude-code-watchdog@cirobox.local.shell-extension.zip`](https://github.com/CiroBoxHub/claude-code-watchdog/releases/latest/download/claude-code-watchdog@cirobox.local.shell-extension.zip)
 dall'[ultima release](https://github.com/CiroBoxHub/claude-code-watchdog/releases/latest), poi:
 
@@ -63,456 +48,190 @@ dall'[ultima release](https://github.com/CiroBoxHub/claude-code-watchdog/release
     cd claude-code-watchdog
     ./bin/install-extension.sh
 
-In tutti e due i casi: **logout e login**, `gnome-extensions enable
+Poi **logout e login** (su Wayland GNOME non ricarica il codice di
+un'estensione in altro modo), `gnome-extensions enable
 claude-code-watchdog@cirobox.local`, e dalle impostazioni dell'estensione →
-*Watchface* → **Installa** per collegare la faccina a Claude Code.
+*Watchface* → **Installa** per collegare la faccina a Claude Code. Vale per le
+sessioni di Claude aperte da lì in poi.
 
-<p align="center">
-  <img src="grafica/screenshot/guida.png" alt="La guida nelle impostazioni" width="520">
-</p>
-
----
-
-## Due strumenti in uno
-
-| | Cosa fa | Dove gira |
-|---|---|---|
-| **Estensione GNOME** | Cruscotto nel pannello: cosa fa Claude adesso, disco, conversazioni per progetto, quota, spazio recuperabile, andamento nel tempo. Da lì si interviene senza aprire un terminale. | Qualunque distribuzione con GNOME |
-| **Script da terminale** (`bin/`) | Scansione del sistema, inventario delle conversazioni, pulizia guidata, riparazione dei progetti spostati. | Fedora per i target di sistema, ovunque per il resto |
-
-## La regola che tiene insieme tutto
-
-> **Prima si guarda, poi si cancella. E si cancella nel cestino.**
-
-Nessuno script cancella niente senza averlo prima elencato voce per voce e
-aver ricevuto un sì esplicito. `clean.sh` e `reclaim.py` sono in **dry-run**
-finché non ricevono `--apply`. Le rimozioni che riguardano conversazioni
-passano da `gio trash`, quindi si recuperano dal gestore file.
-
-La regola è nata da un errore: due conversazioni — una da 4380 messaggi —
-sono andate perse perché al posto del cestino c'era un `unlink()`. L'elenco di
-conferma era corretto e chi ha confermato sapeva cosa stava facendo; il difetto
-era non lasciare un ripensamento possibile su dati che non si ricostruiscono.
-
----
-
-## Requisiti
+**Aggiornando**, se la pagina *Watchface* dice «Installati in parte», premi
+**Reinstalla**: la versione nuova ascolta eventi in più.
 
 | Serve per | Requisito |
 |---|---|
 | Estensione | GNOME Shell **48, 49 o 50** |
-| Script Python | **Python 3.10** o superiore |
-| Cestino | `gio` (arriva con GLib, c'è già su ogni desktop GNOME) |
-| Lettura della quota | CLI `claude` nel `PATH` |
-| Mod di Watchface (facoltativo) | Claude Code che carica i plugin di hook-funzione; senza, Watchface funziona come prima |
-| `scan-system.sh`, target di sistema di `clean.sh` | Fedora (`dnf5`, `rpm`) e systemd |
+| Script | **Python 3.10** o superiore, `gio` (c'è su ogni desktop GNOME) |
+| Quota | la CLI `claude` nel `PATH` |
+| Script di sistema (`scan-system.sh`, `clean.sh`) | Fedora (`dnf5`, `rpm`) e systemd |
 
-L'estensione non dipende da nessuna di queste ultime: gli script che si porta
-dentro invocano soltanto `du`, `gio`, `gsettings` e `claude`.
-
-## Installazione
-
-    git clone https://github.com/CiroBoxHub/claude-code-watchdog
-    cd claude-code-watchdog
-
-    ./bin/prova.sh                 # 170 prove funzionali in sandbox
-    ./bin/install-extension.sh     # installa l'estensione
-    gnome-extensions enable claude-code-watchdog@cirobox.local
-
-Poi **logout e login**. Non è pignoleria: GNOME Shell tiene in cache il modulo
-ES già importato, quindi `disable/enable` non rilegge il codice. Su Wayland non
-esiste scorciatoia.
-
-Per **Watchface** servono anche gli hook di Claude Code: dalle impostazioni
-dell'estensione, pagina *Watchface*, pulsante **Installa**. Oppure da terminale:
-
-    python3 ~/.local/share/gnome-shell/extensions/claude-code-watchdog@cirobox.local/watchface-hooks.py installa
-
-Prima di toccare `~/.claude/settings.json` ne fa un backup: se ne tengono i
-**tre più recenti**, e dalle preferenze si possono anche buttare — nel cestino,
-da dove si recuperano. Claude Code legge
-gli hook all'avvio: le sessioni già aperte non li vedono, quelle nuove sì.
-Dopo un aggiornamento che aggiunge un evento (la 4 ha aggiunto `PreCompact`,
-per il /compact) la pagina dice «Installati in parte»: basta **Reinstalla**.
-
-Lo stesso pulsante attiva anche il **mod**, se la tua versione di Claude Code
-lo regge: un plugin che gira dentro Claude Code e gli chiede direttamente la
-quota e quali aiutanti sono ancora al lavoro, invece di dedurle da fuori.
-La pagina lo mostra come riga a sé e si può spegnere da solo, lasciando gli
-hook al loro posto. Anche questo vale per le sessioni aperte da lì in poi.
-
-Gli script da terminale non vanno installati: si usano dove sono.
-
-### Su un altro PC
-
-    ./bin/pack-extension.sh        # produce dist/*.zip
-
-    # sull'altra macchina
-    gnome-extensions install --force claude-code-watchdog@cirobox.local.shell-extension.zip
-    gnome-extensions enable claude-code-watchdog@cirobox.local
-    # logout e login
-
-Lo zip porta con sé gli script Python, l'hook di Watchface e le icone, quindi
-funziona anche dove il repository non è stato clonato.
+L'estensione funziona su qualunque distribuzione con GNOME: gli script che si
+porta dentro usano soltanto `du`, `gio`, `gsettings` e `claude`.
 
 ### Disinstallare
 
-Prima gli hook, poi l'estensione: in quest'ordine `settings.json` non resta con
-hook che puntano a un file sparito.
+Prima gli hook, poi l'estensione:
 
     python3 ~/.local/share/gnome-shell/extensions/claude-code-watchdog@cirobox.local/watchface-hooks.py rimuovi
-
-Togliere gli hook toglie anche il mod: la riga che lo attivava in
-`settings.json` se ne va con loro, e se `env` resta vuoto sparisce anche quello.
     gnome-extensions uninstall claude-code-watchdog@cirobox.local
 
-Se l'ordine si inverte non succede niente di grave: ogni hook finisce con
-`|| true`, quindi Claude Code non mostra errori. Restano solo righe inutili in
-`settings.json`, che si tolgono a mano o ripristinando un backup da
-`~/.local/share/claude-code-watchdog/backup-settings/`. I dati del cruscotto
-stanno in `~/.local/share/claude-code-watchdog/` e si possono cancellare.
+I dati del cruscotto stanno in `~/.local/share/claude-code-watchdog/` e si
+possono cancellare.
 
 ---
 
-## Watchface, come funziona
+## 🙂 Watchface
 
-![La mascotte e le comparse](grafica/anteprima.png)
+| | Stato | Quando |
+|:---:|---|---|
+| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-faccina-dorme.svg" width="44"> | **dorme** | nessuna sessione di Claude aperta |
+| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-faccina-lavora.svg" width="44"> | **lavora** | Claude sta pensando o usando strumenti |
+| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-faccina-aspetta.svg" width="44"> | **aspetta te** | un permesso o una risposta |
+| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-faccina-finito.svg" width="44"> | **ha finito** | il turno è chiuso, tocca a te |
+| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-robot.svg" width="44"> | **aiutanti** | Claude ha finito, ma i suoi aiutanti in background lavorano ancora |
+| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-limone.svg" width="44"> | **si è inceppato** | un errore ha fermato la sessione, o tre strumenti di fila sono falliti |
+| <img src="gnome-extension/claude-code-watchdog@cirobox.local/icons/fw-limone-su.svg" width="44"> | **/compact** | Claude riassume la conversazione per liberare il contesto: niente avvisi, bordo blu |
 
-Cosa sta facendo Claude Code, senza tornare al terminale. La faccina nella
-barra **dorme** quando non ci sono sessioni, **lavora**, **aspetta te** — un
-permesso o una risposta, con un punto ambra — oppure **ha finito**. Il
-**limone** arriva quando qualcosa si inceppa (sessione fermata da un errore,
-tre strumenti falliti di fila), il limone con gli **occhi all’insù** durante un `/compact` —
-quando Claude riassume la conversazione per liberare il contesto, perché glielo
-chiedi tu o da solo a contesto pieno — e il **robottino** nel popup quando
-Claude manda degli aiutanti. Con più sessioni vince la più urgente.
-Finito un `/compact` chiesto da te la faccina sorride, perché tocca di nuovo a
-te; dopo quello automatico Claude torna al lavoro che stava facendo.
-
-In cima al popup, *Claude adesso* elenca le sessioni aperte: **un clic su una
-riga porta davanti il terminale** in cui gira quella sessione, e lo stesso fa
-un clic sulla notifica. Le notifiche arrivano quando Claude ti aspetta, si
-inceppa o finisce un lavoro di almeno mezzo minuto — non se stai già guardando
-il terminale. Dalle impostazioni si sceglie la grandezza della mascotte
-(piccola, media, grande) e si spegne la mascotte nella barra; senza mascotte
-resta l'icona classica, che si colora d'ambra o di rosso negli stati urgenti,
-e di blu durante un `/compact`.
-Contano solo le sessioni aperte da una persona: quelle avviate da un programma
-(`claude -p`, l'SDK) non compaiono.
+Con più sessioni la faccina mostra la più urgente. In cima al popup c'è una
+riga per sessione, e **un clic porta davanti il terminale** in cui gira; le
+sessioni che Claude avvia in background stanno rientrate sotto quella che le
+ha avviate. Quelle aperte da un programma (`claude -p`, l'SDK) non compaiono.
 
 <p align="center">
   <img src="grafica/screenshot/mascotte-fluttuante.png" alt="La mascotte fluttuante: lavora, ti aspetta con la nuvoletta, riparte, dorme" width="760">
 </p>
 
-Al posto delle notifiche si può scegliere una **mascotte fluttuante** (o nessun
-avviso, solo la faccina e il popup): compare sullo schermo
-solo quando Claude ha qualcosa da dirti, con una nuvoletta che elenca gli
-avvisi di tutte le sessioni — ti aspetta, si è inceppato, ha finito — e un
-numero sul disco della faccina. L'avviso evidenziato dà il colore a tutto;
-un clic su un'altra riga lo cambia, un clic sulla faccina porta al terminale.
-Ogni riga se ne va quando la sua sessione riparte, e senza righe la mascotte
-si ritira — oppure, se la vuoi **sempre visibile**, resta sopra le finestre e
-la sua faccia segue Claude come quella della barra. Niente lampeggia per
-abitudine: compare un **segno** solo quando serve, e lampeggia lui — due punti
-interrogativi quando Claude ti aspetta, due esclamativi quando si è inceppato,
-una lampadina sopra la testa quando c'è lavoro in corso (suo o dei suoi
-aiutanti). Non con le animazioni di GNOME spente. Si trascina dove vuoi, e
-sopra le finestre a schermo intero non compare.
+**Gli avvisi** — quando Claude ti aspetta, si inceppa o finisce un lavoro di
+almeno mezzo minuto — arrivano come notifica, oppure dalla **mascotte
+fluttuante**: compare solo quando ha qualcosa da dirti, con una nuvoletta che
+elenca gli avvisi di tutte le sessioni. Si trascina dove vuoi, non compare
+sopra lo schermo intero, e può anche restare **sempre visibile** come una
+seconda faccina. Niente lampeggia per abitudine: lampeggia solo un **segno**
+quando serve — due punti interrogativi se Claude ti aspetta, due esclamativi
+se si è inceppato, una lampadina mentre c'è lavoro in corso.
 
-**Come funziona.** Claude Code avvisa `watchface-hook` a ogni evento. È uno
-script Bash da circa 3 ms che scrive una riga per sessione in
-`$XDG_RUNTIME_DIR` (in memoria); l'estensione la osserva con inotify, senza
-interrogare niente a intervalli. Lo script non scrive nulla sull'output — per
-una richiesta di permesso l'output di un hook è una risposta — ed esce sempre
-con 0: non approva, non rifiuta, non blocca.
+**Come lo sa.** A ogni evento Claude Code chiama `watchface-hook`, uno script
+da pochi millisecondi che scrive una riga in memoria; l'estensione la legge
+solo quando cambia. Non approva e non rifiuta niente. `watchface-hooks.py`
+mette e toglie gli hook in `~/.claude/settings.json`, sempre dopo un backup
+(se ne tengono tre, e si ripristinano dalle impostazioni).
 
-`watchface-hooks.py` installa, rimuove e ripristina gli hook in
-`~/.claude/settings.json`, con un backup prima di ogni modifica, e sa togliere
-anche gli hook di altri programmi che facciano lo stesso lavoro. Un
-`settings.json` che non è JSON valido non viene mai riscritto.
+**Il mod**, attivato dallo stesso pulsante, è un plugin che gira dentro Claude
+Code e gli chiede quello che da fuori si può solo dedurre: la quota (senza
+accendere una CLI ogni mezz'ora), quali aiutanti lavorano ancora, e la fine di
+un turno interrotto con Esc o finito in errore, che Claude Code non segnala.
+È facoltativo e si spegne da solo: senza, Watchface funziona come prima.
 
-**Il mod**, se attivo, corregge le tre cose che da fuori si possono solo
-dedurre. La quota: Claude Code la conosce già, quindi non serve accendere una
-CLI ogni mezz'ora per chiederla — il mod la scrive quando cambia, e la lettura
-con la CLI resta solo per le sessioni che non hanno ancora parlato. Gli
-aiutanti: l'hook li fa scadere a un'ora perché il segnale di fine di un
-aiutante in background finisce in un altro processo, mentre il mod sta dentro
-quello giusto e chiede a Claude Code chi sta ancora lavorando — chi ha finito
-sparisce subito, chi lavora davvero non scade più. E la **fine del turno**:
-quando interrompi con Esc, o il modello rifiuta, o la chiamata va in errore,
-Claude Code non manda nessun segnale e la faccina restava su «sta lavorando»
-fino a un'ora. Il mod quel momento lo vede. Scrive gli stessi file dell'hook,
-non dei suoi: spegnerlo riporta tutto come prima.
+## 📊 Il pannello
 
-## Il pannello
+Nel popup: cosa fa Claude adesso, disco, peso delle conversazioni con la
+tendenza, cache di Claude, quota con i **consigli** (dietro l'icona «i»: dicono
+*dove* va la quota, per esempio una sessione che si porta dietro più di 150k
+token di contesto a ogni richiesta), spazio recuperabile e i progetti.
 
-Nel popup: cosa fa Claude adesso, disco, peso di `~/.claude` con la tendenza,
-cache di Claude, quota (sessione corrente e settimana) con i **consigli** su
-cosa la sta consumando, spazio recuperabile, e l'elenco dei **progetti
-cliccabili**.
-
-I consigli sulla quota, dietro l'icona «i», si calcolano dalle conversazioni di
-questo PC: dicono *dove* va la quota, cosa che `/usage` non dice — per esempio
-una sessione aperta da settimane che si porta dietro più di 150k token di
-contesto a ogni richiesta.
-
-La barra della cache misura **solo** `~/.cache/claude` e
-`~/.cache/claude-cli-nodejs` — lo staging degli aggiornamenti e i log degli
-MCP. Non tutta `~/.cache`, dove il grosso è sempre il browser: quella la
-sorveglia `scan-system.sh`, che è lo strumento di sistema. Il fondoscala è
-`ALERT_CLAUDE_CACHE_MB` e non il disco, perché la domanda è se si è superato
-il limite che ci si è dati, non quanto pesa su un terabyte.
-
-Ogni riga di progetto si apre su tre azioni:
+Ogni progetto si apre su tre azioni:
 
 | Azione | Cosa fa |
 |---|---|
-| **Cartella** | Apre la cartella di lavoro nel gestore file |
-| **Riprendi** | Apre il terminale ed esegue `claude --resume` lì dentro |
-| **Elimina dati** | Rimuove i dati che Claude Code tiene per proprio conto |
+| **Cartella** | apre la cartella di lavoro nel gestore file |
+| **Riprendi** | apre il terminale con `claude --resume` lì dentro |
+| **Elimina dati** | toglie trascrizioni, memorie e scratchpad di Claude — **mai** la cartella di lavoro |
 
-**«Elimina dati» non tocca mai la cartella di lavoro.** Rimuove trascrizioni,
-memorie, job e scratchpad; i file veri restano. Lo script ha una rete di
-sicurezza che scarta qualunque percorso caschi dentro la cartella di lavoro,
-anche se ci finisse per errore.
+Un progetto spostato mostra **Correggi**: indichi la nuova cartella e le sue
+conversazioni la seguono. Il «+» accanto a «Progetti» ne crea uno nuovo.
 
-Se un progetto è stato spostato, la sua riga mostra **Correggi**: si indica la
-nuova cartella, lo strumento verifica che i file citati nelle conversazioni
-esistano davvero lì, e solo allora riscrive il percorso e sposta le
-trascrizioni. Il «+» accanto a «Progetti» ne crea uno nuovo e ci apre subito
-una sessione.
-
-### Libera spazio
-
-Il pulsante **Libera spazio…** non pulisce: apre l'elenco di cosa verrebbe
-tolto, voce per voce, con un interruttore per ciascuna. Si elimina solo dopo un
-secondo clic su **Elimina**.
-
-Tocca esclusivamente dati dell'utente, senza chiedere privilegi:
-
-`trash` · `usercache` · `claude-cache` · `claude-versions` · `claude-stubs` ·
-`claude-jobs` · `claude-snapshots` · `claude-paste` · `claude-filehistory`
-
-Cache dei pacchetti, journal e kernel richiedono root e restano appannaggio di
-`clean.sh` da terminale.
-
-**`claude-versions`** è di solito la voce più grossa. Claude Code tiene tutte
-le versioni che ha installato in `~/.local/share/claude/versions/`, una per
-aggiornamento, circa 220 MB l'una, e non ne toglie mai nessuna. Si tengono le
-`CLAUDE_KEEP_VERSIONS` più recenti — due di serie, così un aggiornamento
-andato male si può annullare — più quella in uso, che non sempre è la più
-recente. La versione in esecuzione si ricava risolvendo il link di `claude`,
-mai dal numero più alto: se non si riesce a stabilire quale sia, la voce non
-compare affatto invece di tirare a indovinare.
-
-### Segnalazioni
-
-Per le cose che nessuna categoria conosce — una cartella dati rimasta da una
-rinomina, l'export di un esperimento — c'è una coda:
-
-    ./bin/segnala.py ~/.local/share/roba-vecchia --motivo "residuo di una rinomina"
-    ./bin/segnala.py --elenco
-    ./bin/segnala.py --togli ~/.local/share/roba-vecchia
-
-La voce compare nel pannello con nome, peso e motivo, insieme a tutte le altre,
-e si cestina con lo stesso pulsante. **Il pannello non ha un campo dove
-digitare un percorso**: mostra solo quello che è già in coda.
-
-Segnalare non cancella niente, scrive una riga in un file. Sia al momento di
-segnalare sia al momento di cestinare valgono gli stessi controlli: dentro la
-home, mai sotto `~/.claude` (per quello ci sono `session-purge.py` e
-`project-purge.py`, che verificano prima), mai una cartella che ne contiene una
-di lavoro. Il pulsante agisce solo su percorsi che trova davvero nella coda,
-qualunque cosa gli venga passata.
+**Libera spazio…** non pulisce: elenca cosa verrebbe tolto, voce per voce, e
+cestina solo dopo **Elimina**. Tocca solo dati tuoi, senza privilegi: cestino
+scaduto, `~/.cache` stantia, cache e versioni vecchie di Claude Code (tiene
+sempre quella in uso), sessioni-fantasma e sessioni automatiche orfane. Una
+cartella che nessuna categoria conosce si mette in coda con
+`./bin/segnala.py <percorso> --motivo "…"` e compare lì.
 
 ### Impostazioni
 
-Da *Impostazioni e guida*, in fondo al popup. Cinque pagine, e la **lente** in
-alto cerca in tutte:
+Da *Impostazioni e guida*, in fondo al popup. La **lente** cerca in tutte le
+pagine, e ogni gruppo ha un «?» che porta alla guida.
 
 | Pagina | Cosa c'è |
 |---|---|
-| **Guida** | ogni indicatore spiegato, con un indice in cima |
-| **Pannello** | i valori nella barra, il suo aspetto, le sezioni del popup |
-| **Watchface** | faccina nella barra e nel popup, grandezza, come avvisarti (notifiche, mascotte fluttuante o niente), hook e backup |
-| **Quota** | ogni quanto rileggere la quota e ogni quanto aggiornare il resto |
-| **Progetti** | dove nascono i nuovi, il terminale di «Riprendi», la conferma prima di eliminare |
-
-Ogni gruppo ha un pulsante che porta alla sezione della guida che lo spiega.
+| **Guida** | ogni indicatore spiegato |
+| **Pannello** | valori nella barra, aspetto, sezioni del popup |
+| **Watchface** | faccina, grandezza, come avvisarti, hook, mod e backup |
+| **Quota** | ogni quanto rileggere la quota e il resto |
+| **Progetti** | radice dei progetti, terminale di «Riprendi», conferme |
 
 <p align="center">
   <img src="grafica/screenshot/preferenze-watchface.png" alt="La pagina Watchface delle impostazioni" width="520">
 </p>
 
-Lasciando vuota la radice dei progetti viene dedotta da sola: è la cartella che
-contiene più progetti fra quelli già noti.
-
-### Come è fatto
-
-L'estensione **non calcola niente**. Legge
-`~/.local/share/claude-code-watchdog/metrics.json`, prodotto dal raccoglitore,
-e `history.jsonl` per il grafico. Correggere una misura significa toccare gli
-script, non il codice della shell.
-
-Per lo stesso motivo **in `extension.js` non c'è nessuna costante
-configurabile**: una costante lì si cambierebbe solo con logout e login. Tutto
-ciò che si regola sta in GSettings e viene riletto a ogni giro.
-
-I file del cruscotto contengono i nomi dei progetti — quindi, potenzialmente,
-dei clienti. La cartella è `700` e i file `600`.
-
 ---
 
-## Da terminale
+## 🖥️ Da terminale
 
-    ./bin/scan-system.sh                 # stato del sistema
-    ./bin/scan-claude.sh                 # stato di ~/.claude
+> **Prima si guarda, poi si cancella. E si cancella nel cestino.**
+> Ogni script che toglie qualcosa è in anteprima finché non riceve `--apply`.
+
+    ./bin/scan-system.sh                 # stato del sistema (sola lettura)
+    ./bin/scan-claude.sh                 # stato di ~/.claude (sola lettura)
     ./bin/claude-sessions.py             # inventario delle conversazioni
-    ./bin/claude-sessions.py --older-than 90
 
-    ./bin/clean.sh                       # anteprima: cosa si può liberare
-    ./bin/clean.sh --list                # elenco dei target
-    ./bin/clean.sh --apply               # esegue i target "sicuri"
-    ./bin/clean.sh --apply dnf journal   # solo questi due
+    ./bin/clean.sh                       # anteprima di cosa si può liberare
+    ./bin/clean.sh --apply               # esegue i target sicuri
+    ./bin/clean.sh --apply kernels       # un target delicato, solo per nome
+    ./bin/reclaim.py --apply trash       # la variante portabile, quella del pannello
 
-    ./bin/reclaim.py --apply trash usercache   # la variante portabile
-
-Gli scan sono a sola lettura.
-
-    ./bin/session-purge.py <id>          # elenca tutto ciò che appartiene a una sessione
-    ./bin/session-purge.py <id> --apply
-    ./bin/project-purge.py <cartella>    # i dati Claude di un intero progetto
+    ./bin/session-purge.py <id>          # tutto ciò che appartiene a una sessione
+    ./bin/project-purge.py <cartella>    # i dati Claude di un progetto
     ./bin/project-relocate.py <vecchia> <nuova>   # riaggancia un progetto spostato
-    ./bin/fix-cwd.py                     # allinea la cwd dichiarata alla cartella reale
-    ./bin/segnala.py <percorso>          # mette in coda qualcosa da liberare
 
-I target che richiedono root non possono usare `sudo` da dentro Claude Code:
-manca un terminale per la password, e nemmeno il prefisso `!` lo risolve.
-`clean.sh` ripiega su `pkexec`, che mostra il dialogo di autenticazione di
-GNOME sul desktop.
+`./bin/clean.sh --list` elenca i target. Quelli che richiedono root passano da
+`pkexec`, perché dentro Claude Code `sudo` non ha un terminale per la password.
 
-### Target di pulizia
+Da dentro Claude Code: `/watchdog-check` (report, non tocca niente),
+`/watchdog-clean` (mostra, chiede, libera), `/watchdog-sessions` (le chat, con
+il comando per riprenderle).
 
-**Sicuri** — inclusi quando non si specifica niente:
+### Configurazione
 
-`dnf` `journal` `coredump` `logs` `trash` `usercache` `flatpak`
-`claude-stubs` `claude-jobs` `claude-snapshots` `claude-paste`
-`claude-filehistory`
-
-`reclaim.py` aggiunge `claude-cache`, `claude-versions` e le segnalazioni, che
-`clean.sh` non ha: sono nati per il pannello.
-
-Nota sulle finestre di scadenza: un target toglie solo i file più vecchi della
-sua retention. Su una macchina appena installata può quindi non esserci niente
-da togliere anche quando la barra è alta — non è un errore, è che nessun file
-ha ancora l'età richiesta.
-
-**Delicati** — solo se richiesti per nome, mai in automatico:
-
-`kernels` `orphans` `claude-dups` `claude-projects`
-
-`reclaim.py` fa i sette portabili di quella lista: è lo script che
-viaggia dentro l'estensione, e non deve presumere né Fedora né privilegi.
-`clean.sh` resta la versione completa per la riga di comando.
-
-### Sessioni-fantasma
-
-Sono trascrizioni in cui l'assistente non ha mai risposto: le lasciano dietro
-le invocazioni non interattive di Claude — una statusline che chiama `/usage`,
-un hook, uno script SDK. Non sono conversazioni, si rigenerano da sole e
-gonfiano il selettore di `claude --resume`. Il target `claude-stubs` le manda
-nel cestino e non le cancella, perché il criterio «nessuna risposta» può
-pescare anche una conversazione vera interrotta prima della prima risposta.
-
-## Da dentro Claude Code
-
-| Comando | Cosa fa |
-|---|---|
-| `/watchdog-check` | Report su sistema e Claude. Non tocca niente. |
-| `/watchdog-clean` | Mostra cosa si può liberare, chiede, poi libera. |
-| `/watchdog-sessions` | Elenco delle chat, con il comando per riprenderle. |
-
----
-
-## Configurazione
-
-Tutto in `config/watchdog.conf`: quanti giorni tenere i sottoprodotti di
-Claude, il tetto del journal, quanti kernel lasciare installati, le soglie
-oltre le quali scatta l'allarme. Gli script leggono da lì e non hanno numeri
+Soglie e scadenze stanno in `config/watchdog.conf`; gli script non hanno numeri
 cablati dentro.
 
 | Chiave | Cosa regola |
 |---|---|
-| `CLAUDE_JOBS_RETENTION_DAYS` e affini | Quanto tenere job, snapshot, cronologia file, paste |
-| `TRASH_RETENTION_DAYS` | Dopo quanto un elemento cestinato è considerato scaduto |
-| `USER_CACHE_RETENTION_DAYS` | Quanto tenere i file stantii di `~/.cache` |
-| `JOURNAL_MAX_SIZE`, `COREDUMP_RETENTION_DAYS` | Limiti del journal e dei coredump |
-| `KEEP_KERNELS` | Quanti kernel lasciare installati |
-| `CLAUDE_KEEP_VERSIONS` | Quante versioni di Claude Code tenere, quella in uso compresa |
-| `CLAUDE_CACHE_RETENTION_DAYS` | Quanto tenere i log degli MCP in `~/.cache/claude-cli-nodejs/` |
-| `ALERT_CLAUDE_CACHE_MB` | Fondoscala della barra della cache, e soglia dell'avviso |
-| `ALERT_*` | Soglie oltre le quali `/watchdog-check` segnala |
+| `CLAUDE_JOBS_RETENTION_DAYS` e affini | quanto tenere job, snapshot, cronologia file, paste |
+| `TRASH_RETENTION_DAYS` | dopo quanto un elemento del cestino è scaduto |
+| `USER_CACHE_RETENTION_DAYS` | quanto tenere i file stantii di `~/.cache` |
+| `JOURNAL_MAX_SIZE`, `KEEP_KERNELS` | journal e kernel |
+| `CLAUDE_KEEP_VERSIONS` | quante versioni di Claude Code tenere, più quella in uso |
+| `ALERT_*` | soglie degli avvisi |
 
-Le impostazioni del pannello, invece, stanno in GSettings e si cambiano dalle
-preferenze dell'estensione: la cadenza di aggiornamento è `refresh-seconds`,
-non una chiave del file di configurazione.
+Le impostazioni del pannello stanno invece in GSettings, dalle preferenze.
 
-Il cestino è potato leggendo `DeletionDate` dai `.trashinfo`, **non** l'mtime:
-un documento modificato due anni fa e buttato ieri ha l'mtime vecchio, e
-potarlo per quello lo distruggerebbe il giorno dopo averlo cestinato.
+## 🔧 Sviluppo
 
-## Sviluppo
-
-    ./bin/prova.sh                 # 170 prove funzionali, sandbox con HOME dirottata
-    ./bin/prova-js.sh              # 60 prove sulle funzioni pure dei moduli JS
+    ./bin/prova.sh                 # prove funzionali, in sandbox con HOME dirottata
+    ./bin/prova-js.sh              # prove sulle funzioni dei moduli JS
+    ./bin/verifica-estensione.sh   # controlli statici, prove JS e prove del mod
     ./bin/prova-shell.sh           # carica l'estensione in una GNOME Shell annidata
-    ./bin/verifica-estensione.sh   # controlli statici, e le prove JS
-    ./bin/fotografa-pannello.sh    # foto di barra, popup e preferenze, chiaro e scuro
-    ./bin/fotografa-pannello.sh --demo grafica/screenshot   # le foto del README, con dati inventati
-    ./bin/fotografa-icone.sh       # foto delle icone come le disegna la shell
-    ./bin/fotografa-preferenze.sh  # foto di ogni pagina delle impostazioni, chiaro e scuro
-    ./bin/simula-watchface.sh      # fa passare Watchface per tutti gli stati, con sessioni finte
-    ./grafica/mascotte.py          # rigenera le icone (serve Inkscape)
+    ./bin/simula-watchface.sh      # fa passare Watchface per tutti gli stati
+    ./bin/fotografa-pannello.sh --demo grafica/screenshot   # le foto di questo README
+    ./bin/pack-extension.sh        # lo zip in dist/
 
-Le `fotografa-*` girano in una GNOME Shell annidata con una **home finta**:
-dconf ed estensioni della sessione vera non si toccano.
+`install-extension.sh` e `pack-extension.sh` si fermano se i controlli statici
+non passano. Le icone si modificano in `grafica/sorgenti/` e si rigenerano con
+`./grafica/mascotte.py`, mai a mano in `icons/`.
 
-**Le icone si modificano in `grafica/`, mai in `icons/`.** I sorgenti sono
-disegnati a tratto e leggibili; `mascotte.py` li consegna convertiti in sole
-forme piene, perché la shell riempie ogni forma di un'icona *-symbolic* del
-colore del testo e lascia i tratti del colore scritto nel file. Scoperto
-fotografando la shell vera: le icone a tratto uscivano piene e col bordo grigio.
-
-I controlli statici girano dentro `install-extension.sh` e `pack-extension.sh`,
-che si fermano se qualcosa non torna. Verificano la sintassi, lo schema
-GSettings, le icone, i metodi chiamati ma mai definiti, le chiavi GSettings
-inesistenti, le classi CSS non dichiarate e gli script che l'estensione cita ma
-che nessuno copia al suo interno.
-
-Le prove funzionali esistono perché i controlli statici non bastano: girano su
-dati finti in una sandbox con `HOME` dirottata, e coprono i casi in cui un
-difetto si vede solo eseguendo — una radice dedotta male, il cestino potato con
-il criterio sbagliato, due script che codificano lo stesso percorso in modo
-diverso.
-
-## Struttura
-
-    bin/                    script da terminale, script che l'estensione si porta
-                            dentro, prove e strumenti di sviluppo
+    bin/                    script da terminale, prove e strumenti
     config/watchdog.conf    soglie, scadenze, consigli sulla quota
-    gnome-extension/        l'estensione: extension.js (pannello e popup),
-                            watchface.js (stato di Claude), fumetto.js (mascotte
-                            fluttuante), prefs.js (impostazioni e guida),
-                            icons/ (generate), schemas/
+    gnome-extension/        l'estensione: extension.js (pannello), watchface.js,
+                            fumetto.js (mascotte), prefs.js (impostazioni e guida)
+    mods/watchdog/          il mod di Claude Code
     grafica/                sorgenti delle icone e generatore della mascotte
 
-## Autore
+## Autore e licenza
 
 **CiroBoxHub** — [github.com/CiroBoxHub](https://github.com/CiroBoxHub).
 La mascotte di Watchface è un ritratto stilizzato dell'autore, con il limone e
 il robottino che lo accompagnano.
-
-## Licenza
 
 GPL-2.0-or-later, la stessa di GNOME Shell. Copyright © 2026 CiroBoxHub.
 Vedi [`LICENSE`](LICENSE).
