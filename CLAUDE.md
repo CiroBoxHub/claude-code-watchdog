@@ -401,7 +401,7 @@ L'hook lo scrive una volta, all'avvio della sessione, nel settimo campo.
 copre il riavvio.
 
 **Una riserva ceduta e' una sessione vera, e la riga di comando non lo dice.**
-Il 2026-10-08 il progetto `koratyn-tech-tool-to-odoo` non compariva nel
+Il 2026-10-08 un progetto (su un altro PC) non compariva nel
 pannello mentre era aperto — segnalato dall'uso. Il pid 3152601 era ancora
 `claude bg-spare --bg-spare .../e5387224.claim.sock` e ospitava la
 conversazione `71e45a0a`, trentuno prompt scritti a mano: quando il demone

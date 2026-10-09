@@ -238,7 +238,7 @@ pid=${CLAUDE_PID:-}
 # **La riga di comando da sola non basta.** Quando il demone cede una riserva a
 # una sessione vera il processo resta `claude bg-spare`: il 2026-10-08 il pid
 # 3152601 era ancora `claude bg-spare --bg-spare .../e5387224.claim.sock` e
-# ospitava la conversazione 71e45a0a di koratyn-tech-tool-to-odoo, trentuno
+# ospitava una conversazione vera di un altro progetto, trentuno
 # prompt scritti a mano. Il pannello la nascondeva come tubatura, e il
 # progetto sembrava non esistere — segnalato dall'uso il 2026-10-08.
 # Quello che cambia alla cessione e' la **cartella di lavoro**: una riserva
