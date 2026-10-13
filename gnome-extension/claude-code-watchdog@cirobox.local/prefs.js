@@ -41,7 +41,7 @@ const STILE = `
 /* Gli indicatori per la barra, nell'ordine in cui compaiono, con l'icona
    che hanno nel pannello. */
 const INDICATORI = [
-    ['disco', 'Disco', 'Quanto è pieno /', 'fw-disk', 'verde'],
+    ['disco', 'Claude sul disco', 'Conversazioni, installazione e cache', 'fw-disk', 'verde'],
     ['claude', 'Peso delle conversazioni', 'Lo spazio che occupano, plugin esclusi', 'fw-data', 'verde'],
     ['sessioni', 'Numero di conversazioni', 'Quante ce ne sono in archivio', 'fw-chat', 'verde'],
     ['messaggi', 'Messaggi', 'Il totale: misura di lavoro, non di spazio', 'fw-pulse', 'verde'],
@@ -313,7 +313,7 @@ export default class WatchdogPreferences extends ExtensionPreferences {
         const barra = sezione('barra', 'La barra in alto', 'verde', 'fw-disk',
                               'Scegli cosa mostrare nella pagina «Pannello».');
         voce(barra, 'I valori',
-             'Disco, conversazioni, quota della sessione e della settimana, e ' +
+             'Quanto occupa Claude, conversazioni, quota della sessione e della settimana, e ' +
              'altro ancora. Diventano ambra e poi rossi alle stesse soglie delle ' +
              'barre nel popup.');
         voce(barra, 'La faccina',
@@ -420,9 +420,16 @@ export default class WatchdogPreferences extends ExtensionPreferences {
         const popup = sezione('popup', 'Il popup', 'verde', 'view-list-symbolic',
                               'La forma di ogni misura dice che tipo di misura è.');
         voce(popup, 'Barra con tacche',
-             'Per le grandezze che hanno un massimo: disco e quota. Le due tacche ' +
+             'Per le grandezze che hanno un massimo: spazio occupato e quota. Le due tacche ' +
              'sono le soglie di attenzione e di allarme, e il colore cambia ' +
              'esattamente lì: prima il colore della misura, poi ambra, poi rosso.');
+        voce(popup, 'Claude sul disco',
+             'Quanto occupa Claude in tutto: le conversazioni, l’installazione ' +
+             'di Claude Code (le versioni pesano più di tutto il resto) e la sua ' +
+             'cache. Il fondoscala non è il disco ma un limite che ti dai tu, ' +
+             'perché la domanda è se hai superato quello — con mezzo terabyte ' +
+             'libero, «21% di disco» non è una notizia. Lo spazio libero resta ' +
+             'scritto accanto, come contesto.');
         voce(popup, 'Linea di tendenza',
              'Per lo spazio delle conversazioni, che non ha un «pieno». La linea ' +
              'mostra le ultime 60 rilevazioni, il punto segna il valore attuale e ' +
@@ -596,7 +603,7 @@ export default class WatchdogPreferences extends ExtensionPreferences {
                            '«94» invece di «94 MB»', 'view-continuous-symbolic', 'grigio');
 
         const sezioni = this._gruppo(pagina, 'Sezioni del popup',
-                                     'Disco e dati di Claude ci sono sempre.', 'popup');
+                                     'Spazio e dati di Claude ci sono sempre.', 'popup');
         this._interruttore(sezioni, s, 'show-usage', 'Quota Claude',
                            'Sessione e settimana, con l’azzeramento', 'fw-session', 'viola');
         this._interruttore(sezioni, s, 'show-projects', 'Progetti',

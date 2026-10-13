@@ -1268,6 +1268,37 @@ uguale "watchface-hooks: elimina tutti, e nessuno sparisce davvero" \
 uguale "watchface-hooks: eliminare quando non ce n'e' nessuno non e' un errore" \
   "$("$WD_ROOT/bin/watchface-hooks.py" elimina --tutti >/dev/null 2>&1; echo $?)" "0"
 
+# La barra del popup misura **quanto occupa Claude**, non quanto e' pieno il
+# disco: «21% di 951 GB» era quasi tutto lavoro dell'utente, e l'avviso sulla
+# dimensione di ~/.claude non diceva niente con mezzo terabyte libero
+# (segnalato dall'uso il 2026-10-13).
+prepara
+mkdir -p "$HOME/.local/share/claude/versions" "$HOME/.cache/claude"
+# 6 MB di installazione e 3 MB di conversazioni: numeri scelti per essere
+# riconoscibili a occhio nel risultato.
+dd if=/dev/zero of="$HOME/.local/share/claude/versions/2.1.300" bs=1M count=6 status=none
+dd if=/dev/zero of="$HOME/.claude/projects/-tmp-progetto/riempi.jsonl" bs=1M count=3 status=none
+# E 2 MB fuori da projects/: se no «conversazioni» e il totale di ~/.claude
+# coincidono e la prova passa anche scambiandoli (mutazione, 2026-10-13).
+mkdir -p "$HOME/.claude/plugins"
+dd if=/dev/zero of="$HOME/.claude/plugins/peso.bin" bs=1M count=2 status=none
+"$WD_ROOT/bin/collect-metrics.py" --quiet >/dev/null 2>&1
+leggi_m() { python3 -c "
+import json;d=json.load(open('$HOME/.local/share/claude-code-watchdog/metrics.json'));print($1)"; }
+uguale "collect-metrics: «Claude sul disco» somma conversazioni, installazione e cache" \
+  "$(leggi_m "d['claude']['disco']['mb'] == d['claude']['totaleMb'] + d['claude']['disco']['parti']['installazione'] + d['claude']['disco']['parti']['cache']")" \
+  "True"
+uguale "collect-metrics: l'installazione si misura davvero" \
+  "$(leggi_m "d['claude']['disco']['parti']['installazione']")" "6"
+uguale "collect-metrics: le conversazioni sono quelle di ~/.claude/projects, non tutto ~/.claude" \
+  "$(leggi_m "d['claude']['disco']['parti']['conversazioni'], d['claude']['totaleMb'] >= 5")" "3 True"
+# Il fondoscala e' una soglia che ci si da', non la dimensione del disco.
+uguale "collect-metrics: il fondoscala della barra e' CLAUDE_DISCO_MB" \
+  "$(leggi_m "d['soglie']['claudeDiscoMb']")" "3000"
+# E la dimensione in se' non e' piu' un avviso.
+uguale "collect-metrics: la dimensione di ~/.claude non genera avvisi" \
+  "$(leggi_m "[a for a in d['allarmi'] if 'claude a' in a]")" "[]"
+
 # La quota alta colora la sua barra: un avviso testuale in piu' era un doppione.
 prepara
 mkdir -p "$HOME/.local/share/claude-code-watchdog"

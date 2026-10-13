@@ -243,6 +243,39 @@ def radice_progetti(esplicita: str | None, progetti: list[dict]) -> Path | None:
     return migliore
 
 
+# L'installazione di Claude Code: `~/.local/share/claude`, dove stanno le
+# versioni. Pesa piu' delle conversazioni (~245 MB l'una, due tenute) ed e' la
+# voce che fa muovere davvero il numero.
+INSTALLAZIONE = (Path(os.environ.get("XDG_DATA_HOME") or (HOME / ".local/share"))
+                 / "claude")
+
+
+def claude_sul_disco(claude_mb: int, conversazioni_mb: int,
+                     cache_mb: int) -> dict:
+    """Quanto occupa Claude in tutto, e di cosa e' fatto.
+
+    **Non e' lo spazio del disco.** La barra del popup diceva «21% di 951 GB»,
+    cioe' quasi tutto lavoro dell'utente: con 752 GB liberi non era una
+    notizia, e l'avviso «~/.claude a 515 MB» ancora meno. Segnalato dall'uso
+    il 2026-10-13. Ora la barra misura Claude, e il fondoscala e' una soglia
+    che ci si da' (`CLAUDE_DISCO_MB`), come per la cache: la domanda e' se si
+    e' superato il limite che ci si e' dati, non quanto pesa su un terabyte.
+    Lo spazio libero resta accanto, come contesto.
+    """
+    # Un `du` solo: l'albero e' di mezzo giga, attraversarlo due volte per lo
+    # stesso numero e' il costo che questo script ha gia' pagato due volte.
+    installazione = du_mb(INSTALLAZIONE)
+    return {
+        "mb": claude_mb + installazione + cache_mb,
+        "parti": {
+            "conversazioni": conversazioni_mb,
+            "installazione": installazione,
+            "cache": cache_mb,
+            "resto": max(0, claude_mb - conversazioni_mb),
+        },
+    }
+
+
 def claude_scomposizione() -> tuple[int, dict]:
     """(MB totali di ~/.claude, quanto pesa ciascuna parte).
 
@@ -807,8 +840,6 @@ def main() -> int:
     crit = num("ALERT_CRIT_PCT", 90)
     if disco["pct"] >= warn:
         allarmi.append(f"Disco al {disco['pct']}%")
-    if claude_mb > num("ALERT_CLAUDE_MB", 500):
-        allarmi.append(f"~/.claude a {claude_mb} MB")
     cache_mb, cache_top, cache_top_mb = cache_claude()
     if cache_mb > num("ALERT_CLAUDE_CACHE_MB", 200):
         allarmi.append(f"cache di Claude a {cache_mb} MB")
@@ -833,6 +864,10 @@ def main() -> int:
         "disco": disco,
         "claude": {
             "totaleMb": claude_mb,
+            # Quanto occupa Claude in tutto: la barra del popup misura questo,
+            # non quanto e' pieno il disco.
+            "disco": claude_sul_disco(claude_mb, parti.get("conversazioni", 0),
+                                      cache_mb),
             # «Conversazioni» è la voce che riguarda l'utente: è quella che il
             # popup mostra in evidenza, con il totale come contesto.
             "conversazioniMb": parti.get("conversazioni", 0),
@@ -849,7 +884,10 @@ def main() -> int:
         # dovrebbe inventarsi un massimo e colorerebbe a soglie diverse da
         # quelle a cui suona l'allarme.
         "soglie": {"attenzione": warn, "critico": crit,
-                   "cacheMb": num("ALERT_CLAUDE_CACHE_MB", 200)},
+                   "cacheMb": num("ALERT_CLAUDE_CACHE_MB", 200),
+                   # Il fondoscala della barra di Claude: una soglia che ci si
+                   # da', non la dimensione del disco.
+                   "claudeDiscoMb": num("CLAUDE_DISCO_MB", 3000)},
         "recuperabile": {"totaleMb": sum(r["mb"] for r in rec), "voci": rec},
         "quota": quota,
         "consigliQuota": sess.get("consigli", []),

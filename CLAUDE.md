@@ -561,6 +561,27 @@ per l'ora intera, cioe' esattamente il difetto che si sta correggendo. Il mod
 prende `<sessione>.lock`, lo stesso dell'hook, dentro lo `sh -c` che fa gia' la
 rinomina: nessun fork in piu'.
 
+**La barra del disco misurava il disco, e non serviva a niente.** Diceva
+«21% di 951 GB» — 198 GB usati, di cui Claude 1 — e sotto, fra gli avvisi,
+«~/.claude a 515 MB». Segnalato dall'uso il 2026-10-13: «io voglio vedere in
+disco quello occupato da claude». Ha ragione: su una macchina con 752 GB
+liberi nessuno dei due numeri e' una notizia, e il secondo era anche
+**mal attribuito**, perche' 277 di quei 515 MB sono l'ambiente Python del
+plugin `claude-security`, non conversazioni.
+Ora la barra e' **«Claude sul disco»**: `~/.claude` piu' l'installazione di
+Claude Code (`~/.local/share/claude`, dove stanno le versioni) piu' la sua
+cache — oggi 1007 MB, di cui 490 di installazione. Il fondoscala e'
+`CLAUDE_DISCO_MB`, **una soglia che ci si da'**, esattamente come per la cache
+e per la stessa ragione: la domanda e' se si e' superato il limite che ci si e'
+dati, non quanto si pesa su un terabyte. Lo spazio libero resta scritto
+accanto, come contesto, e la stessa misura va nella tessera della barra.
+**L'avviso sulla dimensione e' sparito dal pannello** ma resta in
+`scan-claude.sh`: la' un «quanto pesa» e' quello che gli si chiede.
+**L'installazione pesa piu' delle conversazioni** (490 MB contro 191) ed e' la
+voce che fa muovere il numero: due versioni tenute a ~245 MB l'una. Misurarla
+non costa niente — `versions/` ha due file, non un albero — e la raccolta resta
+a 0,09 s.
+
 **I backup di settings.json sono tre, e si possono buttare** (chiesto dall'uso
 il 2026-10-08). Erano dieci: un backup serve a tornare indietro di un passo,
 non a tenere l'archivio di una configurazione che non c'e' piu'. La rotazione
@@ -762,7 +783,7 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              204 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh              209 prove funzionali, sandbox con HOME dirottata
     ./bin/prova-js.sh           106 prove sulle funzioni pure dei moduli JS
     claude plugin test mods/watchdog  le funzioni pure del mod (gira dentro
                                       verifica-estensione.sh)

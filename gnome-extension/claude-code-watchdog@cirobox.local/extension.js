@@ -1032,7 +1032,11 @@ class Indicatore extends PanelMenu.Button {
 
         // Valore, e quanto vale in percentuale per decidere se tingerlo.
         const valori = {
-            disco: [`${disco.pct ?? '?'}%`, disco.pct],
+            // Anche la tessera nella barra dice quanto occupa Claude: una
+            // percentuale di disco pieno non riguarda lui.
+            disco: [fmtMb(claude.disco?.mb, compatto),
+                    Math.round((claude.disco?.mb ?? 0) /
+                               (d.soglie?.claudeDiscoMb ?? 3000) * 100)],
             claude: [fmtMb(claude.conversazioniMb ?? claude.totaleMb, compatto), null],
             sessioni: [senzaSigle ? `${claude.conversazioni ?? 0}`
                                   : `${claude.conversazioni ?? 0} sess`, null],
@@ -1102,7 +1106,7 @@ class Indicatore extends PanelMenu.Button {
         c.add_child(this._rigaGuasto);
 
         // --- macchina ---
-        this._mDisco = new Misura('Disco', {forma: 'barra'});
+        this._mDisco = new Misura('Claude sul disco', {forma: 'barra'});
         this._mClaude = new Misura('Conversazioni', {forma: 'tendenza'});
         // Solo ~/.cache/claude* e non tutta ~/.cache: li' dentro il grosso e'
         // sempre il browser, e questo pannello non deve misurarlo. Fondoscala
@@ -1305,8 +1309,22 @@ class Indicatore extends PanelMenu.Button {
         this._aggiornaPannello(d);
         this._etichettaAggiornato.set_text(fmtAge(d.generatoIl));
 
-        this._mDisco.aggiorna(`${disco.pct ?? '?'}%`, (disco.pct ?? 0) / 100,
-            `${disco.usatiGb ?? '?'} di ${disco.totaliGb ?? '?'} GB · ${disco.liberiGb ?? '?'} GB liberi`);
+        // Quanto occupa Claude, non quanto è pieno il disco: «21% di 951 GB»
+        // era quasi tutto lavoro dell'utente, e con 752 GB liberi non era una
+        // notizia. Segnalato dall'uso il 2026-10-13. Il fondoscala è la
+        // soglia che ci si dà, come per la cache; lo spazio libero resta
+        // accanto, come contesto.
+        const suDisco = claude.disco ?? {};
+        const parti = suDisco.parti ?? {};
+        const sogliaDisco = d.soglie?.claudeDiscoMb ?? 3000;
+        const pezzi = [];
+        if (parti.conversazioni)
+            pezzi.push(`${fmtMb(parti.conversazioni)} conversazioni`);
+        if (parti.installazione)
+            pezzi.push(`${fmtMb(parti.installazione)} installazione`);
+        pezzi.push(`${disco.liberiGb ?? '?'} GB liberi sul disco`);
+        this._mDisco.aggiorna(fmtMb(suDisco.mb), (suDisco.mb ?? 0) / sogliaDisco,
+                              pezzi.join(' · '));
 
         const cacheMb = claude.cacheMb ?? 0;
         const cacheSoglia = d.soglie?.cacheMb ?? 200;
