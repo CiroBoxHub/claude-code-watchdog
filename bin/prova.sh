@@ -1292,9 +1292,38 @@ uguale "collect-metrics: l'installazione si misura davvero" \
   "$(leggi_m "d['claude']['disco']['parti']['installazione']")" "6"
 uguale "collect-metrics: le conversazioni sono quelle di ~/.claude/projects, non tutto ~/.claude" \
   "$(leggi_m "d['claude']['disco']['parti']['conversazioni'], d['claude']['totaleMb'] >= 5")" "3 True"
-# Il fondoscala e' una soglia che ci si da', non la dimensione del disco.
-uguale "collect-metrics: il fondoscala della barra e' CLAUDE_DISCO_MB" \
-  "$(leggi_m "d['soglie']['claudeDiscoMb']")" "3000"
+# Il fondoscala e' la capienza vera del disco, e accanto si dice quanto e'
+# occupato da tutto cio' che non e' Claude: senza, una barra quasi vuota non
+# spiegherebbe dove sono finiti i GB usati.
+uguale "collect-metrics: il fondoscala della barra e' il disco vero" \
+  "$(leggi_m "d['claude']['disco']['discoMb'] == d['disco']['totaliGb'] * 1024")" "True"
+# «altro» e la percentuale si provano con numeri scelti, non confrontando il
+# risultato con la stessa formula che l'ha prodotto: quella prova passava
+# anche con «altro» che includeva Claude, perche' nella sandbox la differenza
+# spariva nell'arrotondamento ai GB (mutazione, 2026-10-13).
+suDisco() { python3 -c "
+import importlib.util as u
+from pathlib import Path
+s=u.spec_from_file_location('cm','$WD_ROOT/bin/collect-metrics.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+m.INSTALLAZIONE = Path('/non/esiste')   # cosi' il totale e' solo quello passato
+print($1)"; }
+uguale "claude-sul-disco: «altro» e' l'occupato meno Claude" \
+  "$(suDisco "m.claude_sul_disco(10 * 1024, 1000, 0, {'usatiGb': 60, 'totaliGb': 100})['altroGb']")" \
+  "50"
+uguale "claude-sul-disco: il fondoscala e' la capienza, non l'usato" \
+  "$(suDisco "m.claude_sul_disco(1024, 0, 0, {'usatiGb': 60, 'totaliGb': 100})['discoMb']")" \
+  "102400"
+# Un decimale: a zero arrotondato la riga direbbe «0% di 951 GB», che si legge
+# come «non misurato» invece che «quasi niente».
+uguale "claude-sul-disco: la percentuale tiene un decimale" \
+  "$(suDisco "m.claude_sul_disco(5 * 1024 + 512, 0, 0, {'usatiGb': 60, 'totaliGb': 100})['pct']")" \
+  "5.5"
+# Dati incoerenti non devono produrre un numero negativo sotto la barra.
+uguale "claude-sul-disco: «altro» non va sotto zero" \
+  "$(suDisco "m.claude_sul_disco(90 * 1024, 0, 0, {'usatiGb': 10, 'totaliGb': 100})['altroGb']")" \
+  "0"
+uguale "claude-sul-disco: disco sconosciuto, nessuna divisione per zero" \
+  "$(suDisco "m.claude_sul_disco(1024, 0, 0, {})['pct']")" "None"
 # E la dimensione in se' non e' piu' un avviso.
 uguale "collect-metrics: la dimensione di ~/.claude non genera avvisi" \
   "$(leggi_m "[a for a in d['allarmi'] if 'claude a' in a]")" "[]"

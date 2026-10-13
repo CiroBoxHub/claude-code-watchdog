@@ -570,11 +570,17 @@ liberi nessuno dei due numeri e' una notizia, e il secondo era anche
 plugin `claude-security`, non conversazioni.
 Ora la barra e' **«Claude sul disco»**: `~/.claude` piu' l'installazione di
 Claude Code (`~/.local/share/claude`, dove stanno le versioni) piu' la sua
-cache — oggi 1007 MB, di cui 490 di installazione. Il fondoscala e'
-`CLAUDE_DISCO_MB`, **una soglia che ci si da'**, esattamente come per la cache
-e per la stessa ragione: la domanda e' se si e' superato il limite che ci si e'
-dati, non quanto si pesa su un terabyte. Lo spazio libero resta scritto
-accanto, come contesto, e la stessa misura va nella tessera della barra.
+cache — oggi 1007 MB, di cui 490 di installazione. **Il numero e la barra sono
+Claude, il fondoscala e' la capienza vera del disco** (scelta dell'uso, contro
+una prima versione che usava una soglia nostra): cosi' in una riga si legge la
+cosa che interessa davvero, cioe' che Claude occupa **un giga su novecento**.
+Il prezzo e' che la barra resta quasi vuota — allo 0,1% non si vede — percio'
+accanto si scrivono la percentuale **con un decimale** (a zero arrotondato si
+leggerebbe «non misurato» invece che «quasi niente») e **`altroGb`**, quanto e'
+occupato da tutto cio' che non e' Claude: senza, una barra vuota con 265 GB
+usati non si spiega. Stessa misura nella tessera della barra, **senza tinta**:
+su un disco intero Claude non arriva mai a una soglia, e colorarlo vorrebbe
+dire inventarne una.
 **L'avviso sulla dimensione e' sparito dal pannello** ma resta in
 `scan-claude.sh`: la' un «quanto pesa» e' quello che gli si chiede.
 **L'installazione pesa piu' delle conversazioni** (490 MB contro 191) ed e' la
@@ -783,7 +789,7 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              209 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova.sh              214 prove funzionali, sandbox con HOME dirottata
     ./bin/prova-js.sh           106 prove sulle funzioni pure dei moduli JS
     claude plugin test mods/watchdog  le funzioni pure del mod (gira dentro
                                       verifica-estensione.sh)

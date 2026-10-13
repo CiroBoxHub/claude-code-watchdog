@@ -1033,10 +1033,10 @@ class Indicatore extends PanelMenu.Button {
         // Valore, e quanto vale in percentuale per decidere se tingerlo.
         const valori = {
             // Anche la tessera nella barra dice quanto occupa Claude: una
-            // percentuale di disco pieno non riguarda lui.
-            disco: [fmtMb(claude.disco?.mb, compatto),
-                    Math.round((claude.disco?.mb ?? 0) /
-                               (d.soglie?.claudeDiscoMb ?? 3000) * 100)],
+            // percentuale di disco pieno non riguarda lui. Niente tinta: su un
+            // disco intero Claude non arriva mai a una soglia, e colorarlo
+            // vorrebbe dire inventarne una.
+            disco: [fmtMb(claude.disco?.mb, compatto), null],
             claude: [fmtMb(claude.conversazioniMb ?? claude.totaleMb, compatto), null],
             sessioni: [senzaSigle ? `${claude.conversazioni ?? 0}`
                                   : `${claude.conversazioni ?? 0} sess`, null],
@@ -1316,14 +1316,20 @@ class Indicatore extends PanelMenu.Button {
         // accanto, come contesto.
         const suDisco = claude.disco ?? {};
         const parti = suDisco.parti ?? {};
-        const sogliaDisco = d.soglie?.claudeDiscoMb ?? 3000;
         const pezzi = [];
-        if (parti.conversazioni)
-            pezzi.push(`${fmtMb(parti.conversazioni)} conversazioni`);
+        // L'installazione non ha una riga sua, e di solito è la parte grossa:
+        // senza, «1,0 GB» non si spiega con 191 MB di conversazioni.
         if (parti.installazione)
             pezzi.push(`${fmtMb(parti.installazione)} installazione`);
-        pezzi.push(`${disco.liberiGb ?? '?'} GB liberi sul disco`);
-        this._mDisco.aggiorna(fmtMb(suDisco.mb), (suDisco.mb ?? 0) / sogliaDisco,
+        if (suDisco.pct !== null && suDisco.pct !== undefined)
+            pezzi.push(`${String(suDisco.pct).replace('.', ',')}% di ${disco.totaliGb ?? '?'} GB`);
+        // Quanto del disco non è Claude: senza, una barra quasi vuota non
+        // spiega dove siano finiti i GB usati.
+        if (suDisco.altroGb !== undefined)
+            pezzi.push(`altro ${suDisco.altroGb} GB`);
+        pezzi.push(`${disco.liberiGb ?? '?'} GB liberi`);
+        this._mDisco.aggiorna(fmtMb(suDisco.mb),
+                              (suDisco.mb ?? 0) / (suDisco.discoMb || 1),
                               pezzi.join(' · '));
 
         const cacheMb = claude.cacheMb ?? 0;

@@ -426,10 +426,11 @@ export default class WatchdogPreferences extends ExtensionPreferences {
         voce(popup, 'Claude sul disco',
              'Quanto occupa Claude in tutto: le conversazioni, l’installazione ' +
              'di Claude Code (le versioni pesano più di tutto il resto) e la sua ' +
-             'cache. Il fondoscala non è il disco ma un limite che ti dai tu, ' +
-             'perché la domanda è se hai superato quello — con mezzo terabyte ' +
-             'libero, «21% di disco» non è una notizia. Lo spazio libero resta ' +
-             'scritto accanto, come contesto.');
+             'cache. Il numero e la barra sono Claude, il fondoscala è la ' +
+             'capienza vera del disco: così si legge in una riga quanto pesa ' +
+             'Claude sul totale. La barra resta quasi vuota, ed è il punto — ' +
+             'accanto trovi la percentuale, quanto è occupato da tutto il resto ' +
+             'e quanto è libero.');
         voce(popup, 'Linea di tendenza',
              'Per lo spazio delle conversazioni, che non ha un «pieno». La linea ' +
              'mostra le ultime 60 rilevazioni, il punto segna il valore attuale e ' +

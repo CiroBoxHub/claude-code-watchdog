@@ -250,23 +250,35 @@ INSTALLAZIONE = (Path(os.environ.get("XDG_DATA_HOME") or (HOME / ".local/share")
                  / "claude")
 
 
-def claude_sul_disco(claude_mb: int, conversazioni_mb: int,
-                     cache_mb: int) -> dict:
-    """Quanto occupa Claude in tutto, e di cosa e' fatto.
+def claude_sul_disco(claude_mb: int, conversazioni_mb: int, cache_mb: int,
+                     disco: dict) -> dict:
+    """Quanto occupa Claude in tutto, di cosa e' fatto, e quanto e' il resto.
 
-    **Non e' lo spazio del disco.** La barra del popup diceva «21% di 951 GB»,
-    cioe' quasi tutto lavoro dell'utente: con 752 GB liberi non era una
-    notizia, e l'avviso «~/.claude a 515 MB» ancora meno. Segnalato dall'uso
-    il 2026-10-13. Ora la barra misura Claude, e il fondoscala e' una soglia
-    che ci si da' (`CLAUDE_DISCO_MB`), come per la cache: la domanda e' se si
-    e' superato il limite che ci si e' dati, non quanto pesa su un terabyte.
-    Lo spazio libero resta accanto, come contesto.
+    **Il numero e la barra sono Claude; il fondoscala e' il disco vero.** La
+    barra diceva «21% di 951 GB», cioe' quasi tutto lavoro dell'utente, e
+    l'avviso «~/.claude a 515 MB» ancora meno di niente con mezzo terabyte
+    libero. Segnalato dall'uso il 2026-10-13. Ora si legge in una riga sola la
+    cosa che interessa davvero: **Claude occupa un giga su novecento**, e il
+    resto del disco e' roba tua. Per dirlo serve anche `altroGb`, cioe' quanto
+    e' occupato da tutto cio' che non e' Claude: senza, la barra quasi vuota
+    non spiegherebbe dove sono finiti i 198 GB usati.
     """
     # Un `du` solo: l'albero e' di mezzo giga, attraversarlo due volte per lo
     # stesso numero e' il costo che questo script ha gia' pagato due volte.
     installazione = du_mb(INSTALLAZIONE)
+    mb = claude_mb + installazione + cache_mb
+    usati_mb = (disco.get("usatiGb") or 0) * 1024
+    totali_mb = (disco.get("totaliGb") or 0) * 1024
     return {
-        "mb": claude_mb + installazione + cache_mb,
+        "mb": mb,
+        # Il fondoscala della barra: la capienza vera del disco, in MB perche'
+        # il numero sopra e' in MB e i due devono potersi dividere.
+        "discoMb": totali_mb,
+        # Quanto e' occupato da tutto cio' che non e' Claude.
+        "altroGb": max(0, round((usati_mb - mb) / 1024)),
+        # Un decimale: a zero arrotondato la riga direbbe «0% di 951 GB», che
+        # si legge come «non misurato» invece che «quasi niente».
+        "pct": round(mb / totali_mb * 100, 1) if totali_mb else None,
         "parti": {
             "conversazioni": conversazioni_mb,
             "installazione": installazione,
@@ -867,7 +879,7 @@ def main() -> int:
             # Quanto occupa Claude in tutto: la barra del popup misura questo,
             # non quanto e' pieno il disco.
             "disco": claude_sul_disco(claude_mb, parti.get("conversazioni", 0),
-                                      cache_mb),
+                                      cache_mb, disco),
             # «Conversazioni» è la voce che riguarda l'utente: è quella che il
             # popup mostra in evidenza, con il totale come contesto.
             "conversazioniMb": parti.get("conversazioni", 0),
@@ -884,10 +896,7 @@ def main() -> int:
         # dovrebbe inventarsi un massimo e colorerebbe a soglie diverse da
         # quelle a cui suona l'allarme.
         "soglie": {"attenzione": warn, "critico": crit,
-                   "cacheMb": num("ALERT_CLAUDE_CACHE_MB", 200),
-                   # Il fondoscala della barra di Claude: una soglia che ci si
-                   # da', non la dimensione del disco.
-                   "claudeDiscoMb": num("CLAUDE_DISCO_MB", 3000)},
+                   "cacheMb": num("ALERT_CLAUDE_CACHE_MB", 200)},
         "recuperabile": {"totaleMb": sum(r["mb"] for r in rec), "voci": rec},
         "quota": quota,
         "consigliQuota": sess.get("consigli", []),

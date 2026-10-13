@@ -130,10 +130,11 @@ porta dietro più di 150k token di contesto a ogni richiesta), spazio
 recuperabile e i progetti.
 
 **«Claude sul disco»** somma `~/.claude`, l'installazione di Claude Code (le
-versioni, che pesano più di tutto il resto) e la sua cache. Non misura quanto è
-pieno il disco: con mezzo terabyte libero quel numero non dice niente, e parla
-quasi tutto di lavoro tuo. Il fondoscala è `CLAUDE_DISCO_MB`, un limite che ti
-dai tu; lo spazio libero resta scritto accanto.
+versioni, che pesano più di tutto il resto) e la sua cache. Il numero e la
+barra sono Claude, il fondoscala è la capienza vera del disco: si legge in una
+riga che Claude occupa un giga su novecento, e il resto del disco è roba tua.
+Accanto, quanto pesa in percentuale, quanto è occupato da tutto il resto e
+quanto resta libero.
 
 Ogni progetto si apre su tre azioni:
 
