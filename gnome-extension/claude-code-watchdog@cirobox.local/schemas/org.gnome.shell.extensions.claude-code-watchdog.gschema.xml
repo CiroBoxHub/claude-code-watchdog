@@ -78,6 +78,21 @@
       <summary>Quanti progetti elencare</summary>
     </key>
 
+    <key name="disk-scale-gb" type="i">
+      <range min="0" max="4096"/>
+      <default>0</default>
+      <summary>Fondoscala della barra «Claude sul disco» (GB)</summary>
+      <description>
+        A quanto corrisponde la barra piena. 0 significa la capienza vera del
+        disco: la barra resta quasi vuota, perché Claude occupa un giga su
+        novecento, e la riga lo dice con la percentuale e con quanto è
+        occupato da tutto il resto. Un valore proprio — poco sopra quello che
+        Claude occupa oggi — rende la barra leggibile e le fa prendere le
+        tinte di attenzione e allarme. Il numero resta quello che occupa
+        Claude: cambia solo il massimo a cui è rapportato.
+      </description>
+    </key>
+
     <key name="confirm-delete" type="b">
       <default>true</default>
       <summary>Chiedi conferma prima di eliminare i dati di un progetto</summary>

@@ -207,9 +207,9 @@ export default class WatchdogPreferences extends ExtensionPreferences {
     _scorciatoie(gruppo, s, chiave, valori) {
         const riga = new Adw.ActionRow({title: 'Rapidi'});
         const box = new Gtk.Box({valign: Gtk.Align.CENTER, css_classes: ['linked']});
-        for (const [etichetta, secondi] of valori) {
+        for (const [etichetta, valore] of valori) {
             const b = new Gtk.Button({label: etichetta});
-            b.connect('clicked', () => s.set_int(chiave, secondi));
+            b.connect('clicked', () => s.set_int(chiave, valore));
             box.append(b);
         }
         riga.add_suffix(box);
@@ -431,6 +431,13 @@ export default class WatchdogPreferences extends ExtensionPreferences {
              'Claude sul totale. La barra resta quasi vuota, ed è il punto — ' +
              'accanto trovi la percentuale, quanto è occupato da tutto il resto ' +
              'e quanto è libero.');
+        voce(popup, 'Il fondoscala si può cambiare',
+             'Se la barra quasi vuota non ti dice niente, nella pagina Pannello ' +
+             'scegli un fondoscala tuo: poco sopra quello che Claude occupa oggi. ' +
+             'Il numero non cambia — è sempre quanto occupa Claude — ma la barra ' +
+             'si muove, e prende l’ambra e il rosso alle solite soglie. A 0 torna ' +
+             'il disco intero, e allora la tessera nella barra non si colora: su ' +
+             'novecento giga una soglia non la si raggiunge mai.');
         voce(popup, 'Linea di tendenza',
              'Per lo spazio delle conversazioni, che non ha un «pieno». La linea ' +
              'mostra le ultime 60 rilevazioni, il punto segna il valore attuale e ' +
@@ -615,6 +622,15 @@ export default class WatchdogPreferences extends ExtensionPreferences {
                            'Quando una soglia viene superata', 'dialog-warning-symbolic', 'ambra');
         this._numero(sezioni, s, 'max-projects', 'Quanti progetti elencare',
                      'I più pesanti per primi', [3, 25, 1, 5], 'view-list-symbolic', 'blu');
+
+        const scala = this._gruppo(pagina, 'Barra del disco',
+                                   'Il numero è sempre quanto occupa Claude: qui scegli a '
+                                   + 'quanto corrisponde la barra piena.', 'popup');
+        this._numero(scala, s, 'disk-scale-gb', 'Fondoscala (GB)',
+                     '0 = tutto il disco, e la barra resta quasi vuota',
+                     [0, 4096, 1, 10], 'fw-disk', 'verde');
+        this._scorciatoie(scala, s, 'disk-scale-gb',
+                          [['Disco', 0], ['2 GB', 2], ['5 GB', 5], ['10 GB', 10]]);
 
         return pagina;
     }

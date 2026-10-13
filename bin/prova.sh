@@ -1313,17 +1313,24 @@ uguale "claude-sul-disco: «altro» e' l'occupato meno Claude" \
 uguale "claude-sul-disco: il fondoscala e' la capienza, non l'usato" \
   "$(suDisco "m.claude_sul_disco(1024, 0, 0, {'usatiGb': 60, 'totaliGb': 100})['discoMb']")" \
   "102400"
-# Un decimale: a zero arrotondato la riga direbbe «0% di 951 GB», che si legge
-# come «non misurato» invece che «quasi niente».
-uguale "claude-sul-disco: la percentuale tiene un decimale" \
-  "$(suDisco "m.claude_sul_disco(5 * 1024 + 512, 0, 0, {'usatiGb': 60, 'totaliGb': 100})['pct']")" \
-  "5.5"
+# La cache e l'installazione entrano nel totale: la riga dice «Claude sul
+# disco», non «le conversazioni».
+uguale "claude-sul-disco: il totale somma conversazioni, installazione e cache" \
+  "$(suDisco "m.claude_sul_disco(1000, 800, 200, {'usatiGb': 60, 'totaliGb': 100})['mb']")" \
+  "1200"
 # Dati incoerenti non devono produrre un numero negativo sotto la barra.
 uguale "claude-sul-disco: «altro» non va sotto zero" \
   "$(suDisco "m.claude_sul_disco(90 * 1024, 0, 0, {'usatiGb': 10, 'totaliGb': 100})['altroGb']")" \
   "0"
-uguale "claude-sul-disco: disco sconosciuto, nessuna divisione per zero" \
-  "$(suDisco "m.claude_sul_disco(1024, 0, 0, {})['pct']")" "None"
+# Senza disco non si inventa un fondoscala: il pannello lo sa e non scrive
+# nessuna percentuale.
+uguale "claude-sul-disco: disco sconosciuto, fondoscala a zero" \
+  "$(suDisco "m.claude_sul_disco(1024, 0, 0, {})['discoMb']")" "0"
+# Il percento non si calcola qui: dipende dal fondoscala scelto, che sta in
+# GSettings. Due copie di quella regola divergono.
+uguale "claude-sul-disco: la percentuale non viene pubblicata" \
+  "$(suDisco "'pct' in m.claude_sul_disco(1024, 0, 0, {'usatiGb': 60, 'totaliGb': 100})")" \
+  "False"
 # E la dimensione in se' non e' piu' un avviso.
 uguale "collect-metrics: la dimensione di ~/.claude non genera avvisi" \
   "$(leggi_m "[a for a in d['allarmi'] if 'claude a' in a]")" "[]"

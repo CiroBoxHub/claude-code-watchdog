@@ -107,6 +107,34 @@ function fmtMb(mb, compatto = false) {
     return compatto ? `${Math.round(mb)}M` : `${Math.round(mb)} MB`;
 }
 
+/* Il fondoscala della barra del disco, la frazione da disegnare e la
+   percentuale che le sta accanto.
+
+   `scalaGb` viene dalle impostazioni: 0 vuol dire «la capienza vera del
+   disco», ed è il valore di serie. Il numero e la barra sono sempre Claude;
+   quello che cambia è il massimo a cui rapportarlo. Col disco intero la barra
+   resta quasi vuota — Claude occupa un giga su novecento, e la riga lo dice
+   con la percentuale e con `altro N GB` — ma chi la vuole vedere muovere si
+   dà un fondoscala proprio, poco sopra quello che Claude occupa oggi.
+   **La tinta segue la scala scelta**: le soglie del 75 e del 90% su un disco
+   intero non si raggiungono mai, quindi colorare lì vorrebbe dire inventarsi
+   un massimo; su un fondoscala deciso dall'utente invece vogliono dire
+   qualcosa, ed è il motivo per cui l'impostazione esiste. */
+function scalaDisco(mb, discoMb, scalaGb) {
+    const quanti = mb ?? 0;
+    const fondoMb = scalaGb > 0 ? scalaGb * 1024 : discoMb;
+    if (!fondoMb)
+        return {fondoMb: 0, frazione: 0, testo: null, tinta: null};
+    const pct = Math.round(quanti / fondoMb * 1000) / 10;
+    // Un decimale finché il numero è piccolo: a zero arrotondato la riga
+    // direbbe «0% di 951 GB», che si legge come «non misurato» invece che
+    // «quasi niente». Dal 10% in su il decimale è rumore.
+    const cifre = pct < 10 ? String(pct).replace('.', ',') : `${Math.round(pct)}`;
+    const quanto = fondoMb >= 1024 ? `${Math.round(fondoMb / 1024)} GB` : `${fondoMb} MB`;
+    return {fondoMb, frazione: quanti / fondoMb, testo: `${cifre}% di ${quanto}`,
+            tinta: scalaGb > 0 ? pct : null};
+}
+
 function fmtNum(n) {
     if (n === null || n === undefined)
         return '—';
@@ -1033,10 +1061,12 @@ class Indicatore extends PanelMenu.Button {
         // Valore, e quanto vale in percentuale per decidere se tingerlo.
         const valori = {
             // Anche la tessera nella barra dice quanto occupa Claude: una
-            // percentuale di disco pieno non riguarda lui. Niente tinta: su un
-            // disco intero Claude non arriva mai a una soglia, e colorarlo
-            // vorrebbe dire inventarne una.
-            disco: [fmtMb(claude.disco?.mb, compatto), null],
+            // percentuale di disco pieno non riguarda lui. La tinta c'è solo
+            // con un fondoscala scelto: sul disco intero Claude non arriva mai
+            // a una soglia, e colorarlo vorrebbe dire inventarne una.
+            disco: [fmtMb(claude.disco?.mb, compatto),
+                    scalaDisco(claude.disco?.mb, claude.disco?.discoMb,
+                               this._settings.get_int('disk-scale-gb')).tinta],
             claude: [fmtMb(claude.conversazioniMb ?? claude.totaleMb, compatto), null],
             sessioni: [senzaSigle ? `${claude.conversazioni ?? 0}`
                                   : `${claude.conversazioni ?? 0} sess`, null],
@@ -1311,26 +1341,26 @@ class Indicatore extends PanelMenu.Button {
 
         // Quanto occupa Claude, non quanto è pieno il disco: «21% di 951 GB»
         // era quasi tutto lavoro dell'utente, e con 752 GB liberi non era una
-        // notizia. Segnalato dall'uso il 2026-10-13. Il fondoscala è la
-        // soglia che ci si dà, come per la cache; lo spazio libero resta
-        // accanto, come contesto.
+        // notizia. Segnalato dall'uso il 2026-10-13. Il fondoscala è il disco
+        // vero, o quello che l'utente si è scelto in `disk-scale-gb`; lo
+        // spazio libero e l'occupato che non è Claude restano accanto, come
+        // contesto, e non dipendono dalla scala.
         const suDisco = claude.disco ?? {};
         const parti = suDisco.parti ?? {};
+        const scala = scalaDisco(suDisco.mb, suDisco.discoMb, s.get_int('disk-scale-gb'));
         const pezzi = [];
         // L'installazione non ha una riga sua, e di solito è la parte grossa:
         // senza, «1,0 GB» non si spiega con 191 MB di conversazioni.
         if (parti.installazione)
             pezzi.push(`${fmtMb(parti.installazione)} installazione`);
-        if (suDisco.pct !== null && suDisco.pct !== undefined)
-            pezzi.push(`${String(suDisco.pct).replace('.', ',')}% di ${disco.totaliGb ?? '?'} GB`);
+        if (scala.testo)
+            pezzi.push(scala.testo);
         // Quanto del disco non è Claude: senza, una barra quasi vuota non
         // spiega dove siano finiti i GB usati.
         if (suDisco.altroGb !== undefined)
             pezzi.push(`altro ${suDisco.altroGb} GB`);
         pezzi.push(`${disco.liberiGb ?? '?'} GB liberi`);
-        this._mDisco.aggiorna(fmtMb(suDisco.mb),
-                              (suDisco.mb ?? 0) / (suDisco.discoMb || 1),
-                              pezzi.join(' · '));
+        this._mDisco.aggiorna(fmtMb(suDisco.mb), scala.frazione, pezzi.join(' · '));
 
         const cacheMb = claude.cacheMb ?? 0;
         const cacheSoglia = d.soglie?.cacheMb ?? 200;

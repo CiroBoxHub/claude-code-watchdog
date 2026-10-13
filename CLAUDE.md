@@ -587,6 +587,25 @@ dire inventarne una.
 voce che fa muovere il numero: due versioni tenute a ~245 MB l'una. Misurarla
 non costa niente — `versions/` ha due file, non un albero — e la raccolta resta
 a 0,09 s.
+**E il fondoscala si puo' cambiare** (chiesto dall'uso lo stesso giorno, dopo
+aver visto la barra vuota): `disk-scale-gb` nelle preferenze, 0 — il valore di
+serie — vuol dire il disco vero. Chi si da' un fondoscala proprio, poco sopra
+quello che Claude occupa oggi, vede la barra muoversi e **la fa colorare alle
+solite soglie**: sul disco intero il 75% non si raggiunge mai, quindi li' la
+tinta manca, con una scala scelta vuol dire qualcosa. Il numero non cambia mai
+— e' sempre quanto occupa Claude — e cambia solo il massimo a cui e'
+rapportato; `altro N GB` e lo spazio libero restano quelli del disco vero,
+perche' sono il contesto e non dipendono dalla scala.
+**La percentuale e' passata dal raccoglitore al pannello.** Dipende da una
+scelta che vive in GSettings, e lo schema non e' installato a livello di
+sistema: calcolarla anche in `collect-metrics.py` vorrebbe dire due copie della
+stessa regola, cioe' due copie che divergono (e' il motivo per cui la radice
+dei progetti la decide uno solo). Il raccoglitore pubblica il dato grezzo —
+`mb` e `discoMb` — e `scalaDisco()` in `extension.js` ne ricava fondoscala,
+frazione, testo e tinta, con undici casi in `prova-js.sh` e sette mutazioni.
+Una e' sopravvissuta e ha tolto codice invece di aggiungere una prova: il
+`|| 0` sul disco mancante non cambiava niente, perche' un fondoscala falso
+viene gia' intercettato dal ritorno anticipato.
 
 **I backup di settings.json sono tre, e si possono buttare** (chiesto dall'uso
 il 2026-10-08). Erano dieci: un backup serve a tornare indietro di un passo,
@@ -789,8 +808,8 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              214 prove funzionali, sandbox con HOME dirottata
-    ./bin/prova-js.sh           106 prove sulle funzioni pure dei moduli JS
+    ./bin/prova.sh              215 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova-js.sh           120 prove sulle funzioni pure dei moduli JS
     claude plugin test mods/watchdog  le funzioni pure del mod (gira dentro
                                       verifica-estensione.sh)
     ./bin/prova-shell.sh        carica l'estensione in una shell annidata (~1 min)

@@ -134,7 +134,10 @@ versioni, che pesano più di tutto il resto) e la sua cache. Il numero e la
 barra sono Claude, il fondoscala è la capienza vera del disco: si legge in una
 riga che Claude occupa un giga su novecento, e il resto del disco è roba tua.
 Accanto, quanto pesa in percentuale, quanto è occupato da tutto il resto e
-quanto resta libero.
+quanto resta libero. Se la barra quasi vuota non ti dice niente, nelle
+preferenze c'è il **fondoscala**: dagli un valore tuo, poco sopra quello che
+Claude occupa oggi, e la barra si muove e prende l'ambra e il rosso alle solite
+soglie. Il numero resta quello che occupa Claude.
 
 Ogni progetto si apre su tre azioni:
 

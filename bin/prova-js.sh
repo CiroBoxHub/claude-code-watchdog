@@ -28,7 +28,7 @@ const testo = new TextDecoder().decode(sorgente);
 
 // Si prendono solo le funzioni senza dipendenze da GNOME: le altre non si
 // possono eseguire fuori dal processo della shell.
-const PURE = ["fmtMb", "fmtNum", "fmtAge", "taglia", "tagliaNome"];
+const PURE = ["fmtMb", "fmtNum", "fmtAge", "taglia", "tagliaNome", "scalaDisco"];
 let codice = "";
 for (const nome of PURE) {
     const re = new RegExp("^function " + nome + "\\([^)]*\\) \\{[\\s\\S]*?^\\}", "m");
@@ -103,6 +103,46 @@ uguale("fmtMb: forma compatta", fmtMb(2048, true), "2.0G");
 uguale("fmtNum: niente dato", fmtNum(null), "—");
 uguale("fmtNum: sotto i 10000 per esteso", fmtNum(9999), "9999");
 uguale("fmtNum: da 10000 in forma k", fmtNum(10000), "10.0k");
+
+// --- scalaDisco: il fondoscala della barra del disco.
+// Tabella dei casi prima del codice: il disco vero, una scala scelta, nessun
+// disco, oltre il fondoscala, e le due regole sul decimale.
+// Un disco da 952 GB, con Claude a 1003 MB: il caso vero di questa macchina.
+const DISCO = 974848;
+uguale("scalaDisco: col disco vero la percentuale tiene un decimale",
+       scalaDisco(1003, DISCO, 0).testo, "0,1% di 952 GB");
+uguale("scalaDisco: sul disco intero la tessera non si colora",
+       scalaDisco(1003, DISCO, 0).tinta, "null");
+uguale("scalaDisco: la scala scelta vince sul disco",
+       scalaDisco(1003, DISCO, 2).testo, "49% di 2 GB");
+uguale("scalaDisco: con una scala scelta la tinta esiste",
+       scalaDisco(1003, DISCO, 2).tinta, "49");
+uguale("scalaDisco: con una scala scelta la barra si muove",
+       Math.round(scalaDisco(1003, DISCO, 2).frazione * 100), "49");
+// Senza disco e senza scala non si inventa un fondoscala: la riga non scrive
+// nessuna percentuale invece di dividere per zero.
+uguale("scalaDisco: disco sconosciuto, nessuna percentuale",
+       scalaDisco(1003, 0, 0).testo, "null");
+uguale("scalaDisco: disco sconosciuto, frazione a zero",
+       scalaDisco(1003, 0, 0).frazione, "0");
+uguale("scalaDisco: senza il dato del disco non si divide per NaN",
+       scalaDisco(1003, undefined, 0).frazione, "0");
+uguale("scalaDisco: la scala scelta vale anche senza disco",
+       scalaDisco(1003, 0, 2).testo, "49% di 2 GB");
+// Un disco non e quasi mai un numero tondo di GB: si arrotonda al piu vicino.
+uguale("scalaDisco: il fondoscala si arrotonda al GB piu vicino",
+       scalaDisco(1003, 975400, 0).testo, "0,1% di 953 GB");
+// Oltre il fondoscala si dice il numero vero: la barra lo tronca da se.
+uguale("scalaDisco: oltre il fondoscala la percentuale non si tronca",
+       scalaDisco(4096, DISCO, 2).testo, "200% di 2 GB");
+// Sotto il 10 per cento il decimale e la notizia, sopra e rumore.
+uguale("scalaDisco: sotto il dieci per cento tiene il decimale",
+       scalaDisco(112.64, DISCO, 2).testo, "5,5% di 2 GB");
+uguale("scalaDisco: dal dieci per cento in su niente decimale",
+       scalaDisco(205, DISCO, 2).testo, "10% di 2 GB");
+// Un dato che manca non deve diventare NaN sotto la barra.
+uguale("scalaDisco: senza misura la barra sta a zero",
+       scalaDisco(undefined, DISCO, 2).testo, "0% di 2 GB");
 
 // --- taglia: accorcia dalla coda, e il puntino conta nella lunghezza
 uguale("taglia: più corto resta intero", taglia("breve", 10), "breve");

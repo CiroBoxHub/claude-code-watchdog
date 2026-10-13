@@ -262,6 +262,14 @@ def claude_sul_disco(claude_mb: int, conversazioni_mb: int, cache_mb: int,
     resto del disco e' roba tua. Per dirlo serve anche `altroGb`, cioe' quanto
     e' occupato da tutto cio' che non e' Claude: senza, la barra quasi vuota
     non spiegherebbe dove sono finiti i 198 GB usati.
+
+    **La percentuale non si calcola qui.** Dal 2026-10-13 il fondoscala della
+    barra e' un'impostazione (`disk-scale-gb`): il disco vero, o un valore che
+    l'utente si sceglie perche' la barra gli dica qualcosa. Il percento
+    dipende da quella scelta, che vive in GSettings e la conosce solo il
+    pannello — calcolarlo anche qui vorrebbe dire tenerne due versioni e
+    vederle divergere. Qui resta il dato grezzo: quanto occupa Claude e
+    quanto e' capiente il disco.
     """
     # Un `du` solo: l'albero e' di mezzo giga, attraversarlo due volte per lo
     # stesso numero e' il costo che questo script ha gia' pagato due volte.
@@ -276,9 +284,6 @@ def claude_sul_disco(claude_mb: int, conversazioni_mb: int, cache_mb: int,
         "discoMb": totali_mb,
         # Quanto e' occupato da tutto cio' che non e' Claude.
         "altroGb": max(0, round((usati_mb - mb) / 1024)),
-        # Un decimale: a zero arrotondato la riga direbbe «0% di 951 GB», che
-        # si legge come «non misurato» invece che «quasi niente».
-        "pct": round(mb / totali_mb * 100, 1) if totali_mb else None,
         "parti": {
             "conversazioni": conversazioni_mb,
             "installazione": installazione,
