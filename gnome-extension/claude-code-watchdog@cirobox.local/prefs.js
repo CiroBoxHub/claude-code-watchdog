@@ -428,11 +428,10 @@ export default class WatchdogPreferences extends ExtensionPreferences {
              'loro file, le conversazioni, l’installazione di Claude Code (le ' +
              'versioni pesano più di tutto il resto) e la cache. La home, / e /tmp ' +
              'non si contano: una sessione aperta dalla home farebbe misurare ' +
-             'tutto il disco. Il numero e la barra sono Claude, il fondoscala è la ' +
-             'capienza vera del disco: così si legge in una riga quanto pesa ' +
-             'Claude sul totale. La barra resta quasi vuota, ed è il punto — ' +
-             'accanto trovi la percentuale, quanto è occupato da tutto il resto ' +
-             'e quanto è libero.');
+             'tutto il disco. Il numero e la barra sono Claude; sotto trovi in ' +
+             'chiaro gli altri tre numeri che servono a leggerlo — quanto è ' +
+             'occupato in tutto, quanto è libero e quanto è capiente il disco — ' +
+             'e quanta parte del fondoscala occupa Claude.');
         voce(popup, 'Il dettaglio dello spazio',
              'Un clic sulla riga apre di cosa è fatto il numero: una barra a ' +
              'segmenti e una riga per voce, con il colore, la percentuale e i MB. ' +
@@ -441,12 +440,14 @@ export default class WatchdogPreferences extends ExtensionPreferences {
              'allarmi — ambra e rosso restano riservati a quelli, qui direbbero ' +
              'che una voce è un problema mentre si sta solo dicendo quanto pesa.');
         voce(popup, 'Il fondoscala si può cambiare',
-             'Se la barra quasi vuota non ti dice niente, nella pagina Pannello ' +
-             'scegli un fondoscala tuo: poco sopra quello che Claude occupa oggi. ' +
-             'Il numero non cambia — è sempre quanto occupa Claude — ma la barra ' +
-             'si muove, e prende l’ambra e il rosso alle solite soglie. A 0 torna ' +
-             'il disco intero, e allora la tessera nella barra non si colora: su ' +
-             'novecento giga una soglia non la si raggiunge mai.');
+             'Col disco intero la barra resta quasi vuota: Claude occupa un giga ' +
+             'su novecento, e la percentuale sotto lo dice con un decimale. Se ' +
+             'vuoi vederla muovere, nella pagina Pannello scegli un fondoscala ' +
+             'tuo, poco sopra quello che Claude occupa oggi: la riga scrive su ' +
+             'cosa è calcolata la percentuale, e la barra prende l’ambra e il ' +
+             'rosso alle solite soglie. A 0 torna il disco intero, e allora la ' +
+             'tessera nella barra non si colora: su novecento giga una soglia ' +
+             'non la si raggiunge mai.');
         voce(popup, 'Linea di tendenza',
              'Per lo spazio delle conversazioni, che non ha un «pieno». La linea ' +
              'mostra le ultime 60 rilevazioni, il punto segna il valore attuale e ' +

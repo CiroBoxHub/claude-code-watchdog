@@ -18,6 +18,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Clutter from 'gi://Clutter';
+import Pango from 'gi://Pango';
 
 import Shell from 'gi://Shell';
 
@@ -166,6 +167,25 @@ function rgbDaHex(hex) {
     return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255];
 }
 
+/* I quattro numeri che la riga deve rendere evidenti, nell'ordine in cui si
+   leggono: quanto occupa Claude, quanto è occupato in tutto, quanto è libero,
+   quanto è grande il disco. Chiesto dall'uso il 2026-10-14, e servono tutti e
+   quattro: il primo da solo non dice se è tanto, e «usati» e «liberi» uno
+   accanto all'altro sommano al disco — la riga si legge senza fare conti.
+   «altro N GB» se ne va: era l'occupato meno Claude, cioè una sottrazione già
+   fatta che adesso si vede per intero.
+   Un dato che manca salta la sua voce invece di scrivere «?». */
+function totaliDisco(mb, disco) {
+    const d = disco ?? {};
+    const pezzi = [`Claude ${fmtMb(mb ?? 0)}`];
+    for (const [chiave, nome] of [['usatiGb', 'usati'], ['liberiGb', 'liberi'],
+                                  ['totaliGb', 'disco']]) {
+        if (d[chiave] !== null && d[chiave] !== undefined)
+            pezzi.push(`${nome} ${d[chiave]} GB`);
+    }
+    return pezzi;
+}
+
 /* Il fondoscala della barra del disco, la frazione da disegnare e la
    percentuale che le sta accanto.
 
@@ -189,8 +209,14 @@ function scalaDisco(mb, discoMb, scalaGb) {
     // direbbe «0% di 951 GB», che si legge come «non misurato» invece che
     // «quasi niente». Dal 10% in su il decimale è rumore.
     const cifre = pct < 10 ? String(pct).replace('.', ',') : `${Math.round(pct)}`;
-    const quanto = fondoMb >= 1024 ? `${Math.round(fondoMb / 1024)} GB` : `${fondoMb} MB`;
-    return {fondoMb, frazione: quanti / fondoMb, testo: `${cifre}% di ${quanto}`,
+    // Si dice di COSA è percentuale. Col disco intero il numero sta già
+    // scritto accanto («disco 951 GB») e ripeterlo qui sarebbe un numero in
+    // più da leggere; con un fondoscala scelto invece va detto, se no un
+    // «52%» non si sa su cosa sia calcolato.
+    const testo = scalaGb > 0
+        ? `${cifre}% del fondoscala (${scalaGb} GB)`
+        : `${cifre}% del fondoscala`;
+    return {fondoMb, frazione: quanti / fondoMb, testo,
             tinta: scalaGb > 0 ? pct : null};
 }
 
@@ -492,8 +518,15 @@ const Misura = GObject.registerClass({
             this.add_child(this._tendenza);
         }
 
-        this._nota = new St.Label({text: '', style_class: 'fw-metric-note'});
+        this._nota = new St.Label({text: '', style_class: 'fw-metric-note',
+                                   x_expand: true});
+        // `line_wrap` da solo non basta: senza `x_expand` l'etichetta chiede
+        // tutta la larghezza che le serve e il popup la taglia a destra invece
+        // di mandarla a capo, e senza spegnere l'ellissi Pango preferisce
+        // troncare. Visto in foto il 2026-10-14, con la nota a quattro numeri.
         this._nota.clutter_text.line_wrap = true;
+        this._nota.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
+        this._nota.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
         this.add_child(this._nota);
 
         if (apribile) {
@@ -1562,18 +1595,12 @@ class Indicatore extends PanelMenu.Button {
         const suDisco = claude.disco ?? {};
         const parti = suDisco.parti ?? {};
         const scala = scalaDisco(suDisco.mb, suDisco.discoMb, s.get_int('disk-scale-gb'));
-        // Di cosa è fatto il numero: qui solo la voce più grossa, che è anche
-        // quella che lo fa muovere — senza, «2,6 GB» non si spiega con 199 MB
-        // di conversazioni. Le altre stanno nel dettaglio, a un clic: cinque
-        // voci in una nota larga 300 px sono tre righe che nessuno legge.
-        const pezzi = partiDisco(parti, 1);
+        // I tre numeri in chiaro, poi di cosa è percentuale la barra. Di cosa
+        // è fatto il totale lo dice il dettaglio, a un clic: metterlo anche
+        // qui voleva dire una nota di tre righe che nessuno legge.
+        const pezzi = totaliDisco(suDisco.mb, disco);
         if (scala.testo)
             pezzi.push(scala.testo);
-        // Quanto del disco non è Claude: senza, una barra quasi vuota non
-        // spiega dove siano finiti i GB usati.
-        if (suDisco.altroGb !== undefined)
-            pezzi.push(`altro ${suDisco.altroGb} GB`);
-        pezzi.push(`${disco.liberiGb ?? '?'} GB liberi`);
         this._mDisco.aggiorna(fmtMb(suDisco.mb), scala.frazione, pezzi.join(' · '));
         this._mostraComposizione(parti);
 

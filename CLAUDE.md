@@ -575,10 +575,18 @@ Claude, il fondoscala e' la capienza vera del disco** (scelta dell'uso, contro
 una prima versione che usava una soglia nostra): cosi' in una riga si legge la
 cosa che interessa davvero, cioe' che Claude occupa **un giga su novecento**.
 Il prezzo e' che la barra resta quasi vuota — allo 0,1% non si vede — percio'
-accanto si scrivono la percentuale **con un decimale** (a zero arrotondato si
-leggerebbe «non misurato» invece che «quasi niente») e **`altroGb`**, quanto e'
-occupato da tutto cio' che non e' Claude: senza, una barra vuota con 265 GB
-usati non si spiega. Stessa misura nella tessera della barra, **senza tinta**:
+accanto si scrive la percentuale **con un decimale** (a zero arrotondato si
+leggerebbe «non misurato» invece che «quasi niente»).
+**E sotto i quattro numeri in chiaro** (chiesto dall'uso il 2026-10-14, in due
+riprese): `Claude 2.6 GB · usati 200 GB · liberi 750 GB · disco 951 GB · 0,3%
+del fondoscala`. Prima c'era `altro 197 GB`, cioe' l'occupato meno Claude: una
+sottrazione gia' fatta, che nascondeva i due numeri da cui veniva. Ora usati e
+liberi stanno accanto e sommano alla capienza, quindi la riga si legge senza
+conti a mente, e `altroGb` **non si pubblica piu'** — un terzo numero calcolato
+per differenza era un numero in piu' da tenere allineato agli altri due.
+**La percentuale dice di cosa e' percentuale**: «del fondoscala», e con un
+fondoscala scelto anche quanto vale («del fondoscala (5 GB)»). Col disco intero
+il numero sta gia' scritto accanto e ripeterlo era rumore. Stessa misura nella tessera della barra, **senza tinta**:
 su un disco intero Claude non arriva mai a una soglia, e colorarlo vorrebbe
 dire inventarne una.
 **L'avviso sulla dimensione e' sparito dal pannello** ma resta in
@@ -611,8 +619,9 @@ attribuirlo: la riga ora si apre su una barra a segmenti e una riga per voce,
 con il colore, la percentuale e i MB. **Si richiude da sola** — alla chiusura
 del popup e dopo `DETTAGLIO_S` (30 s) — perche' e' un approfondimento, non uno
 stato: lasciato aperto allungherebbe il popup a ogni apertura successiva senza
-che nessuno l'abbia chiesto. Sotto la barra resta **una** voce sola, la piu'
-grossa: cinque in una nota larga 300 px sono tre righe che nessuno legge.
+che nessuno l'abbia chiesto. Sotto la barra non resta nessuna voce della
+composizione: quello spazio serve ai quattro numeri di sopra, e cinque voci in
+una nota larga 300 px erano tre righe che nessuno legge.
 **I colori della composizione non sono quelli dell'allarme.** Ambra e mattone
 vogliono dire «attenzione» e «critico» in tutto il popup, e usarli per una
 fetta farebbe leggere «la cache e' un problema» dove si sta solo dicendo quanto
@@ -636,7 +645,7 @@ sistema: calcolarla anche in `collect-metrics.py` vorrebbe dire due copie della
 stessa regola, cioe' due copie che divergono (e' il motivo per cui la radice
 dei progetti la decide uno solo). Il raccoglitore pubblica il dato grezzo —
 `mb` e `discoMb` — e `scalaDisco()` in `extension.js` ne ricava fondoscala,
-frazione, testo e tinta, con dodici casi in `prova-js.sh` e otto mutazioni.
+frazione, testo e tinta, con undici casi in `prova-js.sh` e otto mutazioni.
 Una e' sopravvissuta e ha tolto codice invece di aggiungere una prova: il
 `|| 0` sul disco mancante non cambiava niente, perche' un fondoscala falso
 viene gia' intercettato dal ritorno anticipato.
@@ -842,8 +851,8 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              230 prove funzionali, sandbox con HOME dirottata
-    ./bin/prova-js.sh           140 prove sulle funzioni pure dei moduli JS
+    ./bin/prova.sh              228 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova-js.sh           143 prove sulle funzioni pure dei moduli JS
     claude plugin test mods/watchdog  le funzioni pure del mod (gira dentro
                                       verifica-estensione.sh)
     ./bin/prova-shell.sh        carica l'estensione in una shell annidata (~1 min)

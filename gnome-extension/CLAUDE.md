@@ -375,6 +375,18 @@ automatico: esattamente il sintomo «i consumi non si aggiornano se non premo
 io». Si registra anche *quando* è stata alzata e oltre `LUCCHETTO_MS` (2 minuti)
 si considera persa e si riapre.
 
+### Le note sotto le misure venivano tagliate
+
+`line_wrap = true` da solo non manda a capo niente: senza `x_expand` l'etichetta
+chiede tutta la larghezza che le serve, e quello che avanza il popup lo taglia a
+destra; Pango, per parte sua, preferisce l'ellissi. Scoperto il 2026-10-14
+allungando la nota del disco a quattro numeri — e la foto ha mostrato che da chissà
+quando era tagliata anche quella delle conversazioni («~/.claude in tutto 526 MB,
+di cui 324 MB fra plugin e strumenti» non si è mai vista). Ora le note hanno
+`x_expand`, `line_wrap_mode = WORD_CHAR` e `ellipsize = NONE`.
+**Nessun controllo statico vede un testo tagliato**: si vede solo in foto, ed è
+il motivo per cui `fotografa-pannello.sh` esiste.
+
 ### Tipografia
 
 Le note sotto le misure erano a `opacity: 0.45-0.5`, cioè metà contrasto rispetto

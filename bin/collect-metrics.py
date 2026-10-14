@@ -321,9 +321,11 @@ def claude_sul_disco(claude_mb: int, conversazioni_mb: int, cache_mb: int,
     l'avviso «~/.claude a 515 MB» ancora meno di niente con mezzo terabyte
     libero. Segnalato dall'uso il 2026-10-13. Ora si legge in una riga sola la
     cosa che interessa davvero: **Claude occupa un giga su novecento**, e il
-    resto del disco e' roba tua. Per dirlo serve anche `altroGb`, cioe' quanto
-    e' occupato da tutto cio' che non e' Claude: senza, la barra quasi vuota
-    non spiegherebbe dove sono finiti i 198 GB usati.
+    resto del disco e' roba tua. Accanto al numero il pannello scrive gli altri
+    due che servono a leggerlo — quanto e' occupato in tutto e quanto e'
+    capiente il disco — e li prende da `disco`, non da qui: un `altroGb`
+    calcolato per differenza era un terzo numero da tenere allineato agli altri
+    due, e nessuno lo leggeva piu' (tolto il 2026-10-14).
 
     **La percentuale non si calcola qui.** Dal 2026-10-13 il fondoscala della
     barra e' un'impostazione (`disk-scale-gb`): il disco vero, o un valore che
@@ -345,15 +347,12 @@ def claude_sul_disco(claude_mb: int, conversazioni_mb: int, cache_mb: int,
     # stesso numero e' il costo che questo script ha gia' pagato due volte.
     installazione = du_mb(INSTALLAZIONE)
     mb = claude_mb + installazione + cache_mb + progetti_mb
-    usati_mb = (disco.get("usatiGb") or 0) * 1024
     totali_mb = (disco.get("totaliGb") or 0) * 1024
     return {
         "mb": mb,
         # Il fondoscala della barra: la capienza vera del disco, in MB perche'
         # il numero sopra e' in MB e i due devono potersi dividere.
         "discoMb": totali_mb,
-        # Quanto e' occupato da tutto cio' che non e' Claude.
-        "altroGb": max(0, round((usati_mb - mb) / 1024)),
         "parti": {
             "conversazioni": conversazioni_mb,
             "installazione": installazione,

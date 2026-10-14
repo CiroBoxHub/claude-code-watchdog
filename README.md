@@ -140,10 +140,12 @@ una sessione aperta dalla home farebbe misurare l'intero disco.
 il colore, la percentuale e i MB. Si richiude da sola quando chiudi il popup, o
 dopo mezzo minuto.
 
-Il numero e la barra sono Claude, il fondoscala è la capienza vera del disco: si
-legge in una riga quanto pesa Claude sul totale, e il resto del disco è roba
-tua. Accanto, quanto pesa in percentuale, quanto è occupato da tutto il resto e
-quanto resta libero. Se la barra quasi vuota non ti dice niente, nelle
+Sotto, i numeri che servono a leggerlo, tutti in chiaro:
+
+    Claude 2.6 GB · usati 200 GB · liberi 750 GB · disco 951 GB · 0,3% del fondoscala
+
+Il numero e la barra sono Claude; il fondoscala è la capienza vera del disco,
+o quello che ti scegli nelle preferenze. Se la barra quasi vuota non ti dice niente, nelle
 preferenze c'è il **fondoscala**: dagli un valore tuo, poco sopra quello che
 Claude occupa oggi, e la barra si muove e prende l'ambra e il rosso alle solite
 soglie. Il numero resta quello che occupa Claude.

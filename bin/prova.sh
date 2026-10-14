@@ -1307,9 +1307,6 @@ from pathlib import Path
 s=u.spec_from_file_location('cm','$WD_ROOT/bin/collect-metrics.py');m=u.module_from_spec(s);s.loader.exec_module(m)
 m.INSTALLAZIONE = Path('/non/esiste')   # cosi' il totale e' solo quello passato
 print($1)"; }
-uguale "claude-sul-disco: «altro» e' l'occupato meno Claude" \
-  "$(suDisco "m.claude_sul_disco(10 * 1024, 1000, 0, 0, {'usatiGb': 60, 'totaliGb': 100})['altroGb']")" \
-  "50"
 uguale "claude-sul-disco: il fondoscala e' la capienza, non l'usato" \
   "$(suDisco "m.claude_sul_disco(1024, 0, 0, 0, {'usatiGb': 60, 'totaliGb': 100})['discoMb']")" \
   "102400"
@@ -1327,10 +1324,6 @@ uguale "claude-sul-disco: le cartelle dei progetti entrano nel totale" \
 uguale "claude-sul-disco: i progetti sono una voce a se'" \
   "$(suDisco "m.claude_sul_disco(1000, 800, 200, 5000, {'usatiGb': 60, 'totaliGb': 100})['parti']['progetti']")" \
   "5000"
-# I progetti sono Claude, quindi escono da «altro»: 60 GB usati meno 6,2 GB.
-uguale "claude-sul-disco: «altro» non conta i progetti" \
-  "$(suDisco "m.claude_sul_disco(1000, 800, 200, 5000, {'usatiGb': 60, 'totaliGb': 100})['altroGb']")" \
-  "54"
 
 # E la dimensione in se' non e' piu' un avviso.
 uguale "collect-metrics: la dimensione di ~/.claude non genera avvisi" \
@@ -1389,16 +1382,18 @@ uguale "du-molti: senza cartelle non lancia nessun processo" \
 import importlib.util as u
 s=u.spec_from_file_location('cm','$WD_ROOT/bin/collect-metrics.py');m=u.module_from_spec(s);s.loader.exec_module(m)
 print(m.du_molti_mb([]))")" "0"
-# Dati incoerenti non devono produrre un numero negativo sotto la barra.
-uguale "claude-sul-disco: «altro» non va sotto zero" \
-  "$(suDisco "m.claude_sul_disco(90 * 1024, 0, 0, 0, {'usatiGb': 10, 'totaliGb': 100})['altroGb']")" \
-  "0"
 # Senza disco non si inventa un fondoscala: il pannello lo sa e non scrive
 # nessuna percentuale.
 uguale "claude-sul-disco: disco sconosciuto, fondoscala a zero" \
   "$(suDisco "m.claude_sul_disco(1024, 0, 0, 0, {})['discoMb']")" "0"
 # Il percento non si calcola qui: dipende dal fondoscala scelto, che sta in
 # GSettings. Due copie di quella regola divergono.
+# «altro» non si pubblica piu': il pannello scrive l'occupato e la capienza,
+# che arrivano da `disco`, e un terzo numero per differenza era solo un numero
+# in piu' da tenere allineato.
+uguale "claude-sul-disco: «altro» non viene piu' pubblicato" \
+  "$(suDisco "'altroGb' in m.claude_sul_disco(1024, 0, 0, 0, {'usatiGb': 60, 'totaliGb': 100})")" \
+  "False"
 uguale "claude-sul-disco: la percentuale non viene pubblicata" \
   "$(suDisco "'pct' in m.claude_sul_disco(1024, 0, 0, 0, {'usatiGb': 60, 'totaliGb': 100})")" \
   "False"

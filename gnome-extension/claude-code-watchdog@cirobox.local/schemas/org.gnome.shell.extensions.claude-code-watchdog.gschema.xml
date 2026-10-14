@@ -85,11 +85,12 @@
       <description>
         A quanto corrisponde la barra piena. 0 significa la capienza vera del
         disco: la barra resta quasi vuota, perché Claude occupa un giga su
-        novecento, e la riga lo dice con la percentuale e con quanto è
-        occupato da tutto il resto. Un valore proprio — poco sopra quello che
-        Claude occupa oggi — rende la barra leggibile e le fa prendere le
-        tinte di attenzione e allarme. Il numero resta quello che occupa
-        Claude: cambia solo il massimo a cui è rapportato.
+        novecento, e la riga lo dice con la percentuale e con i numeri in
+        chiaro (occupato, libero, capienza). Un valore proprio — poco sopra
+        quello che Claude occupa oggi — rende la barra leggibile e le fa
+        prendere le tinte di attenzione e allarme. Il numero resta quello che
+        occupa Claude: cambia solo il massimo a cui è rapportato, e la riga
+        scrive su cosa è calcolata la percentuale.
       </description>
     </key>
 

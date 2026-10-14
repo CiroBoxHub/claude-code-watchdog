@@ -29,7 +29,7 @@ const testo = new TextDecoder().decode(sorgente);
 // Si prendono solo le funzioni senza dipendenze da GNOME: le altre non si
 // possono eseguire fuori dal processo della shell.
 const PURE = ["fmtMb", "fmtNum", "fmtAge", "taglia", "tagliaNome", "scalaDisco", "partiDisco",
-              "composizioneDisco", "rgbDaHex"];
+              "composizioneDisco", "rgbDaHex", "totaliDisco"];
 let codice = "";
 for (const nome of PURE) {
     const re = new RegExp("^function " + nome + "\\([^)]*\\) \\{[\\s\\S]*?^\\}", "m");
@@ -105,6 +105,20 @@ uguale("fmtNum: niente dato", fmtNum(null), "—");
 uguale("fmtNum: sotto i 10000 per esteso", fmtNum(9999), "9999");
 uguale("fmtNum: da 10000 in forma k", fmtNum(10000), "10.0k");
 
+// --- totaliDisco: i tre numeri che la riga deve rendere evidenti.
+uguale("totaliDisco: Claude, usati, liberi e il disco, in quest ordine",
+       totaliDisco(2625, {usatiGb: 200, totaliGb: 951, liberiGb: 750}).join(" | "),
+       "Claude 2.6 GB | usati 200 GB | liberi 750 GB | disco 951 GB");
+// Un disco non misurato non deve diventare «usati ? GB»: la voce sparisce.
+uguale("totaliDisco: senza dati del disco resta il solo numero di Claude",
+       totaliDisco(2625, {}).join(" | "), "Claude 2.6 GB");
+uguale("totaliDisco: senza disco del tutto non salta il giro",
+       totaliDisco(2625, null).join(" | "), "Claude 2.6 GB");
+// Un disco pieno a zero e un dato, non un dato mancante.
+uguale("totaliDisco: lo zero si scrive",
+       totaliDisco(0, {usatiGb: 0, liberiGb: 0, totaliGb: 951}).join(" | "),
+       "Claude 0 MB | usati 0 GB | liberi 0 GB | disco 951 GB");
+
 // --- composizioneDisco: di cosa e fatto «Claude sul disco», voce per voce.
 const COMP = composizioneDisco({conversazioni: 199, installazione: 499, cache: 2,
                                 progetti: 1600, resto: 325});
@@ -169,11 +183,11 @@ uguale("partiDisco: a parita di peso l ordine e stabile",
 // Un disco da 952 GB, con Claude a 1003 MB: il caso vero di questa macchina.
 const DISCO = 974848;
 uguale("scalaDisco: col disco vero la percentuale tiene un decimale",
-       scalaDisco(1003, DISCO, 0).testo, "0,1% di 952 GB");
+       scalaDisco(1003, DISCO, 0).testo, "0,1% del fondoscala");
 uguale("scalaDisco: sul disco intero la tessera non si colora",
        scalaDisco(1003, DISCO, 0).tinta, "null");
 uguale("scalaDisco: la scala scelta vince sul disco",
-       scalaDisco(1003, DISCO, 2).testo, "49% di 2 GB");
+       scalaDisco(1003, DISCO, 2).testo, "49% del fondoscala (2 GB)");
 uguale("scalaDisco: con una scala scelta la tinta esiste",
        scalaDisco(1003, DISCO, 2).tinta, "49");
 uguale("scalaDisco: con una scala scelta la barra si muove",
@@ -187,21 +201,18 @@ uguale("scalaDisco: disco sconosciuto, frazione a zero",
 uguale("scalaDisco: senza il dato del disco non si divide per NaN",
        scalaDisco(1003, undefined, 0).frazione, "0");
 uguale("scalaDisco: la scala scelta vale anche senza disco",
-       scalaDisco(1003, 0, 2).testo, "49% di 2 GB");
-// Un disco non e quasi mai un numero tondo di GB: si arrotonda al piu vicino.
-uguale("scalaDisco: il fondoscala si arrotonda al GB piu vicino",
-       scalaDisco(1003, 975400, 0).testo, "0,1% di 953 GB");
+       scalaDisco(1003, 0, 2).testo, "49% del fondoscala (2 GB)");
 // Oltre il fondoscala si dice il numero vero: la barra lo tronca da se.
 uguale("scalaDisco: oltre il fondoscala la percentuale non si tronca",
-       scalaDisco(4096, DISCO, 2).testo, "200% di 2 GB");
+       scalaDisco(4096, DISCO, 2).testo, "200% del fondoscala (2 GB)");
 // Sotto il 10 per cento il decimale e la notizia, sopra e rumore.
 uguale("scalaDisco: sotto il dieci per cento tiene il decimale",
-       scalaDisco(112.64, DISCO, 2).testo, "5,5% di 2 GB");
+       scalaDisco(112.64, DISCO, 2).testo, "5,5% del fondoscala (2 GB)");
 uguale("scalaDisco: dal dieci per cento in su niente decimale",
-       scalaDisco(205, DISCO, 2).testo, "10% di 2 GB");
+       scalaDisco(205, DISCO, 2).testo, "10% del fondoscala (2 GB)");
 // Un dato che manca non deve diventare NaN sotto la barra.
 uguale("scalaDisco: senza misura la barra sta a zero",
-       scalaDisco(undefined, DISCO, 2).testo, "0% di 2 GB");
+       scalaDisco(undefined, DISCO, 2).testo, "0% del fondoscala (2 GB)");
 
 // --- taglia: accorcia dalla coda, e il puntino conta nella lunghezza
 uguale("taglia: più corto resta intero", taglia("breve", 10), "breve");
