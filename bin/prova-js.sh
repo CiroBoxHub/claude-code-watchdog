@@ -28,7 +28,8 @@ const testo = new TextDecoder().decode(sorgente);
 
 // Si prendono solo le funzioni senza dipendenze da GNOME: le altre non si
 // possono eseguire fuori dal processo della shell.
-const PURE = ["fmtMb", "fmtNum", "fmtAge", "taglia", "tagliaNome", "scalaDisco"];
+const PURE = ["fmtMb", "fmtNum", "fmtAge", "taglia", "tagliaNome", "scalaDisco", "partiDisco",
+              "composizioneDisco", "rgbDaHex"];
 let codice = "";
 for (const nome of PURE) {
     const re = new RegExp("^function " + nome + "\\([^)]*\\) \\{[\\s\\S]*?^\\}", "m");
@@ -103,6 +104,64 @@ uguale("fmtMb: forma compatta", fmtMb(2048, true), "2.0G");
 uguale("fmtNum: niente dato", fmtNum(null), "—");
 uguale("fmtNum: sotto i 10000 per esteso", fmtNum(9999), "9999");
 uguale("fmtNum: da 10000 in forma k", fmtNum(10000), "10.0k");
+
+// --- composizioneDisco: di cosa e fatto «Claude sul disco», voce per voce.
+const COMP = composizioneDisco({conversazioni: 199, installazione: 499, cache: 2,
+                                progetti: 1600, resto: 325});
+uguale("composizioneDisco: le voci scendono di peso",
+       COMP.map(v => v.chiave).join(","), "progetti,installazione,resto,conversazioni,cache");
+uguale("composizioneDisco: la frazione e sul totale delle voci",
+       Math.round(COMP[0].frazione * 100), "61");
+uguale("composizioneDisco: le frazioni sommano a uno",
+       Math.round(COMP.reduce((s, v) => s + v.frazione, 0) * 1000), "1000");
+uguale("composizioneDisco: ogni voce porta nome e colore",
+       `${COMP[0].nome} ${COMP[0].colore}`, "Progetti #2F9284");
+// Ambra e mattone sono i colori dell allarme in tutto il popup: qui dentro
+// direbbero «questa voce e un problema» mentre si sta solo dicendo quanto pesa.
+uguale("composizioneDisco: nessuna voce usa i colori dell allarme",
+       COMP.filter(v => ["#B77B1A", "#CE5A50"].includes(v.colore)).length, "0");
+uguale("composizioneDisco: senza dati nessuna voce", composizioneDisco(null).length, "0");
+// Una sola voce prende tutta la barra: se no il segmento unico resterebbe
+// grande quanto la sua fetta di un totale che non esiste.
+uguale("composizioneDisco: una voce sola riempie la barra",
+       composizioneDisco({cache: 7})[0].frazione, "1");
+// Un numero negativo non deve produrre un segmento che torna indietro.
+uguale("composizioneDisco: un numero storto non entra",
+       composizioneDisco({cache: -5, progetti: 10}).map(v => v.chiave).join(","), "progetti");
+
+// --- rgbDaHex: dal colore scritto ai numeri che vuole Cairo
+uguale("rgbDaHex: bianco", rgbDaHex("#FFFFFF").join(","), "1,1,1");
+uguale("rgbDaHex: nero", rgbDaHex("#000000").join(","), "0,0,0");
+uguale("rgbDaHex: i tre canali non si scambiano",
+       rgbDaHex("#2F9284").map(x => Math.round(x * 255)).join(","), "47,146,132");
+uguale("rgbDaHex: minuscole come maiuscole",
+       rgbDaHex("#2f9284").join(",") === rgbDaHex("#2F9284").join(",") ? "uguali" : "diversi",
+       "uguali");
+// Un colore storto diventa grigio: meglio un segmento spento che il disegno
+// dell intera riga che salta.
+uguale("rgbDaHex: un colore storto diventa grigio", rgbDaHex("rosso").join(","), "0.5,0.5,0.5");
+uguale("rgbDaHex: niente colore diventa grigio", rgbDaHex(null).join(","), "0.5,0.5,0.5");
+
+// --- partiDisco: di cosa e fatto il numero, le due voci piu grosse.
+// Il caso vero: i progetti pesano piu di tutto, poi l installazione.
+const PARTI = {conversazioni: 199, installazione: 499, cache: 2,
+               progetti: 1600, resto: 325};
+uguale("partiDisco: le due voci piu grosse, nell ordine",
+       partiDisco(PARTI).join(" | "), "1.6 GB progetti | 499 MB installazione");
+uguale("partiDisco: quante voci lo decide chi chiama",
+       partiDisco(PARTI, 3).length, "3");
+// Una voce a zero non si scrive: «0 MB cache» occupa posto e non dice niente.
+uguale("partiDisco: le voci a zero non compaiono",
+       partiDisco({progetti: 0, conversazioni: 10}).join(" | "), "10 MB conversazioni");
+// Una chiave che il pannello non conosce non si inventa un nome.
+uguale("partiDisco: una voce sconosciuta si ignora",
+       partiDisco({pippo: 9999, cache: 5}).join(" | "), "5 MB cache");
+uguale("partiDisco: senza dati nessuna voce", partiDisco(undefined).length, "0");
+// A parita di peso decide il nome: se no due voci uguali si scambierebbero di
+// posto da un giro all altro e il pannello ridisegnerebbe per niente.
+uguale("partiDisco: a parita di peso l ordine e stabile",
+       partiDisco({resto: 10, cache: 10}).join(" | "),
+       "10 MB cache | 10 MB altro in ~/.claude");
 
 // --- scalaDisco: il fondoscala della barra del disco.
 // Tabella dei casi prima del codice: il disco vero, una scala scelta, nessun

@@ -587,6 +587,40 @@ dire inventarne una.
 voce che fa muovere il numero: due versioni tenute a ~245 MB l'una. Misurarla
 non costa niente — `versions/` ha due file, non un albero — e la raccolta resta
 a 0,09 s.
+**E i progetti ci stanno dentro, con i loro file** (chiesto dall'uso il
+2026-10-14: «voglio vedere quanto spazio occupa Claude con i suoi file e i
+progetti, dentro o fuori la radice, con annessi file»). Le conversazioni e
+l'installazione sono i file *di* Claude, ma lo spazio che si mangia lavorare
+con Claude e' quello che nasce nelle cartelle di lavoro: dump, archivi,
+repository clonati. Qui 1600 MB contro 199 di conversazioni. La riga rispondeva
+a «quanto pesa il programma» mentre la domanda era «quanto mi costa tutto
+questo».
+**Quali cartelle, e perche' non tutte** (`cartelle_progetti()`): i progetti
+sono i `cwd` da cui Claude e' stato eseguito, e la' dentro ci finiscono posti
+che progetti non sono. **La home, `/` e `/tmp` si saltano** — una sessione
+aperta dalla home farebbe misurare l'intero disco e chiamarlo Claude — ma
+`/tmp/lavoro` si conta: si scarta la cartella, non il prefisso, la stessa
+regola della deduzione della radice. **Una cartella dentro un'altra si conta
+una volta sola**, e vince la piu' esterna; **quello che non c'e' non si
+misura**. Dodici casi in `prova.sh`, ognuno con la sua mutazione. Costo: un
+`du` solo per tutte le cartelle (`du_molti_mb`), raccolta da 0,10 a 0,11 s.
+
+**Il dettaglio si apre dalla riga** (chiesto dall'uso lo stesso giorno).
+«Claude sul disco» somma cinque cose, e un salto di mezzo giga non si sa a chi
+attribuirlo: la riga ora si apre su una barra a segmenti e una riga per voce,
+con il colore, la percentuale e i MB. **Si richiude da sola** — alla chiusura
+del popup e dopo `DETTAGLIO_S` (30 s) — perche' e' un approfondimento, non uno
+stato: lasciato aperto allungherebbe il popup a ogni apertura successiva senza
+che nessuno l'abbia chiesto. Sotto la barra resta **una** voce sola, la piu'
+grossa: cinque in una nota larga 300 px sono tre righe che nessuno legge.
+**I colori della composizione non sono quelli dell'allarme.** Ambra e mattone
+vogliono dire «attenzione» e «critico» in tutto il popup, e usarli per una
+fetta farebbe leggere «la cache e' un problema» dove si sta solo dicendo quanto
+pesa. Gli altri cinque — verde acqua, blu, viola, oliva, grigio — sono stati
+verificati sopra 3:1, la soglia per i grafici, su popup chiaro e scuro e su
+barra chiara e scura. Una prova controlla che nessuna voce usi i due colori
+riservati: e' una regola che si perde al primo ritocco, se non la si scrive.
+
 **E il fondoscala si puo' cambiare** (chiesto dall'uso lo stesso giorno, dopo
 aver visto la barra vuota): `disk-scale-gb` nelle preferenze, 0 — il valore di
 serie — vuol dire il disco vero. Chi si da' un fondoscala proprio, poco sopra
@@ -602,7 +636,7 @@ sistema: calcolarla anche in `collect-metrics.py` vorrebbe dire due copie della
 stessa regola, cioe' due copie che divergono (e' il motivo per cui la radice
 dei progetti la decide uno solo). Il raccoglitore pubblica il dato grezzo —
 `mb` e `discoMb` — e `scalaDisco()` in `extension.js` ne ricava fondoscala,
-frazione, testo e tinta, con undici casi in `prova-js.sh` e sette mutazioni.
+frazione, testo e tinta, con dodici casi in `prova-js.sh` e otto mutazioni.
 Una e' sopravvissuta e ha tolto codice invece di aggiungere una prova: il
 `|| 0` sul disco mancante non cambiava niente, perche' un fondoscala falso
 viene gia' intercettato dal ritorno anticipato.
@@ -723,7 +757,7 @@ percorso della quota non parte mai, nemmeno togliendo il dato o invecchiandolo
 
 ## Quanto costa, misurato
 
-    raccolta metriche    0,10 s ogni   60 s   0,17% di una CPU  (mediana di 9)
+    raccolta metriche    0,11 s ogni   60 s   0,18% di una CPU  (mediana di 9)
     lettura quota        2,57 s ogni 1800 s   0,14%  (picco 323 MB)
                          — con il mod attivo e una sessione aperta: zero
                                               ----
@@ -808,8 +842,8 @@ tutti, e qui dentro ci sono i nomi dei clienti.
 
 ## Prima di dire «fatto»
 
-    ./bin/prova.sh              215 prove funzionali, sandbox con HOME dirottata
-    ./bin/prova-js.sh           120 prove sulle funzioni pure dei moduli JS
+    ./bin/prova.sh              230 prove funzionali, sandbox con HOME dirottata
+    ./bin/prova-js.sh           140 prove sulle funzioni pure dei moduli JS
     claude plugin test mods/watchdog  le funzioni pure del mod (gira dentro
                                       verifica-estensione.sh)
     ./bin/prova-shell.sh        carica l'estensione in una shell annidata (~1 min)

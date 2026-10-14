@@ -82,6 +82,12 @@ const TERMINALI = [
    riavvio della shell. Oltre questo tempo si considera perso e si riapre. */
 const LUCCHETTO_MS = 120000;
 
+/* Per quanto resta aperto il dettaglio della composizione, se nessuno lo
+   richiude. Serve perché è un approfondimento, non uno stato: lasciato
+   aperto allunga il popup a ogni apertura successiva senza che nessuno lo
+   abbia chiesto. Si richiude anche con il popup, che è il caso normale. */
+const DETTAGLIO_S = 30;
+
 const TOOLTIP_MS = 450;       // attesa prima che il suggerimento compaia
 const MAX_CAMPIONI = 60;      // quanti punti disegna il grafico
 /* Quanto si aspetta prima di ritentare una lettura della quota fallita.
@@ -105,6 +111,59 @@ function fmtMb(mb, compatto = false) {
     if (mb >= 1024)
         return compatto ? `${(mb / 1024).toFixed(1)}G` : `${(mb / 1024).toFixed(1)} GB`;
     return compatto ? `${Math.round(mb)}M` : `${Math.round(mb)} MB`;
+}
+
+/* Di cosa è fatto «Claude sul disco»: le voci più grosse per prime, con il
+   nome, il colore e quanto pesano sul totale.
+
+   **Il colore non si ripete a caso**: ambra e mattone restano quelli
+   dell'allarme in tutto il popup, e usarli qui farebbe leggere «la cache è un
+   problema» dove si sta solo dicendo quanto pesa. Gli altri cinque sono
+   verificati sopra 3:1 — la soglia per i grafici — su popup chiaro e scuro e
+   su barra chiara e scura, come il resto della tavolozza.
+
+   La tabella sta dentro la funzione e non fra le costanti in cima perché
+   `prova-js.sh` estrae funzioni, non costanti: una funzione che si porta
+   dietro quello che le serve è una funzione che si può provare.
+   A parità di peso decide la chiave, se no due voci uguali si scambierebbero
+   di posto da un giro all'altro e il pannello ridisegnerebbe per niente. */
+function composizioneDisco(parti) {
+    const VOCI = [
+        ['progetti', 'Progetti', '#2F9284'],
+        ['installazione', 'Installazione', '#4580C6'],
+        ['conversazioni', 'Conversazioni', '#8676B8'],
+        ['cache', 'Cache', '#6E8B3D'],
+        ['resto', 'Altro in ~/.claude', '#8A8A8A'],
+    ];
+    const voci = VOCI
+        .map(([chiave, nome, colore]) =>
+            ({chiave, nome, colore, mb: parti?.[chiave] ?? 0}))
+        // Il filtro fa anche da rete sui numeri storti: una voce negativa
+        // disegnerebbe un segmento che torna indietro.
+        .filter(v => v.mb > 0)
+        .sort((a, b) => b.mb - a.mb || a.chiave.localeCompare(b.chiave));
+    const tot = voci.reduce((s, v) => s + v.mb, 0);
+    return voci.map(v => ({...v, frazione: tot ? v.mb / tot : 0}));
+}
+
+/* Le due voci più grosse in forma di testo, per la nota sotto la barra.
+   Scriverle tutte e cinque in un popup largo 300 px vuol dire tre righe che
+   nessuno legge; il resto si apre col dettaglio. Si appoggia all'ordinamento
+   di sopra invece di rifarlo: due ordinamenti sono due ordinamenti che
+   divergono. */
+function partiDisco(parti, quante = 2) {
+    return composizioneDisco(parti).slice(0, quante)
+        .map(v => `${fmtMb(v.mb)} ${v.nome.toLowerCase()}`);
+}
+
+/* Da «#RRGGBB» ai tre numeri fra 0 e 1 che vuole Cairo. Un colore storto
+   diventa grigio invece di far saltare il disegno dell'intera riga. */
+function rgbDaHex(hex) {
+    const m = /^#([0-9a-f]{6})$/i.exec(String(hex ?? ''));
+    if (!m)
+        return [0.5, 0.5, 0.5];
+    const n = parseInt(m[1], 16);
+    return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255];
 }
 
 /* Il fondoscala della barra del disco, la frazione da disegnare e la
@@ -342,6 +401,50 @@ class Misuratore extends St.DrawingArea {
     }
 });
 
+/* La barra della composizione: un segmento per voce, nell'ordine in cui sono
+   scritte sotto. Non ha soglie e non cambia colore — non è una misura che può
+   andare male, è una torta stesa: dice solo com'è diviso il totale.
+   I segmenti sotto il pixel si disegnano comunque a un pixel, se no una voce
+   piccola sparisce e la legenda sotto nomina un colore che non c'è. */
+const BarraComposta = GObject.registerClass(
+class BarraComposta extends St.DrawingArea {
+    _init() {
+        super._init({style_class: 'fw-comp-bar', height: 10, x_expand: true});
+        this._segmenti = [];
+        this.connect('repaint', () => this._disegna());
+    }
+
+    setSegmenti(segmenti) {
+        this._segmenti = segmenti ?? [];
+        this.queue_repaint();
+    }
+
+    _disegna() {
+        const ctx = this.get_context();
+        const [w, h] = this.get_surface_size();
+        const y = Math.round(h / 2) - 3;
+        const alt = 6;
+
+        ctx.setSourceRGBA(0.5, 0.5, 0.5, 0.22);
+        ctx.rectangle(0, y, w, alt);
+        ctx.fill();
+
+        let x = 0;
+        for (const s of this._segmenti) {
+            const larghezza = Math.max(1, Math.round(w * (s.frazione ?? 0)) - 1);
+            if (x >= w)
+                break;
+            const [cr, cg, cb] = rgbDaHex(s.colore);
+            ctx.setSourceRGBA(cr, cg, cb, 1);
+            ctx.rectangle(x, y, Math.min(larghezza, w - x), alt);
+            ctx.fill();
+            x += larghezza + 1;
+        }
+
+        ctx.$dispose();
+    }
+});
+
 /* --------------------------------------------------------- riga misura --- */
 
 /* Una misura è una riga, non una scheda: etichetta a sinistra, cifra grande a
@@ -349,9 +452,13 @@ class Misuratore extends St.DrawingArea {
      limitata (percentuale) → barra riempita
      illimitata (megabyte)  → linea di tendenza
    Una barra su una grandezza senza massimo sarebbe una bugia grafica. */
-const Misura = GObject.registerClass(
-class Misura extends St.BoxLayout {
-    _init(titolo, {forma = 'barra', tinta = null} = {}) {
+const Misura = GObject.registerClass({
+    // Il pannello deve sapere quando il dettaglio si apre, per armare il
+    // timer che lo richiude: un segnale, non una callback passata al
+    // costruttore, perché chi apre è il pulsante dentro la riga.
+    Signals: {'alternato': {param_types: [GObject.TYPE_BOOLEAN]}},
+}, class Misura extends St.BoxLayout {
+    _init(titolo, {forma = 'barra', tinta = null, apribile = false} = {}) {
         super._init({orientation: Clutter.Orientation.VERTICAL,
                      style_class: 'fw-metric', x_expand: true});
 
@@ -361,7 +468,21 @@ class Misura extends St.BoxLayout {
                                      y_align: Clutter.ActorAlign.CENTER}));
         this._valore = new St.Label({text: '—', style_class: 'fw-metric-value'});
         riga.add_child(this._valore);
-        this.add_child(riga);
+        if (apribile) {
+            // La freccia dice che c'è dell'altro: una riga che si apre senza
+            // dirlo non la apre nessuno.
+            this._freccia = new St.Icon({icon_name: 'pan-end-symbolic',
+                                         style_class: 'fw-metric-arrow',
+                                         y_align: Clutter.ActorAlign.CENTER});
+            riga.add_child(this._freccia);
+            const testa = new St.Button({style_class: 'fw-metric-head',
+                                         x_expand: true, can_focus: true});
+            testa.set_child(riga);
+            testa.connect('clicked', () => this.alterna());
+            this.add_child(testa);
+        } else {
+            this.add_child(riga);
+        }
 
         if (forma === 'barra') {
             this._misuratore = new Misuratore(tinta);
@@ -374,6 +495,30 @@ class Misura extends St.BoxLayout {
         this._nota = new St.Label({text: '', style_class: 'fw-metric-note'});
         this._nota.clutter_text.line_wrap = true;
         this.add_child(this._nota);
+
+        if (apribile) {
+            this.dettaglio = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL,
+                                               style_class: 'fw-comp',
+                                               x_expand: true, visible: false});
+            this.add_child(this.dettaglio);
+        }
+    }
+
+    /* Apre o chiude il dettaglio. `forza` serve a chi chiude senza chiedere:
+       la chiusura del popup e il timer. */
+    alterna(forza) {
+        if (!this.dettaglio)
+            return false;
+        const aperto = forza ?? !this.dettaglio.visible;
+        this.dettaglio.visible = aperto;
+        if (this._freccia)
+            this._freccia.icon_name = aperto ? 'pan-down-symbolic' : 'pan-end-symbolic';
+        this.emit('alternato', aperto);
+        return aperto;
+    }
+
+    get aperto() {
+        return !!this.dettaglio?.visible;
     }
 
     aggiorna(valore, frazione, nota) {
@@ -797,6 +942,9 @@ class Indicatore extends PanelMenu.Button {
                 this.suggerimento?.annulla();
                 for (const r of [...this._righeProgetto, ...(this._righeAltre ?? [])])
                     r.alterna(false);
+                // Anche il dettaglio della composizione: il popup si riapre
+                // com'era, non come l'ultima volta che si è curiosato.
+                this._mDisco?.alterna(false);
             }
         });
     }
@@ -1136,7 +1284,12 @@ class Indicatore extends PanelMenu.Button {
         c.add_child(this._rigaGuasto);
 
         // --- macchina ---
-        this._mDisco = new Misura('Claude sul disco', {forma: 'barra'});
+        // Apribile: sotto c'è di cosa è fatto il numero, voce per voce.
+        // «Claude sul disco» somma cinque cose diverse, e senza il dettaglio
+        // un salto di mezzo giga non si sa a chi attribuirlo.
+        this._mDisco = new Misura('Claude sul disco',
+                                  {forma: 'barra', apribile: true});
+        this._mDisco.connect('alternato', (_m, aperto) => this._timerDettaglio(aperto));
         this._mClaude = new Misura('Conversazioni', {forma: 'tendenza'});
         // Solo ~/.cache/claude* e non tutta ~/.cache: li' dentro il grosso e'
         // sempre il browser, e questo pannello non deve misurarlo. Fondoscala
@@ -1319,6 +1472,67 @@ class Indicatore extends PanelMenu.Button {
         this._mostra(d);
     }
 
+    /* Il dettaglio della composizione: la barra a segmenti e una riga per
+       voce. Si ricostruisce solo quando i numeri cambiano davvero — gli stessi
+       dati arrivano a ogni giro del timer, e rifare gli attori mentre il
+       dettaglio è aperto lo farebbe sfarfallare sotto il dito. */
+    _mostraComposizione(parti) {
+        const voci = composizioneDisco(parti);
+        const firma = voci.map(v => `${v.chiave}:${v.mb}`).join('|');
+        if (firma === this._firmaComposizione)
+            return;
+        this._firmaComposizione = firma;
+
+        const box = this._mDisco.dettaglio;
+        if (!box)
+            return;
+        box.destroy_all_children();
+        if (!voci.length) {
+            box.add_child(new St.Label({text: 'Nessun dato', style_class: 'fw-comp-name'}));
+            return;
+        }
+
+        const barra = new BarraComposta();
+        barra.setSegmenti(voci);
+        box.add_child(barra);
+
+        for (const v of voci) {
+            const riga = new St.BoxLayout({style_class: 'fw-comp-row', x_expand: true});
+            // Il pallino è il legame con la barra: il colore sta nel disegno,
+            // il significato nel nome accanto, come in tutto il popup.
+            const punto = new St.Widget({style_class: 'fw-comp-dot',
+                                         y_align: Clutter.ActorAlign.CENTER,
+                                         style: `background-color: ${v.colore};`});
+            riga.add_child(punto);
+            riga.add_child(new St.Label({text: v.nome, style_class: 'fw-comp-name',
+                                         x_expand: true,
+                                         y_align: Clutter.ActorAlign.CENTER}));
+            riga.add_child(new St.Label({text: `${Math.round(v.frazione * 100)}%`,
+                                         style_class: 'fw-comp-pct',
+                                         y_align: Clutter.ActorAlign.CENTER}));
+            riga.add_child(new St.Label({text: fmtMb(v.mb), style_class: 'fw-comp-size',
+                                         y_align: Clutter.ActorAlign.CENTER}));
+            box.add_child(riga);
+        }
+    }
+
+    /* Il dettaglio si richiude da solo: è un approfondimento, non uno stato.
+       Il timer riparte a ogni apertura e si spegne alla chiusura, perché un
+       timer dimenticato richiuderebbe la volta dopo, a sorpresa. */
+    _timerDettaglio(aperto) {
+        if (this._idDettaglio) {
+            GLib.source_remove(this._idDettaglio);
+            this._idDettaglio = 0;
+        }
+        if (!aperto)
+            return;
+        this._idDettaglio = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, DETTAGLIO_S, () => {
+            this._idDettaglio = 0;
+            this._mDisco.alterna(false);
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
     _mostra(d) {
         const s = this._settings;
         const disco = d.disco ?? {};
@@ -1348,11 +1562,11 @@ class Indicatore extends PanelMenu.Button {
         const suDisco = claude.disco ?? {};
         const parti = suDisco.parti ?? {};
         const scala = scalaDisco(suDisco.mb, suDisco.discoMb, s.get_int('disk-scale-gb'));
-        const pezzi = [];
-        // L'installazione non ha una riga sua, e di solito è la parte grossa:
-        // senza, «1,0 GB» non si spiega con 191 MB di conversazioni.
-        if (parti.installazione)
-            pezzi.push(`${fmtMb(parti.installazione)} installazione`);
+        // Di cosa è fatto il numero: qui solo la voce più grossa, che è anche
+        // quella che lo fa muovere — senza, «2,6 GB» non si spiega con 199 MB
+        // di conversazioni. Le altre stanno nel dettaglio, a un clic: cinque
+        // voci in una nota larga 300 px sono tre righe che nessuno legge.
+        const pezzi = partiDisco(parti, 1);
         if (scala.testo)
             pezzi.push(scala.testo);
         // Quanto del disco non è Claude: senza, una barra quasi vuota non
@@ -1361,6 +1575,7 @@ class Indicatore extends PanelMenu.Button {
             pezzi.push(`altro ${suDisco.altroGb} GB`);
         pezzi.push(`${disco.liberiGb ?? '?'} GB liberi`);
         this._mDisco.aggiorna(fmtMb(suDisco.mb), scala.frazione, pezzi.join(' · '));
+        this._mostraComposizione(parti);
 
         const cacheMb = claude.cacheMb ?? 0;
         const cacheSoglia = d.soglie?.cacheMb ?? 200;
@@ -2450,7 +2665,7 @@ class Indicatore extends PanelMenu.Button {
         this.suggerimento?.destroy();
         this.suggerimento = null;
         for (const t of ['_timeout', '_timeoutEsito', '_timeoutQuota', '_orologio',
-                         '_timeoutRiprova', '_timeoutAvvio']) {
+                         '_timeoutRiprova', '_timeoutAvvio', '_idDettaglio']) {
             if (this[t]) {
                 GLib.source_remove(this[t]);
                 this[t] = 0;

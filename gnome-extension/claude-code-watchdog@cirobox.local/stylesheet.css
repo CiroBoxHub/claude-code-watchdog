@@ -124,6 +124,66 @@
     padding-top: 1px;
 }
 
+/* La testa di una misura che si apre. Niente bordo: il fondo tenue al
+   passaggio basta a dire che si può premere, come nelle righe dei progetti. */
+.fw-metric-head {
+    border-radius: 6px;
+    padding: 0;
+}
+
+.fw-metric-head:hover {
+    background-color: rgba(127, 127, 127, 0.14);
+}
+
+.fw-metric-arrow {
+    icon-size: 12px;
+    opacity: 0.6;
+    padding-left: 6px;
+}
+
+/* --- composizione dello spazio, sotto «Claude sul disco» --- */
+
+.fw-comp {
+    spacing: 1px;
+    padding: 4px 2px 2px 2px;
+}
+
+.fw-comp-bar {
+    margin: 2px 0 4px 0;
+}
+
+.fw-comp-row {
+    spacing: 6px;
+    padding: 1px 0;
+}
+
+/* Il colore sta qui, non nel testo: su fondo chiaro una scritta colorata
+   piccola non arriva a 4,5:1, un pallino sì a 3:1. Lo assegna extension.js,
+   che è dove sta la tavolozza della composizione. */
+.fw-comp-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+}
+
+.fw-comp-name {
+    font-size: 0.88em;
+    opacity: 0.86;
+}
+
+.fw-comp-pct {
+    font-size: 0.82em;
+    opacity: 0.68;
+    font-feature-settings: "tnum";
+}
+
+.fw-comp-size {
+    font-size: 0.88em;
+    font-feature-settings: "tnum";
+    min-width: 58px;
+    text-align: right;
+}
+
 /* I misuratori sono disegnati in Cairo (classe Misuratore in extension.js):
    con widget CSS dentro un BinLayout il riempimento finiva centrato e la tinta
    non veniva applicata. Qui resta solo lo spazio che occupano. */

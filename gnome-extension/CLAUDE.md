@@ -79,6 +79,34 @@ mappa `TINTE` di `extension.js` per la parte disegnata — vanno tenute
 allineate: `#2F9284` sano · `#8676B8` quota · `#B77B1A` attenzione da 75% ·
 `#CE5A50` critico da 90%.
 
+### La composizione dello spazio
+
+«Claude sul disco» somma cinque voci, e la riga si **apre** su di esse: barra a
+segmenti in Cairo (`BarraComposta`), poi una riga per voce con pallino, nome,
+percentuale e MB. Regole, tutte nate qui:
+
+- **la tavolozza della composizione non tocca ambra e mattone.** Quei due
+  vogliono dire «attenzione» e «critico» in tutto il popup: una fetta ambra
+  direbbe che la cache è un problema mentre si sta dicendo quanto pesa. Le
+  cinque usate — `#2F9284` verde acqua, `#4580C6` blu, `#8676B8` viola,
+  `#6E8B3D` oliva, `#8A8A8A` grigio — sono verificate sopra 3:1 sui quattro
+  fondi, come il resto. `#3A6FB0` (il blu dei pulsanti) **non** passa su fondo
+  scuro: 2,56. Una prova in `prova-js.sh` controlla che nessuna voce usi i due
+  colori riservati;
+- **il colore sta nel disegno e nel pallino, mai nel testo**: è la regola di
+  contrasto di sopra, applicata a una legenda;
+- **la sezione si richiude da sola**, alla chiusura del popup e dopo
+  `DETTAGLIO_S` (30 s). Un dettaglio che resta aperto allunga il popup alla
+  prossima apertura senza che nessuno l'abbia chiesto — e il popup si apre
+  decine di volte al giorno. Il timer riparte a ogni apertura e si spegne alla
+  chiusura: un timer dimenticato richiuderebbe la volta dopo, a sorpresa;
+- **il dettaglio si ricostruisce solo se i numeri cambiano** (una firma, come
+  per le righe dei progetti): gli stessi dati arrivano a ogni giro del timer, e
+  rifare gli attori mentre la sezione è aperta la fa sfarfallare sotto il dito;
+- la riga apribile sta in `Misura` (`{apribile: true}`), con il segnale
+  `alternato`: chi apre è il pulsante dentro la riga, e il pannello deve
+  saperlo per armare il timer.
+
 ### Soglie di colore
 
 **Una sola definizione, in `config/watchdog.conf`:** `ALERT_WARN_PCT=75` e

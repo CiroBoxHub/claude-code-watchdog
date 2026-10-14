@@ -1308,32 +1308,100 @@ s=u.spec_from_file_location('cm','$WD_ROOT/bin/collect-metrics.py');m=u.module_f
 m.INSTALLAZIONE = Path('/non/esiste')   # cosi' il totale e' solo quello passato
 print($1)"; }
 uguale "claude-sul-disco: «altro» e' l'occupato meno Claude" \
-  "$(suDisco "m.claude_sul_disco(10 * 1024, 1000, 0, {'usatiGb': 60, 'totaliGb': 100})['altroGb']")" \
+  "$(suDisco "m.claude_sul_disco(10 * 1024, 1000, 0, 0, {'usatiGb': 60, 'totaliGb': 100})['altroGb']")" \
   "50"
 uguale "claude-sul-disco: il fondoscala e' la capienza, non l'usato" \
-  "$(suDisco "m.claude_sul_disco(1024, 0, 0, {'usatiGb': 60, 'totaliGb': 100})['discoMb']")" \
+  "$(suDisco "m.claude_sul_disco(1024, 0, 0, 0, {'usatiGb': 60, 'totaliGb': 100})['discoMb']")" \
   "102400"
 # La cache e l'installazione entrano nel totale: la riga dice «Claude sul
 # disco», non «le conversazioni».
 uguale "claude-sul-disco: il totale somma conversazioni, installazione e cache" \
-  "$(suDisco "m.claude_sul_disco(1000, 800, 200, {'usatiGb': 60, 'totaliGb': 100})['mb']")" \
+  "$(suDisco "m.claude_sul_disco(1000, 800, 200, 0, {'usatiGb': 60, 'totaliGb': 100})['mb']")" \
   "1200"
+# E le cartelle di lavoro: e' la voce piu' grossa, ed e' la domanda da cui e'
+# nata la riga — «quanto mi costa tutto questo», non «quanto pesa il
+# programma» (chiesto dall'uso il 2026-10-14).
+uguale "claude-sul-disco: le cartelle dei progetti entrano nel totale" \
+  "$(suDisco "m.claude_sul_disco(1000, 800, 200, 5000, {'usatiGb': 60, 'totaliGb': 100})['mb']")" \
+  "6200"
+uguale "claude-sul-disco: i progetti sono una voce a se'" \
+  "$(suDisco "m.claude_sul_disco(1000, 800, 200, 5000, {'usatiGb': 60, 'totaliGb': 100})['parti']['progetti']")" \
+  "5000"
+# I progetti sono Claude, quindi escono da «altro»: 60 GB usati meno 6,2 GB.
+uguale "claude-sul-disco: «altro» non conta i progetti" \
+  "$(suDisco "m.claude_sul_disco(1000, 800, 200, 5000, {'usatiGb': 60, 'totaliGb': 100})['altroGb']")" \
+  "54"
+
+# E la dimensione in se' non e' piu' un avviso.
+uguale "collect-metrics: la dimensione di ~/.claude non genera avvisi" \
+  "$(leggi_m "[a for a in d['allarmi'] if 'claude a' in a]")" "[]"
+
+# --- quali cartelle si misurano, e quali no -------------------------------
+# Tabella dei casi prima del codice: l'elenco dei progetti sono i `cwd` da cui
+# Claude e' stato eseguito, e la' dentro ci finiscono posti che progetti non
+# sono. Misurare la home vorrebbe dire misurare tutto il disco e chiamarlo
+# Claude.
+prepara
+mkdir -p "$HOME/lavoro/alfa/dentro" "$HOME/lavoro/beta" "/tmp/fuori-$$"
+cartelle() { python3 -c "
+import importlib.util as u
+from pathlib import Path
+s=u.spec_from_file_location('cm','$WD_ROOT/bin/collect-metrics.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+print([str(x) for x in m.cartelle_progetti($1, home=Path('$HOME'))])"; }
+uguale "cartelle-progetti: una cartella normale si misura" \
+  "$(cartelle "['$HOME/lavoro/alfa']")" "['$HOME/lavoro/alfa']"
+uguale "cartelle-progetti: lo stesso percorso due volte si conta una volta" \
+  "$(cartelle "['$HOME/lavoro/alfa', '$HOME/lavoro/alfa']")" "['$HOME/lavoro/alfa']"
+uguale "cartelle-progetti: una dentro l'altra si conta una volta sola" \
+  "$(cartelle "['$HOME/lavoro/alfa', '$HOME/lavoro/alfa/dentro']")" "['$HOME/lavoro/alfa']"
+# Anche se arriva dopo: chi comprende vince, qualunque sia l'ordine di arrivo.
+uguale "cartelle-progetti: la madre arrivata dopo scalza la figlia" \
+  "$(cartelle "['$HOME/lavoro/alfa/dentro', '$HOME/lavoro/alfa']")" "['$HOME/lavoro/alfa']"
+# Due sorelle non si mangiano a vicenda: il tranello del prefisso.
+uguale "cartelle-progetti: due sorelle restano due" \
+  "$(cartelle "['$HOME/lavoro/alfa', '$HOME/lavoro/beta']")" \
+  "['$HOME/lavoro/alfa', '$HOME/lavoro/beta']"
+uguale "cartelle-progetti: la home non e' un progetto" \
+  "$(cartelle "['$HOME']")" "[]"
+uguale "cartelle-progetti: la radice del disco non e' un progetto" \
+  "$(cartelle "['/']")" "[]"
+# /tmp si scarta come cartella, non come prefisso: una cartella di lavoro
+# dentro /tmp e' legittima, ed e' la stessa regola della deduzione della radice.
+uguale "cartelle-progetti: /tmp si scarta, le sue figlie no" \
+  "$(cartelle "['/tmp', '/tmp/fuori-$$']")" "['/tmp/fuori-$$']"
+uguale "cartelle-progetti: una cartella sparita non si misura" \
+  "$(cartelle "['$HOME/mai-esistita']")" "[]"
+uguale "cartelle-progetti: un percorso vuoto non fa saltare il giro" \
+  "$(cartelle "['', None, '$HOME/lavoro/beta']")" "['$HOME/lavoro/beta']"
+rmdir "/tmp/fuori-$$"
+
+# Un `du` solo per tutte: il numero deve essere la somma, non la prima riga.
+head -c 2000000 /dev/zero > "$HOME/lavoro/alfa/grosso.bin"
+head -c 3000000 /dev/zero > "$HOME/lavoro/beta/grosso.bin"
+uguale "du-molti: somma tutte le cartelle, non solo la prima" \
+  "$(python3 -c "
+import importlib.util as u
+from pathlib import Path
+s=u.spec_from_file_location('cm','$WD_ROOT/bin/collect-metrics.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+print(m.du_molti_mb([Path('$HOME/lavoro/alfa'), Path('$HOME/lavoro/beta')]) >= 4)")" "True"
+uguale "du-molti: senza cartelle non lancia nessun processo" \
+  "$(python3 -c "
+import importlib.util as u
+s=u.spec_from_file_location('cm','$WD_ROOT/bin/collect-metrics.py');m=u.module_from_spec(s);s.loader.exec_module(m)
+print(m.du_molti_mb([]))")" "0"
 # Dati incoerenti non devono produrre un numero negativo sotto la barra.
 uguale "claude-sul-disco: «altro» non va sotto zero" \
-  "$(suDisco "m.claude_sul_disco(90 * 1024, 0, 0, {'usatiGb': 10, 'totaliGb': 100})['altroGb']")" \
+  "$(suDisco "m.claude_sul_disco(90 * 1024, 0, 0, 0, {'usatiGb': 10, 'totaliGb': 100})['altroGb']")" \
   "0"
 # Senza disco non si inventa un fondoscala: il pannello lo sa e non scrive
 # nessuna percentuale.
 uguale "claude-sul-disco: disco sconosciuto, fondoscala a zero" \
-  "$(suDisco "m.claude_sul_disco(1024, 0, 0, {})['discoMb']")" "0"
+  "$(suDisco "m.claude_sul_disco(1024, 0, 0, 0, {})['discoMb']")" "0"
 # Il percento non si calcola qui: dipende dal fondoscala scelto, che sta in
 # GSettings. Due copie di quella regola divergono.
 uguale "claude-sul-disco: la percentuale non viene pubblicata" \
-  "$(suDisco "'pct' in m.claude_sul_disco(1024, 0, 0, {'usatiGb': 60, 'totaliGb': 100})")" \
+  "$(suDisco "'pct' in m.claude_sul_disco(1024, 0, 0, 0, {'usatiGb': 60, 'totaliGb': 100})")" \
   "False"
-# E la dimensione in se' non e' piu' un avviso.
-uguale "collect-metrics: la dimensione di ~/.claude non genera avvisi" \
-  "$(leggi_m "[a for a in d['allarmi'] if 'claude a' in a]")" "[]"
 
 # La quota alta colora la sua barra: un avviso testuale in piu' era un doppione.
 prepara

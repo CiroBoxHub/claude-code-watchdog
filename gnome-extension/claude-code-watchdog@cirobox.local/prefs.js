@@ -424,13 +424,22 @@ export default class WatchdogPreferences extends ExtensionPreferences {
              'sono le soglie di attenzione e di allarme, e il colore cambia ' +
              'esattamente lì: prima il colore della misura, poi ambra, poi rosso.');
         voce(popup, 'Claude sul disco',
-             'Quanto occupa Claude in tutto: le conversazioni, l’installazione ' +
-             'di Claude Code (le versioni pesano più di tutto il resto) e la sua ' +
-             'cache. Il numero e la barra sono Claude, il fondoscala è la ' +
+             'Quanto costa tutto questo: le cartelle di lavoro dei progetti con i ' +
+             'loro file, le conversazioni, l’installazione di Claude Code (le ' +
+             'versioni pesano più di tutto il resto) e la cache. La home, / e /tmp ' +
+             'non si contano: una sessione aperta dalla home farebbe misurare ' +
+             'tutto il disco. Il numero e la barra sono Claude, il fondoscala è la ' +
              'capienza vera del disco: così si legge in una riga quanto pesa ' +
              'Claude sul totale. La barra resta quasi vuota, ed è il punto — ' +
              'accanto trovi la percentuale, quanto è occupato da tutto il resto ' +
              'e quanto è libero.');
+        voce(popup, 'Il dettaglio dello spazio',
+             'Un clic sulla riga apre di cosa è fatto il numero: una barra a ' +
+             'segmenti e una riga per voce, con il colore, la percentuale e i MB. ' +
+             'Si richiude da sola quando chiudi il popup, o dopo mezzo minuto: è ' +
+             'un approfondimento, non uno stato. I colori non sono quelli degli ' +
+             'allarmi — ambra e rosso restano riservati a quelli, qui direbbero ' +
+             'che una voce è un problema mentre si sta solo dicendo quanto pesa.');
         voce(popup, 'Il fondoscala si può cambiare',
              'Se la barra quasi vuota non ti dice niente, nella pagina Pannello ' +
              'scegli un fondoscala tuo: poco sopra quello che Claude occupa oggi. ' +

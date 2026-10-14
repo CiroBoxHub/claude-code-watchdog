@@ -94,6 +94,68 @@ def du_mb(path: Path) -> int:
         return 0
 
 
+def du_molti_mb(cartelle: list[Path]) -> int:
+    """MB di piu' cartelle con un `du` solo.
+
+    Un fork per cartella sarebbe tredici fork a ogni giro del pannello, per un
+    numero che si legge in un colpo: `du -sm a b c` stampa una riga per
+    argomento e si sommano.
+    """
+    if not cartelle:
+        return 0
+    try:
+        r = subprocess.run(["du", "-sm", "--one-file-system", *map(str, cartelle)],
+                           capture_output=True, text=True, timeout=60)
+        tot = 0
+        for riga in r.stdout.splitlines():
+            campi = riga.split(None, 1)
+            if campi and campi[0].isdigit():
+                tot += int(campi[0])
+        return tot
+    except Exception:
+        return 0
+
+
+def cartelle_progetti(percorsi, home: Path | None = None) -> list[Path]:
+    """Le cartelle di lavoro da misurare, senza doppioni e senza trabocchetti.
+
+    Chiesto dall'uso il 2026-10-14: «voglio vedere quanto spazio occupa Claude
+    con i suoi file e i progetti, dentro o fuori la radice, con annessi file».
+    I progetti sono i `cwd` da cui Claude Code e' stato eseguito, e quell'elenco
+    contiene anche posti che progetti non sono. Da qui tre regole:
+
+    - **la home, `/` e `/tmp` si saltano**: una sessione aperta dalla home
+      farebbe misurare l'intero disco e contare come «Claude» tutto quello che
+      l'utente ha. `/tmp/lavoro` invece e' una cartella di lavoro legittima,
+      quindi si scarta la cartella, non il prefisso (e' la stessa regola della
+      deduzione della radice);
+    - **una dentro l'altra si conta una volta sola**: con il `cwd` della radice
+      e quello di un progetto dentro, `du` conterebbe due volte gli stessi
+      file. Vince la piu' esterna, che li comprende tutti;
+    - **quello che non c'e' non si misura**: un progetto spostato o cancellato
+      lascia la sua riga nel pannello, non dei byte sul disco.
+    """
+    casa = (home or HOME).resolve()
+    saltare = {casa, Path("/"), Path("/tmp")}
+    viste: list[Path] = []
+    for percorso in percorsi:
+        if not percorso:
+            continue
+        try:
+            d = Path(percorso).resolve()
+        except Exception:
+            continue
+        if d in saltare or not d.is_dir():
+            continue
+        if any(d == v or v in d.parents for v in viste):
+            continue
+        # Se la nuova contiene delle gia' prese, quelle se ne vanno: i loro
+        # file li conta lei.
+        viste = [v for v in viste if d not in v.parents]
+        viste.append(d)
+    return sorted(viste)
+
+
 def stale_mb(path: Path, days: int) -> int:
     """MB dei file non toccati da più di `days` giorni.
 
@@ -251,7 +313,7 @@ INSTALLAZIONE = (Path(os.environ.get("XDG_DATA_HOME") or (HOME / ".local/share")
 
 
 def claude_sul_disco(claude_mb: int, conversazioni_mb: int, cache_mb: int,
-                     disco: dict) -> dict:
+                     progetti_mb: int, disco: dict) -> dict:
     """Quanto occupa Claude in tutto, di cosa e' fatto, e quanto e' il resto.
 
     **Il numero e la barra sono Claude; il fondoscala e' il disco vero.** La
@@ -270,11 +332,19 @@ def claude_sul_disco(claude_mb: int, conversazioni_mb: int, cache_mb: int,
     pannello — calcolarlo anche qui vorrebbe dire tenerne due versioni e
     vederle divergere. Qui resta il dato grezzo: quanto occupa Claude e
     quanto e' capiente il disco.
+
+    **E i progetti ci stanno dentro, con i loro file** (chiesto dall'uso il
+    2026-10-14). Le conversazioni e l'installazione sono i file *di* Claude,
+    ma lo spazio che si mangia lavorare con Claude e' soprattutto quello che
+    nasce nelle cartelle di lavoro: dump, archivi, repository clonati. Senza,
+    la riga rispondeva a «quanto pesa il programma» mentre la domanda era
+    «quanto mi costa tutto questo». Quali cartelle, e perche' non tutte, lo
+    decide `cartelle_progetti()`.
     """
     # Un `du` solo: l'albero e' di mezzo giga, attraversarlo due volte per lo
     # stesso numero e' il costo che questo script ha gia' pagato due volte.
     installazione = du_mb(INSTALLAZIONE)
-    mb = claude_mb + installazione + cache_mb
+    mb = claude_mb + installazione + cache_mb + progetti_mb
     usati_mb = (disco.get("usatiGb") or 0) * 1024
     totali_mb = (disco.get("totaliGb") or 0) * 1024
     return {
@@ -288,6 +358,9 @@ def claude_sul_disco(claude_mb: int, conversazioni_mb: int, cache_mb: int,
             "conversazioni": conversazioni_mb,
             "installazione": installazione,
             "cache": cache_mb,
+            # Le cartelle di lavoro: di solito la voce piu' grossa, perche' e'
+            # dove finiscono i file su cui si lavora.
+            "progetti": progetti_mb,
             "resto": max(0, claude_mb - conversazioni_mb),
         },
     }
@@ -871,6 +944,11 @@ def main() -> int:
     # script gira copiato dentro l'estensione, cioè in uso normale.
     radice_prog = sess.pop("radiceProgetti", None)
 
+    # Le cartelle di lavoro dei progetti, dentro e fuori la radice: nel conto
+    # del disco ci vanno anche loro, con i file che contengono.
+    progetti_mb = du_molti_mb(
+        cartelle_progetti(e.get("percorso") for e in sess.get("progetti", [])))
+
     now = datetime.now(timezone.utc)
     data = {
         "generatoIl": now.isoformat(timespec="seconds"),
@@ -884,7 +962,7 @@ def main() -> int:
             # Quanto occupa Claude in tutto: la barra del popup misura questo,
             # non quanto e' pieno il disco.
             "disco": claude_sul_disco(claude_mb, parti.get("conversazioni", 0),
-                                      cache_mb, disco),
+                                      cache_mb, progetti_mb, disco),
             # «Conversazioni» è la voce che riguarda l'utente: è quella che il
             # popup mostra in evidenza, con il totale come contesto.
             "conversazioniMb": parti.get("conversazioni", 0),

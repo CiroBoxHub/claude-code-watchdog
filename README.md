@@ -129,11 +129,20 @@ conversazioni con la tendenza, cache di Claude, quota con i **consigli**
 porta dietro più di 150k token di contesto a ogni richiesta), spazio
 recuperabile e i progetti.
 
-**«Claude sul disco»** somma `~/.claude`, l'installazione di Claude Code (le
-versioni, che pesano più di tutto il resto) e la sua cache. Il numero e la
-barra sono Claude, il fondoscala è la capienza vera del disco: si legge in una
-riga che Claude occupa un giga su novecento, e il resto del disco è roba tua.
-Accanto, quanto pesa in percentuale, quanto è occupato da tutto il resto e
+**«Claude sul disco»** somma le cartelle di lavoro dei progetti (dentro e fuori
+la radice, con i file che contengono), `~/.claude`, l'installazione di Claude
+Code — le versioni, che pesano più di tutto il resto — e la sua cache. È la
+risposta a «quanto mi costa tutto questo», non a «quanto pesa il programma»: di
+solito a fare il numero sono i progetti. La home, `/` e `/tmp` non si contano:
+una sessione aperta dalla home farebbe misurare l'intero disco.
+
+**La riga si apre** sul dettaglio: una barra a segmenti e una riga per voce, con
+il colore, la percentuale e i MB. Si richiude da sola quando chiudi il popup, o
+dopo mezzo minuto.
+
+Il numero e la barra sono Claude, il fondoscala è la capienza vera del disco: si
+legge in una riga quanto pesa Claude sul totale, e il resto del disco è roba
+tua. Accanto, quanto pesa in percentuale, quanto è occupato da tutto il resto e
 quanto resta libero. Se la barra quasi vuota non ti dice niente, nelle
 preferenze c'è il **fondoscala**: dagli un valore tuo, poco sopra quello che
 Claude occupa oggi, e la barra si muove e prende l'ambra e il rosso alle solite
