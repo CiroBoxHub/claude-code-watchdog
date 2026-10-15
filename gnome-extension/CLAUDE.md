@@ -21,7 +21,9 @@ cache il modulo ES già importato: una costante lì si cambia solo con logout e
 login, come si è visto con `claude-status` il 2026-09-16. Le impostazioni dell'estensione stanno in **GSettings**
 (`schemas/org.gnome.shell.extensions.claude-code-watchdog.gschema.xml`), lette a
 runtime e modificabili dalla finestra delle preferenze. Le soglie degli script
-restano in `config/watchdog.conf`. Nessuno dei due richiede un logout.
+restano in `watchdog.conf`, che dal 2026-10-15 si modifica in
+`~/.config/claude-code-watchdog/`: la cartella installata non deve dipendere dal
+checkout del progetto. Nessuno dei due richiede un logout.
 
 Il pulsante di pulizia nel popup rispetta la regola del progetto: primo clic
 mostra l'elenco puntuale, secondo clic elimina. Non scorciatoie, e solo target
@@ -109,8 +111,9 @@ percentuale e MB. Regole, tutte nate qui:
 
 ### Soglie di colore
 
-**Una sola definizione, in `config/watchdog.conf`:** `ALERT_WARN_PCT=75` e
-`ALERT_CRIT_PCT=90`. `collect-metrics.py` le usa per gli allarmi e le pubblica
+**Una sola definizione, in `watchdog.conf`** (quello dell'utente in
+`~/.config/claude-code-watchdog/`, con il `config/watchdog.conf` del progetto
+come valore di serie): `ALERT_WARN_PCT=75` e `ALERT_CRIT_PCT=90`. `collect-metrics.py` le usa per gli allarmi e le pubblica
 in `metrics.json` sotto `soglie`; l'estensione le legge da lì per colorare barre
 ed etichette, con un ripiego a 75/90 se il JSON manca.
 

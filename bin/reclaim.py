@@ -81,23 +81,31 @@ TARGET = ["trash", "usercache", "claude-cache", "claude-stubs",
           "claude-orfane", "claude-versions", *CARTELLE]
 
 
-def conf() -> dict:
-    """Legge config/watchdog.conf senza eseguirlo (è un file bash).
+def conf_utente() -> Path:
+    """Il watchdog.conf dell'utente, l'unico che non dipende dal progetto."""
+    base = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
+    return base / "claude-code-watchdog" / "watchdog.conf"
 
-    Copiato dentro l'estensione si legge il watchdog.conf che
-    install-extension.sh gli mette accanto; se manca, i default, che sono gli
-    stessi scritti nel conf di serie.
+
+def conf() -> dict:
+    """Legge watchdog.conf senza eseguirlo (è un file bash).
+
+    Stessa regola di collect-metrics.py: il conf di serie — del progetto o
+    quello che sta accanto allo script dentro l'estensione — e sopra quello
+    dell'utente in `~/.config/claude-code-watchdog/`, che vince chiave per
+    chiave ed è l'unico che resta se il checkout viene cancellato.
     """
     out = {}
-    f = (ROOT / "config" / "watchdog.conf") if ROOT else (SCRIPT_DIR / "watchdog.conf")
-    if not f.is_file():
-        return out
-    for riga in f.read_text().splitlines():
-        riga = riga.strip()
-        if not riga or riga.startswith("#") or "=" not in riga:
+    serie = (ROOT / "config" / "watchdog.conf") if ROOT else (SCRIPT_DIR / "watchdog.conf")
+    for f in (serie, conf_utente()):
+        if not f.is_file():
             continue
-        k, _, v = riga.partition("=")
-        out[k.strip()] = v.split("#")[0].strip().strip("\"'")
+        for riga in f.read_text().splitlines():
+            riga = riga.strip()
+            if not riga or riga.startswith("#") or "=" not in riga:
+                continue
+            k, _, v = riga.partition("=")
+            out[k.strip()] = v.split("#")[0].strip().strip("\"'")
     return out
 
 

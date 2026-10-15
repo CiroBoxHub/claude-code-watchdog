@@ -571,8 +571,9 @@ export default class WatchdogPreferences extends ExtensionPreferences {
              'attuale, history.jsonl la serie storica (le ultime 2000 rilevazioni), ' +
              'usage.json l’ultima lettura della quota.');
         voce(dove, 'Soglie e scadenze',
-             'In watchdog.conf: soglie di colore, scadenze della pulizia e soglie ' +
-             'dei consigli sulla quota. Si modificano lì, senza riavviare niente.');
+             'In ~/.config/claude-code-watchdog/watchdog.conf: soglie di colore, ' +
+             'scadenze della pulizia e soglie dei consigli sulla quota. Si modificano ' +
+             'lì, senza riavviare niente, e restano anche se disinstalli e reinstalli.');
 
         const info = sezione('info', 'Informazioni', 'grigio', 'fw-gauge');
         const autore = new Adw.ActionRow({

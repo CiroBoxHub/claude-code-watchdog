@@ -49,7 +49,8 @@ il dry-run, mostra l'elenco, chiedi. Anche quando la risposta sembra ovvia.
     bin/install-extension.sh installa l'estensione GNOME
     bin/pack-extension.sh   crea lo zip distribuibile in dist/
     bin/lib.sh              funzioni condivise
-    config/watchdog.conf    soglie e retention: si modifica qui, non negli script
+    config/watchdog.conf    soglie e retention di serie (le tue stanno in
+                            ~/.config/claude-code-watchdog/watchdog.conf)
     mods/watchdog/          mod di Claude Code: quota e aiutanti dal motore
     gnome-extension/        sorgente dell'estensione di pannello
     reports/                report datati, per confrontare due momenti
@@ -261,10 +262,35 @@ i conti al giro dopo, una sessione nuova lascia ferma la vecchia.
 **La copia installata legge il `watchdog.conf` che le sta accanto.** Fino al
 2026-10-03 `conf()` tornava `{}` quando `ROOT` è `None` — cioè sempre, per il
 pannello — e ogni soglia del file veniva ignorata: colori, scadenze, consigli.
-Stessa famiglia del difetto di `progetto` qui sopra. `install-extension.sh` ora
-mette nella cartella dell'estensione un **collegamento** a `config/watchdog.conf`
-(una modifica vale subito) e `pack-extension.sh` una copia vera. Trovato da
-`/code-review`.
+Stessa famiglia del difetto di `progetto` qui sopra. `install-extension.sh`
+mette quindi un `watchdog.conf` nella cartella dell'estensione, come
+`pack-extension.sh` fa nello zip. Trovato da `/code-review`.
+
+**Ma era un collegamento al conf del progetto, e questo legava l'installazione
+al checkout.** Chiesto dall'uso il 2026-10-15: «se volessi cancellare questa
+cartella devo essere libero di farlo senza perdere nulla». Cancellata la
+cartella del progetto, il link restava appeso: `f.is_file()` su un link rotto è
+**falso**, `conf()` tornava `{}` e tutte le soglie ripiegavano sui predefiniti —
+in silenzio, senza un errore, cioè esattamente il difetto del 2026-10-03 da
+un'altra porta. Ora i file sono **due e nessuno dei due è il checkout**:
+
+    ~/.config/claude-code-watchdog/watchdog.conf   quello dell'utente, vince
+    <estensione>/watchdog.conf                     quello di serie, copia vera
+    <progetto>/config/watchdog.conf                di serie quando si gira da bin/
+
+Si **fondono chiave per chiave**, l'utente sopra: chi ne ridefinisce una sola
+non perde le altre. Il posto dell'utente si legge da `XDG_CONFIG_HOME`, non da
+un `~/.config` scritto a mano, e `install-extension.sh` lo crea **una volta
+sola** — reinstallare non deve riscrivere le soglie di chi le ha cambiate.
+**Prezzo dichiarato**: modificare `config/watchdog.conf` nel progetto non ha più
+effetto sul pannello, perché la copia dell'utente vince. È il rovescio
+necessario di avere un posto solo che sopravvive a tutto; chi sviluppa cambia la
+sua copia in `~/.config`, e quella del progetto resta il valore di serie da
+spedire. La stessa catena vale per bash (`lib.sh` fa `source` di entrambi,
+nello stesso ordine), se no `clean.sh` userebbe soglie diverse dal pannello.
+**Le prove dirottano anche `XDG_CONFIG_HOME`**, non solo `HOME`: le due non sono
+legate, e senza quella riga l'esito di `prova.sh` dipenderebbe da come ha
+configurato il pannello chi la lancia.
 
 **Watchface, revisione del 2026-10-03: dieci rilievi, tutti corretti.** I tre
 che contavano: l'hook faceva leggi-modifica-scrivi senza lock, e venti aiutanti

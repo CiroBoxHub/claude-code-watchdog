@@ -29,6 +29,10 @@ trap 'rm -rf "$SANDBOX"' EXIT
 # Una finta ~ con una conversazione vera e uno scarto senza risposte.
 prepara() {
   export HOME="$SANDBOX/home"
+  # Il conf dell'utente si cerca in XDG_CONFIG_HOME, che non e' detto segua
+  # HOME: senza questa riga le prove leggerebbero le soglie vere di chi le
+  # lancia, e il loro esito dipenderebbe da come ha configurato il pannello.
+  export XDG_CONFIG_HOME="$HOME/.config"
   rm -rf "$HOME"; mkdir -p "$HOME/.claude/projects/-tmp-progetto" \
         "$HOME/.claude/session-env" "$HOME/.local/share"
   mkdir -p "$SANDBOX/lavoro/progetto"
@@ -551,7 +555,32 @@ uguale "collect-metrics: la copia legge il watchdog.conf accanto" \
   "$(python3 -c "import json;print(json.load(open('$M'))['soglie']['attenzione'])" 2>/dev/null)" "60"
 uguale "reclaim: la copia legge il watchdog.conf accanto" \
   "$(cd "$COPIA" && python3 -c "import reclaim;print(reclaim.giorni('trash'))")" "5"
+
+# Il conf dell'utente, in ~/.config: e' l'unico che non dipende dal progetto
+# ne' dalla cartella dell'estensione, quindi e' l'unico che sopravvive se si
+# cancella il checkout. Vince chiave per chiave su quello di serie.
+U="$XDG_CONFIG_HOME/claude-code-watchdog"; mkdir -p "$U"
+printf 'ALERT_WARN_PCT=42\n' > "$U/watchdog.conf"
+rm -f "$M"; (cd "$COPIA" && ./collect-metrics.py --quiet >/dev/null 2>&1)
+uguale "conf: quello dell'utente vince su quello di serie" \
+  "$(python3 -c "import json;print(json.load(open('$M'))['soglie']['attenzione'])" 2>/dev/null)" "42"
+uguale "conf: una chiave che l'utente non ridefinisce resta quella di serie" \
+  "$(cd "$COPIA" && python3 -c "import reclaim;print(reclaim.giorni('trash'))")" "5"
+# Senza il conf di serie accanto resta solo quello dell'utente: e' il caso di
+# chi ha cancellato il progetto dopo aver installato.
 rm -f "$COPIA/watchdog.conf"
+rm -f "$M"; (cd "$COPIA" && ./collect-metrics.py --quiet >/dev/null 2>&1)
+uguale "conf: senza quello di serie basta quello dell'utente" \
+  "$(python3 -c "import json;print(json.load(open('$M'))['soglie']['attenzione'])" 2>/dev/null)" "42"
+# E il posto si legge da XDG_CONFIG_HOME, non da un ~/.config fisso. La prova
+# tiene i due file diversi apposta: con la cartella scritta a mano nel codice
+# si leggerebbe comunque quello di ~/.config, e la prova non direbbe niente.
+A="$SANDBOX/config-altrove/claude-code-watchdog"; mkdir -p "$A"
+printf 'ALERT_WARN_PCT=33\n' > "$A/watchdog.conf"
+rm -f "$M"; (cd "$COPIA" && XDG_CONFIG_HOME="$SANDBOX/config-altrove" ./collect-metrics.py --quiet >/dev/null 2>&1)
+uguale "conf: si legge dove dice XDG_CONFIG_HOME, non da ~/.config fisso" \
+  "$(python3 -c "import json;print(json.load(open('$M'))['soglie']['attenzione'])" 2>/dev/null)" "33"
+rm -rf "$U" "$SANDBOX/config-altrove"
 
 # Una sessione aperta in una sottocartella del progetto: capita ogni volta che
 # si lavora dentro un repository clonato li'. Deve restare dentro la radice e

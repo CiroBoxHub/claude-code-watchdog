@@ -62,24 +62,37 @@ HISTORY = OUT_DIR / "history.jsonl"
 HISTORY_MAX_LINES = 2000
 
 
+def conf_utente() -> Path:
+    """Il watchdog.conf dell'utente, l'unico che non dipende dal progetto."""
+    base = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
+    return base / "claude-code-watchdog" / "watchdog.conf"
+
+
 def conf() -> dict:
-    """Legge config/watchdog.conf senza eseguirlo (è un file bash)."""
+    """Legge watchdog.conf senza eseguirlo (è un file bash).
+
+    Due file, in quest'ordine: quello **di serie** — `<progetto>/config/` quando
+    si gira dal progetto, altrimenti quello che install/pack mettono accanto
+    allo script dentro l'estensione — e sopra quello **dell'utente** in
+    `~/.config/claude-code-watchdog/`, che vince chiave per chiave.
+    Fino al 2026-10-15 l'estensione installata leggeva un *collegamento* al conf
+    del progetto: cancellato il checkout il link restava appeso, `is_file()`
+    diceva falso e ogni soglia tornava al predefinito senza dirlo a nessuno —
+    lo stesso difetto del 2026-10-03, da un'altra porta. La copia dell'utente
+    sta fuori da entrambi perché è l'unica che sopravvive a tutti e due.
+    """
     out = {}
-    # Nella copia dentro l'estensione il progetto non c'e': si legge il
-    # watchdog.conf che install-extension.sh le mette accanto (un collegamento
-    # a quello del progetto). Prima qui si tornava ai predefiniti, e il
-    # pannello ignorava ogni soglia scritta nel file — anche quelle che la
-    # guida diceva di modificare li'. Segnalato dalla revisione del 2026-10-03.
-    f = (ROOT / "config" / "watchdog.conf") if ROOT else (SCRIPT_DIR / "watchdog.conf")
-    if not f.is_file():
-        return out
-    for line in f.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+    serie = (ROOT / "config" / "watchdog.conf") if ROOT else (SCRIPT_DIR / "watchdog.conf")
+    for f in (serie, conf_utente()):
+        if not f.is_file():
             continue
-        k, _, v = line.partition("=")
-        v = v.split("#")[0].strip().strip('"').strip("'")
-        out[k.strip()] = v
+        for line in f.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            v = v.split("#")[0].strip().strip('"').strip("'")
+            out[k.strip()] = v
     return out
 
 

@@ -214,8 +214,14 @@ il comando per riprenderle).
 
 ### Configurazione
 
-Soglie e scadenze stanno in `config/watchdog.conf`; gli script non hanno numeri
-cablati dentro.
+Soglie e scadenze stanno in `watchdog.conf`; gli script non hanno numeri
+cablati dentro. Il file si modifica in
+**`~/.config/claude-code-watchdog/watchdog.conf`**, che `install-extension.sh`
+crea la prima volta copiando `config/watchdog.conf` e non riscrive mai piu'.
+I due si fondono chiave per chiave, con il tuo che vince: quello del progetto
+(o quello che viaggia dentro l'estensione) resta come valore di serie.
+Sta fuori dal progetto apposta — cosi' le tue soglie restano anche se cancelli
+il checkout, e reinstallare non te le riscrive.
 
 | Chiave | Cosa regola |
 |---|---|
@@ -243,7 +249,8 @@ non passano. Le icone si modificano in `grafica/sorgenti/` e si rigenerano con
 `./grafica/mascotte.py`, mai a mano in `icons/`.
 
     bin/                    script da terminale, prove e strumenti
-    config/watchdog.conf    soglie, scadenze, consigli sulla quota
+    config/watchdog.conf    soglie, scadenze, consigli sulla quota (i valori
+                            di serie: i tuoi stanno in ~/.config/)
     gnome-extension/        l'estensione: extension.js (pannello), watchface.js,
                             fumetto.js (mascotte), prefs.js (impostazioni e guida)
     mods/watchdog/          il mod di Claude Code

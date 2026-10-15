@@ -40,12 +40,25 @@ if [[ -d "$WD_ROOT/mods" ]]; then
   cp -a "$WD_ROOT/mods" "$DST/mods"
 fi
 
+# La configurazione sta in due posti, e nessuno dei due e' il checkout.
+# Qui una copia di serie, come nello zip: era un collegamento al conf del
+# progetto, e chi cancellava la cartella del progetto si ritrovava un link
+# appeso — `is_file()` falso, tutte le soglie tornate al predefinito, in
+# silenzio. Una cartella installata non deve dipendere dal sorgente.
+install -m 644 "$WD_ROOT/config/watchdog.conf" "$DST/watchdog.conf"
+
+# E in ~/.config la copia dell'utente, quella che si modifica. Si crea una
+# volta sola: reinstallare non deve riscrivere le soglie di chi le ha cambiate.
+CONF_UTENTE="${XDG_CONFIG_HOME:-$HOME/.config}/claude-code-watchdog/watchdog.conf"
+if [[ -f "$CONF_UTENTE" ]]; then
+  echo "Configurazione gia' presente, lasciata com'e': $CONF_UTENTE"
+else
+  install -D -m 644 "$WD_ROOT/config/watchdog.conf" "$CONF_UTENTE"
+  echo "Configurazione in $CONF_UTENTE"
+fi
+
 # Gli schemi GSettings vanno compilati nella destinazione: senza
 # gschemas.compiled l'estensione non parte proprio.
-# La configurazione: un collegamento, non una copia, cosi' una soglia cambiata
-# nel progetto vale subito anche per gli script che il pannello lancia da qui.
-ln -sfn "$WD_ROOT/config/watchdog.conf" "$DST/watchdog.conf"
-
 if [[ -d "$DST/schemas" ]]; then
   glib-compile-schemas "$DST/schemas" || {
     echo "compilazione degli schemi fallita" >&2; exit 1; }

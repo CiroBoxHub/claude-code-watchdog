@@ -5,8 +5,13 @@
 # questo file si limita a definire variabili e funzioni.
 
 WD_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Due conf, nello stesso ordine degli script Python: quello di serie nel
+# progetto, e sopra quello dell'utente in ~/.config, che vince riga per riga.
+# L'utente e' l'unica copia che non sparisce insieme al checkout.
 WD_CONF="$WD_ROOT/config/watchdog.conf"
+WD_CONF_UTENTE="${XDG_CONFIG_HOME:-$HOME/.config}/claude-code-watchdog/watchdog.conf"
 [[ -f "$WD_CONF" ]] && source "$WD_CONF"
+[[ -f "$WD_CONF_UTENTE" ]] && source "$WD_CONF_UTENTE"
 
 CLAUDE_DIR="$HOME/.claude"
 
