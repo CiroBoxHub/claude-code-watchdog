@@ -22,6 +22,11 @@ __pycache__/
 # Anche l'hook di Watchface viene copiato da bin/ come gli script Python.
 gnome-extension/*/watchface-hook
 
+# L'anteprima della mascotte: la rigenera `grafica/mascotte.py --anteprima`
+# quando serve, e nel repo non la guardava nessuno.
+grafica/anteprima.png
+grafica/anteprima.svg
+
 # Foto di prova della barra e del popup (bin/fotografa-pannello.sh)
 grafica/foto/
 grafica/foto-icone.png

@@ -180,13 +180,6 @@ def mod_rimuovi(d: dict, percorso: str) -> bool:
     return True
 
 
-def mod_installato(d: dict, percorso: str) -> bool:
-    env = d.get("env")
-    if not isinstance(env, dict):
-        return False
-    return percorso in voci_mod(env.get(CHIAVE_MOD, ""))
-
-
 # Interpreti e lanciatori: il programma vero e' lo script che segue. Senza
 # saltarli, tutti gli hook «python3 ...» finivano in un gruppo solo, e
 # «Rimuovi» su uno li toglieva tutti (revisione del 2026-10-03).

@@ -229,13 +229,6 @@
     font-size: 0.97em;
 }
 
-/* La cartella sparita la segnala il triangolo nel nome, non una tinta: un
-   testo ambra è illeggibile su fondo chiaro. */
-.fw-proj-missing {
-    opacity: 0.75;
-    font-style: italic;
-}
-
 .fw-proj-meta {
     font-size: 0.83em;
     opacity: 0.68;
