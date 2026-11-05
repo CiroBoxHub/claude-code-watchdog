@@ -15,6 +15,19 @@ WD_CONF_UTENTE="${XDG_CONFIG_HOME:-$HOME/.config}/claude-code-watchdog/watchdog.
 
 CLAUDE_DIR="$HOME/.claude"
 
+WD_UUID="claude-code-watchdog@cirobox.local"
+WD_METADATA="$WD_ROOT/gnome-extension/$WD_UUID/metadata.json"
+
+# Le versioni di GNOME che l'estensione dichiara, come array JSON.
+# Le cavie usa-e-getta delle foto devono dichiarare le stesse: una shell piu'
+# nuova non carica un'estensione fuori versione, e una cavia non caricata e'
+# una foto che non si fa — e nei log non c'e' niente da leggere, perche' il
+# suo codice non gira. Costato un'ora su GNOME 51 il 2026-11-05: si scriveva
+# a mano in due script, ora si legge da un posto solo.
+wd_shell_versions() {
+  python3 -c "import json;print(json.dumps(json.load(open('$WD_METADATA'))['shell-version']))"
+}
+
 # Espande le tilde/variabili rimaste nei valori di config
 CLAUDE_ARCHIVE_DIR="${CLAUDE_ARCHIVE_DIR:-$HOME/Documenti/Claude/_archivio-trascrizioni}"
 

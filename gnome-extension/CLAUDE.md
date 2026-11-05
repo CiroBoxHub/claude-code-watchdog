@@ -459,7 +459,12 @@ voce:
 - **I segnali sulle impostazioni si staccano alla chiusura** (`this._segnali`):
   la finestra muore prima del processo.
 - **Si controlla con `bin/fotografa-preferenze.sh`**, tutte le pagine in chiaro e
-  scuro: nella shell annidata il clic non arriva alla finestra.
+  scuro: nella shell annidata il clic non arriva alla finestra. Un clic con
+  puntatore virtuale era stato ritentato in `fotografa-pannello.sh` ed e' stato
+  **tolto il 2026-11-05**: su GNOME 51 finiva nella panoramica e scriveva una
+  foto sbagliata senza dirlo, con coordinate che parlavano ancora di «sette
+  schede» quando sono cinque. Li' resta la prima pagina, che prova un'altra
+  cosa — che `openExtensionPrefs` apra davvero nella shell vera.
 - **Il mod sta nel gruppo degli hook, non in uno suo** (2026-10-08): per chi
   installa è una cosa sola, e una pagina — o un gruppo — con una riga sola era
   il rumore che il ridisegno aveva tolto. Il suo pulsante «Attiva» esiste

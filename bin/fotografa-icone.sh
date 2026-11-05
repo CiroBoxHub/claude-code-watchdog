@@ -32,7 +32,7 @@ mkdir -p "$E" "$P/run"; chmod 700 "$P/run"
 NOMI=$(cd "$ICONE" && ls *-symbolic.svg | sed 's/-symbolic.svg$//' \
        | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read().split()))')
 
-echo '{"uuid":"foto-icone@prova","name":"foto","description":"-","shell-version":["48","49","50"]}' \
+echo '{"uuid":"foto-icone@prova","name":"foto","description":"-","shell-version":'"$(wd_shell_versions)"'}' \
   > "$E/metadata.json"
 cat > "$E/extension.js" <<EOF
 import St from 'gi://St';
@@ -74,6 +74,7 @@ timeout 90 env -i PATH=/usr/bin:/bin HOME="$P/home" XDG_CONFIG_HOME="$P/home/.co
   XDG_DATA_HOME="$P/home/.local/share" XDG_CACHE_HOME="$P/home/.cache" \
   XDG_RUNTIME_DIR="$P/run" dbus-run-session -- bash -c "
     gsettings set org.gnome.shell disable-user-extensions false
+    gsettings set org.gnome.shell welcome-dialog-last-shown-version '99' # la home finta e' nuova: senza questo il benvenuto di Fedora copre la foto
     gsettings set org.gnome.shell enabled-extensions \"['foto-icone@prova']\"
     gnome-shell --headless --virtual-monitor 1600x600 >'$P/log' 2>&1 &
     S=\$!; sleep 20; kill \$S; wait \$S" >/dev/null 2>&1

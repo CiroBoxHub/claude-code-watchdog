@@ -59,7 +59,7 @@ sessioni di Claude aperte da lì in poi.
 
 | Serve per | Requisito |
 |---|---|
-| Estensione | GNOME Shell **48, 49 o 50** |
+| Estensione | GNOME Shell **48, 49, 50 o 51** |
 | Script | **Python 3.10** o superiore, `gio` (c'è su ogni desktop GNOME) |
 | Quota | la CLI `claude` nel `PATH` |
 | Script di sistema (`scan-system.sh`, `clean.sh`) | Fedora (`dnf5`, `rpm`) e systemd |

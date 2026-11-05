@@ -40,7 +40,7 @@ il dry-run, mostra l'elenco, chiedi. Anche quando la risposta sembra ovvia.
     bin/verifica-estensione.sh controlli statici, obbligatori prima di installare
     bin/watchface-hook      hook di Claude Code per Watchface — bash, niente output
     bin/watchface-hooks.py  mette, toglie e ripristina gli hook in settings.json
-    bin/fotografa-pannello.sh foto di barra, popup e preferenze (shell annidata)
+    bin/fotografa-pannello.sh foto di barra, popup e prima pagina delle preferenze
     bin/fotografa-icone.sh  foto delle icone come le disegna la shell
     bin/fotografa-preferenze.sh foto di ogni pagina delle preferenze, chiaro e scuro
     bin/simula-watchface.sh fa passare Watchface per tutti gli stati, sessioni finte
@@ -104,7 +104,7 @@ cruscotto. `verifica-estensione.sh` controlla anche gli `import` fra script
 fratelli, non solo le chiamate per nome.
 
 **L'estensione può finire su una distribuzione qualsiasi.** Purché ci sia
-GNOME: `metadata.json` dichiara 48, 49 e 50. Gli script che viaggiano dentro
+GNOME: `metadata.json` dichiara 48, 49, 50 e 51. Gli script che viaggiano dentro
 di lei invocano solo `du`, `gio`, `gsettings` e `claude` — mai `dnf5`, mai
 `rpm`, mai percorsi sotto `/var`. Le parti specifiche di Fedora stanno in
 `scan-system.sh` e `clean.sh`, che non vengono copiati. Il pulsante «Libera
@@ -291,6 +291,41 @@ nello stesso ordine), se no `clean.sh` userebbe soglie diverse dal pannello.
 **Le prove dirottano anche `XDG_CONFIG_HOME`**, non solo `HOME`: le due non sono
 legate, e senza quella riga l'esito di `prova.sh` dipenderebbe da come ha
 configurato il pannello chi la lancia.
+
+**Una versione di GNOME nuova spegne l'estensione, e non e' un guasto.**
+Il 2026-11-05 Fedora e' passata alla 45, cioe' GNOME Shell 51, e il pannello e'
+sparito: `gnome-extensions info` diceva **OUT OF DATE**, perche' `metadata.json`
+dichiarava 48, 49 e 50. La shell non carica un'estensione fuori versione, e non
+e' un errore del codice — sulla stessa macchina sono rimaste fuori anche
+`ignore-lid`, `quick-sound-switcher` e `screentime`. Si aggiunge il numero e si
+reinstalla. **Il numero pero' non si aggiunge a fiducia**: l'estensione e' stata
+caricata in una GNOME Shell 51 annidata (`prova-shell.sh`) e rifotografata
+(`fotografa-pannello.sh`, `fotografa-preferenze.sh`) prima di dire che andava.
+Regge tutto: `extension.js` tocca di Clutter solo costanti e layout, e nessuna
+delle API rimosse.
+**Il guaio vero stava negli strumenti, non nell'estensione.** Le foto
+fallivano **senza una riga di log**, e il motivo e' lo stesso di sopra al
+quadrato: le cavie usa-e-getta di `fotografa-pannello.sh` e `fotografa-icone.sh`
+sono estensioni anche loro, con un `metadata.json` scritto a mano che diceva
+48/49/50. Fuori versione, non caricate, codice mai eseguito — percio' nei log
+non c'era niente da leggere, nemmeno un errore. Ora le versioni le dice
+`wd_shell_versions()` in `lib.sh`, leggendole dal `metadata.json` vero, e
+`verifica-estensione.sh` ha un controllo che rifiuta un `"shell-version":[`
+scritto a mano in `bin/` (verificato con una mutazione).
+**Due cose rotte davvero da GNOME 51, entrambe nelle foto:**
+`Clutter.get_default_backend()` non esiste piu' e `global.backend` non ha
+`get_default_seat` — il backend buono e' `global.stage.context.get_backend()`,
+trovato con una sonda che chiede alla shell cosa espone invece di indovinare.
+E la finestra di benvenuto di Fedora, che in una home finta compare sempre e
+copriva la foto delle preferenze (`welcome-dialog-last-shown-version`).
+**E una cosa e' stata tolta invece che riparata**: il clic con puntatore
+virtuale sulla scheda «Watchface» in `fotografa-pannello.sh`. Su 51 finiva
+nella panoramica e scriveva una foto sbagliata **senza dirlo**, e le sue
+coordinate parlavano ancora di «sette schede» quando sono cinque dal
+2026-10-03. Le pagine delle preferenze le fotografa bene
+`fotografa-preferenze.sh`, una per una e in due temi: era un doppione peggiore
+dell'originale. La foto della prima pagina resta, perche' quella prova un'altra
+cosa — che `openExtensionPrefs` apra davvero nella shell vera.
 
 **Watchface, revisione del 2026-10-03: dieci rilievi, tutti corretti.** I tre
 che contavano: l'hook faceva leggi-modifica-scrivi senza lock, e venti aiutanti

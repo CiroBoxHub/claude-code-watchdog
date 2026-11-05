@@ -95,6 +95,16 @@ PY
 )
 if [[ -z "$_c" ]]; then echo "ok"; else echo "✗ $_c"; ko=1; fi
 
+# Le cavie usa-e-getta delle foto girano in una GNOME Shell vera, quindi hanno
+# un metadata.json loro — e una shell non carica un'estensione fuori versione.
+# Scritte a mano, quelle liste invecchiano in silenzio: su GNOME 51 le cavie
+# dichiaravano ancora 48/49/50, non venivano caricate, e le foto fallivano
+# senza una riga di log, perche' il loro codice non girava.
+printf '  %-34s ' "versioni di GNOME: un posto solo"
+_c=$(grep -n '"shell-version":\[' "$WD_ROOT"/bin/*.sh 2>/dev/null)
+if [[ -z "$_c" ]]; then echo "ok ($(python3 -c "import json;print(','.join(json.load(open('$SRC/metadata.json'))['shell-version']))"))"
+else echo "✗ scritte a mano:"; echo "$_c" | sed 's/^/      /'; ko=1; fi
+
 # Gli script devono esistere in bin/ E essere nelle liste che li copiano
 # dentro l'estensione: install e pack hanno due liste separate, e dimenticarne
 # una lascia il pacchetto senza uno script che il codice chiama.

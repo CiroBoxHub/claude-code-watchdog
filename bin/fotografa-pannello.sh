@@ -16,6 +16,14 @@
 # quelli veri, le scritture finiscono nella cartella temporanea.
 # Per Watchface si scrivono due sessioni finte: una che aspetta te con due
 # aiutanti, una che lavora.
+#
+# Le preferenze si fotografano **alla prima pagina**, cioe' come le apre la
+# shell vera: serve a provare quel percorso, non a vedere le pagine. Le pagine
+# le fa bene bin/fotografa-preferenze.sh, una per una e in due temi. Qui c'era
+# anche un clic con puntatore virtuale sulla scheda «Watchface»: su GNOME 51
+# finiva nella panoramica e scriveva una foto sbagliata senza dirlo, e le
+# coordinate parlavano ancora di «sette schede» quando sono cinque dal
+# 2026-10-03. Un doppione peggiore dell'originale: tolto.
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
@@ -63,12 +71,11 @@ printf 'PreToolUse\t%s\t0\t0\t%s\n' "$ora" "$H/Progetti/app-ricette" > "$WF/sess
 
 F="$EXT/foto-pannello@prova"
 mkdir -p "$F"
-echo '{"uuid":"foto-pannello@prova","name":"foto","description":"-","shell-version":["48","49","50"]}' > "$F/metadata.json"
+echo '{"uuid":"foto-pannello@prova","name":"foto","description":"-","shell-version":'"$(wd_shell_versions)"'}' > "$F/metadata.json"
 cat > "$F/extension.js" <<EOF
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
-import Clutter from 'gi://Clutter';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
@@ -101,23 +108,6 @@ export default class Foto extends Extension {
                 Main.extensionManager.openExtensionPrefs('$UUID', '', {});
                 await new Promise(r => GLib.timeout_add(0, 7000, () => { r(); return false; }));
                 await foto(0, 0, global.stage.width, global.stage.height, 'preferenze.png');
-                // La scheda «Watchface», con un puntatore virtuale: solo la
-                // scheda, mai un pulsante — la pagina legge i settings veri.
-                const fin = global.get_window_actors().map(a => a.meta_window)
-                    .find(w => (w.get_wm_class() ?? '').includes('Extensions'));
-                if (fin) {
-                    const r = fin.get_frame_rect();
-                    const seat = Clutter.get_default_backend().get_default_seat();
-                    const ptr = seat.create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
-                    const t = () => GLib.get_monotonic_time();
-                    // Quinta di sette schede, sulla barra in fondo alla finestra.
-                    ptr.notify_absolute_motion(t(), r.x + r.width * 9 / 14, r.y + r.height - 22);
-                    ptr.notify_button(t(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.PRESSED);
-                    ptr.notify_button(t(), Clutter.BUTTON_PRIMARY, Clutter.ButtonState.RELEASED);
-                    await new Promise(r2 => GLib.timeout_add(0, 2500, () => { r2(); return false; }));
-                    await foto(0, 0, global.stage.width, global.stage.height, 'preferenze-watchface.png');
-                    console.log('FINESTRA ' + r.x + ',' + r.y + ' ' + r.width + 'x' + r.height);
-                }
                 console.log('FOTO FATTE');
             })().catch(e => console.log('FOTO FALLITE ' + e + ' ' + e.stack));
             return false;
@@ -134,6 +124,7 @@ for tema in scuro chiaro; do
     XDG_DATA_HOME="$H/.local/share" XDG_CACHE_HOME="$H/.cache" XDG_RUNTIME_DIR="$P/run" \
     LANG="${LANG:-it_IT.UTF-8}" dbus-run-session -- bash -c "
       gsettings set org.gnome.shell disable-user-extensions false
+      gsettings set org.gnome.shell welcome-dialog-last-shown-version '99' # la home finta e' nuova: senza questo il benvenuto di Fedora copre la foto
       gsettings set org.gnome.shell enabled-extensions \"['$UUID', 'foto-pannello@prova']\"
       gsettings set org.gnome.desktop.interface color-scheme '$schema'
       [ -n \"\$1\" ] && printf '%s\n' \"\$1\" | dconf load /org/gnome/shell/extensions/claude-code-watchdog/
@@ -141,7 +132,7 @@ for tema in scuro chiaro; do
       gnome-shell --headless --virtual-monitor 1600x1000 >'$P/log-$tema' 2>&1 &
       S=\$!; sleep 32; kill \$S; wait \$S" _ "$PREF" >"$P/sessione-$tema" 2>&1
   if grep -q "FOTO FATTE" "$P/log-$tema"; then
-    for f in barra barra-intera popup preferenze preferenze-watchface; do cp "$P/$f.png" "$OUT/$f-$tema.png"; done
+    for f in barra barra-intera popup preferenze; do cp "$P/$f.png" "$OUT/$f-$tema.png"; done
     echo "tema $tema: foto in $OUT"
   else
     echo "tema $tema: foto non riuscite"
